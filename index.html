@@ -785,6 +785,11 @@ function wallExcelDesc(row, mode) {
   if (row.kind === "interior") return "Batts / " + inside + " / " + hLabel;
   return "R19/" + inside + "/" + hLabel;
 }
+// Height only splits R-13 batt walls (pre-cut lengths). Everything else merges across heights within its wall type.
+function wallHeightSplits(kind, mode) {
+  return (mode === "batt" || !mode) && (kind === "ext_2x4" || kind === "concrete" || kind === "interior");
+}
+function dropHeight(desc) { return String(desc).replace(/\s*\/\s*[\d.]+'$/, ""); }
 function wallProduct(mode, kind) {
   if (mode === "foam") return "Open-cell spray foam";
   if (mode === "cellulose") return "Cellulose";
@@ -822,8 +827,9 @@ function interiorWallLine(r, idx, count, noteTag) {
   const label = "Interior walls" + (count > 1 ? " #" + (idx + 1) : "");
   const cav = interiorCavities(r);
   return { area: label, assembly: "Interior walls", product: product, description: desc + (count > 1 ? " (#" + (idx + 1) + ")" : ""),
+    _mergeDesc: mode === "batt" ? undefined : dropHeight(desc),
     footage: round2(interiorWallSf(r)), unit: "SF",
-    notes: noteTag + cav + " cav × " + round2(wallFactor(r)) + (n(r.cavities) > 0 ? "" : " (from " + fmt(n(r.lf)) + " LF)") };
+    notes: noteTag + cav + " cav × " + round2(wallFactor(r)) + " @ " + hLabel + (n(r.cavities) > 0 ? "" : " (from " + fmt(n(r.lf)) + " LF)") };
 }
 const MISC_UNITS = [["SF","SF"],["LF","LF"],["Each","Each"],["Bags","Bags"],["Rolls","Rolls"],["Sheets","Sheets"],["Hours","Hours"],["custom","Custom…"]];
 function newMiscItem() { return { id: uid(), material: "", notes: "", qty: "", unit: "SF", customUnit: "" }; }
@@ -1068,7 +1074,7 @@ function buildLinesForPackage(p, tag) {
   if (!excludeDVK && S.hasDeadAir) {
     S.deadAir.forEach(r => {
       if (n(r.sf) <= 0) return;
-      push(lines, { area: r.name.trim() || "Dead air", assembly: "Dead air", product: "R-38 fiberglass batts", description: "R38 batts", footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
+      push(lines, { area: "Dead air", assembly: "Dead air", product: "R-38 fiberglass batts", description: "R38 batts", footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
     });
   }
   if (!excludeDVK && S.hasVaults) {
@@ -1102,15 +1108,15 @@ function buildLinesForPackage(p, tag) {
     S.knees.forEach((r, idx) => {
       const sf = kneeSf(r); if (sf <= 0) return;
       const oc = String(r.oc || "16");
-      const name = r.name.trim() || "Knee wall";
-      const part = { name, txt: (r.name.trim() || "Knee #" + (idx + 1)) + " " + (r.shape === "triangle" ? "△ " : "") + fmt(n(r.height)) + "'×" + fmt(n(r.lf)) + " LF" + (r.shape === "triangle" ? "÷2" : "") };
+      const name = "Knee walls";
+      const part = { name, txt: (r.shape === "triangle" ? "△ " : "") + fmt(n(r.height)) + "'×" + fmt(n(r.lf)) + " LF" + (r.shape === "triangle" ? "÷2" : "") };
       addKnee("batt|R-19 fiberglass batts|R19|" + oc, { assembly: "Knee wall", product: "R-19 fiberglass batts", description: "R19 / " + oc + " OC" }, sf, part);
       if (r.wrap) addKnee("wrap|House wrap", { assembly: "Knee wrap", product: "House wrap", description: "Open knee wrap" }, sf, part);
     });
     kneeGroups.forEach(g => {
       const area = g.names.size === 1 ? Array.from(g.names)[0] : "Knee walls";
       push(lines, { area, assembly: g.assembly, product: g.product, description: g.description, footage: round2(g.sf), unit: "SF",
-        notes: noteTag + (g.parts.length > 1 ? g.parts.length + " knees: " : "") + g.parts.join(" + ") });
+        notes: noteTag + (g.parts.length > 1 ? g.parts.length + " pcs: " : "") + g.parts.join(" + ") });
     });
   }
   if (S.hasBaffles && n(S.baffles) > 0 && (F.isNew || F.isAtticRetro) && !foamRoof) {
@@ -1123,7 +1129,7 @@ function buildLinesForPackage(p, tag) {
       const f = n(r.flatSf); if (f <= 0) return;
       usedExplicit = true;
       const factor = resolvePitchFactor(r.pitch, r.customRise);
-      push(lines, { area: r.name.trim() || "Roof line", assembly: "Roof foam", product: "Open-cell spray foam", description: '5.5" OC roof', footage: round2(f * factor), unit: "SF", notes: noteTag + "flat×" + factor.toFixed(3) });
+      push(lines, { area: "Roof line", assembly: "Roof foam", product: "Open-cell spray foam", description: '5.5" OC roof', footage: round2(f * factor), unit: "SF", notes: noteTag + "flat×" + factor.toFixed(3) });
     });
     if (!usedExplicit) {
       push(lines, { area: "House roof", assembly: "Roof foam", product: "Open-cell spray foam", description: '5.5" OC roof', footage: round2(flat * housePitchFactor), unit: "SF", notes: noteTag + "flat×" + housePitchFactor.toFixed(3) });
@@ -1161,7 +1167,7 @@ function buildLinesForPackage(p, tag) {
     if (S.hasCrawlWalls) {
       S.crawlWalls.forEach(r => {
         const sf = n(r.length) * n(r.height); if (sf <= 0) return;
-        push(lines, { area: r.name.trim() || "Crawl wall", assembly: "Crawl wall foam", product: "Closed-cell spray foam", description: '1.5" CC', footage: round2(sf), unit: "SF", notes: noteTag });
+        push(lines, { area: "Crawl wall", assembly: "Crawl wall foam", product: "Closed-cell spray foam", description: '1.5" CC', footage: round2(sf), unit: "SF", notes: noteTag });
       });
     }
     push(lines, { area: "Crawl", assembly: "Dehumidifier", product: "Dehumidifier", description: "Install included", footage: 1, unit: "ea", notes: noteTag });
@@ -1170,7 +1176,7 @@ function buildLinesForPackage(p, tag) {
   if (S.hasRim && F.canAskRim) {
     S.rims.forEach(r => {
       const lf = n(r.lf); if (lf <= 0) return;
-      push(lines, { area: r.name.trim() || "Rim joist", assembly: "Band / rim",
+      push(lines, { area: "Rim joist", assembly: "Band / rim",
         product: totalFoam ? "Open-cell spray foam" : "R-19 fiberglass batts",
         description: totalFoam ? '3.5" OC band ×1.2' : "R19 band ×1.2",
         footage: round2(lf * 1.2), unit: "LF", notes: noteTag + fmt(lf) + " LF × 1.2" });
@@ -1191,10 +1197,11 @@ function buildLinesForPackage(p, tag) {
         else if (p === "foam_spider" && r.kind !== "garage_ext") mode = "spider";
       }
       push(lines, {
-        area: r.name.trim() || WALL_KIND_LABELS[r.kind] || "Wall",
+        area: WALL_KIND_LABELS[r.kind] || "Wall",
         assembly: "Wall — " + (WALL_KIND_LABELS[r.kind] || r.kind),
         product: wallProduct(mode, r.kind), description: wallExcelDesc(r, mode),
-        footage: round2(sf), unit: "SF", notes: noteTag + cavities + " cav × " + round2(factor)
+        _mergeDesc: wallHeightSplits(r.kind, mode) ? undefined : dropHeight(wallExcelDesc(r, mode)),
+        footage: round2(sf), unit: "SF", notes: noteTag + cavities + " cav × " + round2(factor) + " @ " + wallHeightFt(r) + "'"
       });
       if ((mode === "cellulose" || mode === "spider") && r.kind === "interior") nettingTotal += sf;
     });
@@ -1215,17 +1222,17 @@ function buildLinesForPackage(p, tag) {
     S.gables.forEach(r => {
       const L = n(r.length), H = n(r.height); if (L <= 0 || H <= 0) return;
       const sf = r.shape === "triangle" ? (L * H) / 2 : L * H;
-      push(lines, { area: r.name.trim() || "Gable", assembly: "Gable (" + r.shape + ")",
+      push(lines, { area: "Gable", assembly: "Gable (" + r.shape + ")",
         product: foamRoof ? "Open-cell spray foam" : "Fiberglass batts",
         description: foamRoof ? '3.5" OC gable' : "Gable batts", footage: round2(sf), unit: "SF", notes: noteTag });
-      if (r.wrap) push(lines, { area: r.name.trim() || "Gable", assembly: "Gable wrap", product: "House wrap", description: "W", footage: round2(sf), unit: "SF", notes: noteTag });
+      if (r.wrap) push(lines, { area: "Gable", assembly: "Gable wrap", product: "House wrap", description: "W", footage: round2(sf), unit: "SF", notes: noteTag });
     });
   }
 
   if (S.hasCants && F.canAskCants) {
     S.cants.forEach(r => {
       if (n(r.sf) <= 0) return;
-      push(lines, { area: r.name.trim() || "Cantilever", assembly: "Cantilever",
+      push(lines, { area: "Cantilever", assembly: "Cantilever",
         product: (r.material === "foam55" || totalFoam) ? "Open-cell spray foam" : r.material === "cellulose" ? "Cellulose" : "R-30 fiberglass batts",
         description: (r.material === "foam55" || totalFoam) ? '5.5" OC' : r.material === "cellulose" ? "Cellulose" : "R30",
         footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
@@ -1249,7 +1256,7 @@ function buildLinesForPackage(p, tag) {
     let denseNet = 0;
     S.dense.forEach(r => {
       if (n(r.sf) <= 0) return;
-      push(lines, { area: r.name.trim() || "Dense-pack", assembly: "Floor dense-pack", product: p === "foam_spider" ? "Spider" : "Cellulose", description: "Dense-pack flat SF", footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
+      push(lines, { area: "Dense-pack", assembly: "Floor dense-pack", product: p === "foam_spider" ? "Spider" : "Cellulose", description: "Dense-pack flat SF", footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
       if (r.netting) denseNet += n(r.sf);
     });
     if (denseNet > 0) push(lines, { area: "Dense-pack", assembly: "Netting", product: "Netting", description: "Matches dense-pack", footage: round2(denseNet), unit: "SF", notes: noteTag });
@@ -1284,25 +1291,26 @@ function mergeLikeLines(lines, noteTag) {
   const out = [], groups = new Map();
   lines.forEach(L => {
     if (L.area === "Fireplace" || L.unit === "—" || L.bags) { out.push(L); return; }
-    const desc = stripNum(L.description);
+    const desc = stripNum(L._mergeDesc != null ? L._mergeDesc : L.description);
     const key = [section(L.assembly), L.product, desc, L.unit].join("|");
     let g = groups.get(key);
     if (!g) { g = { line: L, items: [L], desc }; groups.set(key, g); out.push(g); return; }
     g.items.push(L);
   });
+  const clean = L => { if (!("_mergeDesc" in L)) return L; const c = Object.assign({}, L); delete c._mergeDesc; return c; };
   return out.map(g => {
-    if (!g.items) return g;
-    if (g.items.length === 1) return g.line;
+    if (!g.items) return clean(g);
+    if (g.items.length === 1) return clean(g.line);
     const it = g.items, first = g.line;
     const same = f => it.every(x => x[f] === first[f]);
     const areas = Array.from(new Set(it.map(x => stripNum(x.area))));
     const raw = x => String(x.notes || "").replace(noteTag || "\u0000", "").trim();
-    return Object.assign({}, first, {
-      area: areas.length === 1 ? areas[0] : (areas.join(" + ").length <= 40 ? areas.join(" + ") : section(first.assembly) + " ×" + it.length),
+    return Object.assign(clean(first), {
+      area: areas.length === 1 ? areas[0] : section(first.assembly),
       assembly: same("assembly") ? first.assembly : section(first.assembly),
-      description: g.desc,
+      description: (() => { const ds = new Set(it.map(x => stripNum(x.description))); return ds.size === 1 ? Array.from(ds)[0] : g.desc + (g.desc.includes(" / ") ? " / " : "/") + "mixed ht"; })(),
       footage: round2(it.reduce((s, x) => s + n(x.footage), 0)),
-      notes: (noteTag || "") + it.length + " combined: " + it.map(x => stripNum(x.area) + " " + fmt(n(x.footage)) + (raw(x) ? " [" + raw(x) + "]" : "")).join(" + ")
+      notes: (noteTag || "") + it.length + " pcs: " + it.map(x => fmt(n(x.footage)) + (raw(x) ? " [" + raw(x) + "]" : "")).join(" + ")
     });
   });
 }
@@ -1508,7 +1516,6 @@ function renderAssemblyEditors() {
     S.deadAir.forEach((r, idx) => {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Dead air #' + (idx+1) + '</div>';
-      card.appendChild(fieldInput("Area", r.name, v => { r.name = v; schedule(); }));
       card.appendChild(fieldInput("SF", r.sf, v => { r.sf = v; schedule(); }, "number"));
       box.appendChild(card);
     });
@@ -1531,7 +1538,6 @@ function renderAssemblyEditors() {
       card.innerHTML = '<div class="row-title">Knee #' + (idx+1) + '</div>';
       const sfOut = el("p", "cap");
       const showSf = () => { sfOut.textContent = "= " + fmt(round2(kneeSf(r))) + " SF" + (r.shape === "triangle" ? " (L × H ÷ 2)" : " (L × H)"); };
-      card.appendChild(fieldInput("Area", r.name, v => { r.name = v; schedule(); }));
       card.appendChild(fieldSelect("Shape", r.shape || "rectangle", [["rectangle","Rectangle"],["triangle","Triangle"]], v => { r.shape = v; render(); }));
       card.appendChild(fieldInput("Height ft", r.height, v => { r.height = v; showSf(); schedule(); }, "number"));
       card.appendChild(fieldInput("LF", r.lf, v => { r.lf = v; showSf(); schedule(); }, "number"));
@@ -1553,7 +1559,6 @@ function renderAssemblyEditors() {
     S.rims.forEach((r, idx) => {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Rim #' + (idx+1) + ' · ×1.2 → ' + fmt(n(r.lf)*1.2) + '</div>';
-      card.appendChild(fieldInput("Area", r.name, v => { r.name = v; schedule(); }));
       card.appendChild(fieldInput("LF", r.lf, v => { r.lf = v; schedule(); }, "number"));
       box.appendChild(card);
     });
@@ -1561,12 +1566,11 @@ function renderAssemblyEditors() {
   }
   if (S.hasWalls && F.canAskWalls) {
     const h = el("div", "divider"); box.appendChild(h);
-    box.appendChild(el("p", "cap", "Walls — matching walls (same kind, material, OC, height) combine into one Excel row. 16 OC = 12×15×h÷144 · 24 OC = 12×24×h÷144"));
+    box.appendChild(el("p", "cap", "Walls — matching walls of the same type combine into one Excel row (R-13 batts stay split by height). 16 OC = 12×15×h÷144 · 24 OC = 12×24×h÷144"));
     S.walls.forEach((r, idx) => {
       const card = el("div", "row-card");
       const sf = round2(wallFactor(r) * n(r.cavities));
       card.innerHTML = '<div class="row-title">Wall #' + (idx+1) + ' · ' + wallExcelDesc(r, r.materialMode) + ' → ' + fmt(sf) + ' SF</div>';
-      card.appendChild(fieldInput("Area name", r.name, v => { r.name = v; schedule(); }));
       card.appendChild(fieldSelect("Kind", r.kind, Object.keys(WALL_KIND_LABELS).map(k => [k, WALL_KIND_LABELS[k]]), v => { r.kind = v; render(); }));
       card.appendChild(fieldSelect("OC", r.oc, [["16","16 OC"],["24","24 OC"]], v => { r.oc = v; render(); }));
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
@@ -1609,7 +1613,6 @@ function renderAssemblyEditors() {
     S.gables.forEach((r, idx) => {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Gable #' + (idx+1) + '</div>';
-      card.appendChild(fieldInput("Name", r.name, v => { r.name = v; schedule(); }));
       card.appendChild(fieldSelect("Shape", r.shape, [["triangle","Triangle"],["rectangle","Rectangle"]], v => { r.shape = v; render(); }));
       card.appendChild(fieldInput("Length", r.length, v => { r.length = v; schedule(); }, "number"));
       card.appendChild(fieldInput("Height", r.height, v => { r.height = v; schedule(); }, "number"));
@@ -1624,7 +1627,6 @@ function renderAssemblyEditors() {
     S.cants.forEach((r, idx) => {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Cantilever #' + (idx+1) + '</div>';
-      card.appendChild(fieldInput("Name", r.name, v => { r.name = v; schedule(); }));
       card.appendChild(fieldInput("SF", r.sf, v => { r.sf = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Material", r.material, [["r30","R30"],["foam55",'5.5" foam'],["cellulose","Cellulose"]], v => { r.material = v; render(); }));
       box.appendChild(card);
@@ -1671,7 +1673,6 @@ function renderAssemblyEditors() {
     S.crawlWalls.forEach((r, idx) => {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Crawl wall #' + (idx+1) + '</div>';
-      card.appendChild(fieldInput("Name", r.name, v => { r.name = v; schedule(); }));
       card.appendChild(fieldInput("Length", r.length, v => { r.length = v; schedule(); }, "number"));
       card.appendChild(fieldInput("Height", r.height, v => { r.height = v; schedule(); }, "number"));
       box.appendChild(card);
@@ -1682,7 +1683,6 @@ function renderAssemblyEditors() {
     S.dense.forEach((r, idx) => {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Dense-pack #' + (idx+1) + '</div>';
-      card.appendChild(fieldInput("Area", r.name, v => { r.name = v; schedule(); }));
       card.appendChild(fieldInput("Flat SF", r.sf, v => { r.sf = v; schedule(); }, "number"));
       box.appendChild(card);
     });
@@ -1691,8 +1691,7 @@ function renderAssemblyEditors() {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">Extra foam roof lines (optional — blank uses flat×pitch)</div>';
     S.foamRoofs.forEach((r, idx) => {
-      card.appendChild(fieldInput("Name #" + (idx+1), r.name, v => { r.name = v; schedule(); }));
-      card.appendChild(fieldInput("Flat SF", r.flatSf, v => { r.flatSf = v; schedule(); }, "number"));
+      card.appendChild(fieldInput("Flat SF #" + (idx+1), r.flatSf, v => { r.flatSf = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Pitch", r.pitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { r.pitch = v; render(); }));
     });
     card.appendChild(addBtn("Add foam roof line", () => { S.foamRoofs.push({ id: uid(), name: "", flatSf: "", pitch: "6", customRise: "" }); render(); }));
