@@ -380,7 +380,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
   <section id="tab-output" class="tabs-panel">
     <div class="section">
       <h2>Excel takeoff (primary)</h2>
-      <p class="cap">Product · Description · Footage · Bags — handoff for Sky / FieldGroove.</p>
+      <p class="cap">Work area · Product · Description · Footage · Bags — handoff for Sky / FieldGroove.</p>
       <div class="seg" id="seg-outputView">
         <button type="button" data-v="excel" class="active">Excel (primary)</button>
         <button type="button" data-v="fg">FG-style (secondary)</button>
@@ -2122,15 +2122,36 @@ function ballpark(linesArg) {
   return { total: round2(scaled + fixed), scaled: round2(scaled), fixed: round2(fixed), fixedItems, pricedLines, unpricedLines, missing: Array.from(missing).sort() };
 }
 
+// Work area shown on every Excel summary row (where the material goes).
+const WORK_AREA_LABELS = {
+  "Wall — 2x4 exterior (R-13)": "Exterior walls (2x4)", "Wall — 2x6 exterior (R-19)": "Exterior walls (2x6)",
+  "Wall — Daylight basement (R-19)": "Daylight basement walls", "Wall — Concrete basement (R-13)": "Concrete basement walls",
+  "Wall — Garage exterior": "Garage walls", "Wall — Interior": "Interior walls", "Interior walls": "Interior walls",
+  "Knee wall": "Knee walls", "Knee wrap": "Knee walls (wrap)", "Dead air": "Dead air", "Open vault": "Open vaults", "Closed vault": "Closed vaults",
+  "Poly vent": "Closed vaults (vents)", "Garage ceiling": "Garage ceiling", "Garage roof foam": "Garage roofline", "Baffles": "Eaves (baffles)",
+  "Band / rim": "Rim / band", "Between floors (sound)": "Between floors", "Cantilever": "Cantilevers", "Gable": "Gables", "Gable wrap": "Gables (wrap)",
+  "Crawl subfloor": "Crawl subfloor", "Crawl touch-up": "Crawl subfloor (touch-up)", "Crawl prep": "Crawl (removal)", "Poly": "Crawl floor",
+  "Encap poly": "Crawl floor (encap)", "Seam taping": "Crawl floor (encap)", "Crawl wall foam": "Crawl walls", "Dehumidifier": "Crawl space",
+  "UFBC": "UFBC (basement ceiling)", "Porch ceiling": "Porch ceiling", "Porch gable-off": "Porch gable", "Porch roof foam": "Porch roofline",
+  "Floor dense-pack": "Floors (dense-pack)", "Netting": "Netting", "Air seal (caulk & foam)": "Air seal", "Air seal add-on": "Air seal",
+  "Extra labor": "Extra labor", "Miscellaneous": "Misc", "Attic blow": "Attic (blown)", "Attic batts": "Attic batts", "Attic prep": "Attic (removal)",
+  "Roof foam": "Roofline",
+};
+function workAreaOf(L) {
+  const sec = String(L.assembly || "").replace(/^(Gable)\s*\([^)]*\)\s*$/, "$1").trim();
+  if (WORK_AREA_LABELS[sec]) return WORK_AREA_LABELS[sec];
+  if (L.area === "Fireplace") return "Fireplace";
+  return L.area || sec || "";
+}
 function buildExcelCsv() {
   const esc = s => {
     s = String(s == null ? "" : s);
     if (s.includes(",") || s.includes('"') || s.includes("\n")) return '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
-  const rows = ["Product,Description,Footage,Bags"];
+  const rows = ["Work area,Product,Description,Footage,Bags"];
   allLines().forEach(L => {
-    rows.push([L.product, L.description, (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), L.bags].map(esc).join(","));
+    rows.push([workAreaOf(L), L.product, L.description, (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), L.bags].map(esc).join(","));
   });
   return rows.join("\n");
 }
@@ -2758,13 +2779,13 @@ function takeoffXlsx(lines, title) {
     ? '<c r="' + ref + '"' + (style ? ' s="' + style + '"' : "") + '><v>' + v + "</v></c>"
     : '<c r="' + ref + '" t="inlineStr"' + (style ? ' s="' + style + '"' : "") + "><is><t xml:space=\"preserve\">" + xmlEsc(v) + "</t></is></c>";
   const rows = ['<row r="1">' + cell("A1", title, 1) + "</row>",
-    '<row r="2">' + ["Product", "Description", "Footage", "Bags"].map((h, i) => cell("ABCD"[i] + "2", h, 1)).join("") + "</row>"];
+    '<row r="2">' + ["Work area", "Product", "Description", "Footage", "Bags"].map((h, i) => cell("ABCDE"[i] + "2", h, 1)).join("") + "</row>"];
   lines.forEach((L, i) => {
     const r = i + 3, foot = (L.footage === 0 && L.unit === "—") ? "" : Number(L.footage);
-    rows.push('<row r="' + r + '">' + cell("A" + r, L.product || "") + cell("B" + r, L.description || "") + (foot === "" ? "" : cell("C" + r, foot)) + (L.bags ? cell("D" + r, L.bags) : "") + "</row>");
+    rows.push('<row r="' + r + '">' + cell("A" + r, workAreaOf(L)) + cell("B" + r, L.product || "") + cell("C" + r, L.description || "") + (foot === "" ? "" : cell("D" + r, foot)) + (L.bags ? cell("E" + r, L.bags) : "") + "</row>");
   });
   const x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
-  const sheet = x + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="30" customWidth="1"/><col min="2" max="2" width="44" customWidth="1"/><col min="3" max="4" width="12" customWidth="1"/></cols><sheetData>' + rows.join("") + "</sheetData></worksheet>";
+  const sheet = x + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="26" customWidth="1"/><col min="2" max="2" width="30" customWidth="1"/><col min="3" max="3" width="44" customWidth="1"/><col min="4" max="5" width="12" customWidth="1"/></cols><sheetData>' + rows.join("") + "</sheetData></worksheet>";
   const files = [
     { name: "[Content_Types].xml", data: x + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
     { name: "_rels/.rels", data: x + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
@@ -2822,9 +2843,9 @@ function renderOutput() {
   const wrap = $("outputTable");
   if (!lines.length) { wrap.innerHTML = "<p class='status'>Enter measurements — Excel rows appear here.</p>"; return; }
   if (S.outputView === "excel") {
-    let html = "<table><thead><tr><th>Product</th><th>Description</th><th>Footage</th><th>Bags</th></tr></thead><tbody>";
+    let html = "<table><thead><tr><th>Work area</th><th>Product</th><th>Description</th><th>Footage</th><th>Bags</th></tr></thead><tbody>";
     lines.forEach(L => {
-      html += "<tr><td>" + escHtml(L.product) + "</td><td>" + escHtml(L.description) + "</td><td class='num'>" +
+      html += "<tr><td>" + escHtml(workAreaOf(L)) + "</td><td>" + escHtml(L.product) + "</td><td>" + escHtml(L.description) + "</td><td class='num'>" +
         ((L.footage === 0 && L.unit === "—") ? "" : escHtml(fmt(L.footage))) + "</td><td class='num'>" + escHtml(L.bags) + "</td></tr>";
     });
     html += "</tbody></table>";
@@ -3366,7 +3387,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29n";
+const APP_BUILD = "2026-10-29o";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
