@@ -883,10 +883,13 @@ function resolvePitchFactor(pitch, customRise) {
 // Cavity width (inches) used for SF: 16 OC → 15, 19 OC → 18 (build i, 19.2" layouts), 24 OC → 24 (Asher's rule).
 function wallInside(oc) { return oc === "16" ? 15 : oc === "19" ? 18 : 24; }
 // Width shown in Excel descriptions: 15 / 19 / 24 — 19 OC never merges with 16 or 24.
+// Material width rule: wall cavities (vertical framing) use 15" material at 16 OC, 19" at 19 OC, 24" at 24 OC.
+// Horizontal framing (ceiling/floor joists, vaults, bands) uses material equal to the OC: 16/19/24 — see battW().
 function wallWidthLabel(oc) { return oc === "16" ? 15 : oc === "19" ? 19 : 24; }
 const OC_CHOICES = [["16", "16 OC"], ["19", "19 OC"], ["24", "24 OC"]];
 // Batt / roll width picker (build j) for every batt area that isn't a wall: shows in the description (R38/16 · R38/19 · R38/24), splits merges, drives the FG item.
 const BATT_W_CHOICES = [["16", '16"'], ["19", '19"'], ["24", '24"']];
+const WALL_W_CHOICES = [["16", '16 OC (15" batts)'], ["19", '19 OC (19" batts)'], ["24", '24 OC (24" batts)']];
 function battW(v, def) { v = String(v == null ? "" : v); return v === "16" || v === "19" || v === "24" ? v : def; }
 const BATT_W_DEFAULTS = { deadAir: "24", vault: "16", rim: "16", cant: "16", betweenFloors: "16", gable: "16",
   garageCeilOc: "16", porchCeilOc: "16", crawlSubOc: "16", ufbcOc: "16", touchupOc: "16", customAtticBattOc: "24" };
@@ -1720,7 +1723,7 @@ function buildLinesForPackage(p, tag) {
   if (F.crawlIsNewBatts) {
     const sub = S.crawlNewSf.trim() !== "" ? n(S.crawlNewSf) : flat;
     const r = S.crawlNewR || "R-19", oc = S.crawlNewOc || "16";
-    if (sub > 0) push(lines, { area: "Crawl", assembly: "Crawl subfloor", product: r + " fiberglass batts", description: r.replace("R-", "R") + " crawl subfloor / " + oc + " OC",
+    if (sub > 0) push(lines, { area: "Crawl", assembly: "Crawl subfloor", product: r + " fiberglass batts", description: r.replace("R-", "R") + "/" + battW(oc, "16") + " crawl subfloor",
       footage: round2(sub), unit: "SF", notes: noteTag + "New batts — no removal" });
     if (S.crawlNewPoly) {
       const ps = S.crawlNewPolySf.trim() !== "" ? n(S.crawlNewPolySf) : sub;
@@ -1799,7 +1802,7 @@ function buildLinesForPackage(p, tag) {
       const oc = String(r.oc || "16");
       const name = "Knee walls";
       const part = { name, txt: (r.shape === "triangle" ? "△ " : "") + fmt(n(r.height)) + "'×" + fmt(n(r.lf)) + " LF" + (r.shape === "triangle" ? "÷2" : "") };
-      addKnee("batt|R-19 fiberglass batts|R19|" + oc, { assembly: "Knee wall", product: "R-19 fiberglass batts", description: "R19 / " + oc + " OC" }, sf, part);
+      addKnee("batt|R-19 fiberglass batts|R19|" + oc, { assembly: "Knee wall", product: "R-19 fiberglass batts", description: "R19/" + wallWidthLabel(oc) + " / " + oc + " OC" }, sf, part);
       if (r.wrap) addKnee("wrap|House wrap|" + oc, { assembly: "Knee wrap", product: "House wrap", description: "Open knee wrap / " + oc + " OC" }, sf, part);
     });
     kneeGroups.forEach(g => {
@@ -1932,7 +1935,7 @@ function buildLinesForPackage(p, tag) {
       const sf = r.shape === "triangle" ? (L * H) / 2 : L * H;
       push(lines, { area: "Gable", assembly: "Gable (" + r.shape + ")",
         product: foamRoof ? "Open-cell spray foam" : "Fiberglass batts",
-        description: foamRoof ? '3.5" OC gable' : "R13/" + battW(r.oc, "16") + " gable batts", footage: round2(sf), unit: "SF", notes: noteTag });
+        description: foamRoof ? '3.5" OC gable' : "R13/" + wallWidthLabel(battW(r.oc, "16")) + " gable batts", footage: round2(sf), unit: "SF", notes: noteTag });
       if (r.wrap) push(lines, { area: "Gable", assembly: "Gable wrap", product: "House wrap", description: "W", footage: round2(sf), unit: "SF", notes: noteTag });
     });
   }
@@ -2329,7 +2332,7 @@ function renderAssemblyEditors() {
       card.appendChild(fieldSelect("Shape", r.shape || "rectangle", [["rectangle","Rectangle"],["triangle","Triangle"]], v => { r.shape = v; render(); }));
       card.appendChild(fieldInput("Height ft", r.height, v => { r.height = v; showSf(); schedule(); }, "number"));
       card.appendChild(fieldInput("LF", r.lf, v => { r.lf = v; showSf(); schedule(); }, "number"));
-      card.appendChild(fieldSelect("OC", r.oc || "16", OC_CHOICES, v => { r.oc = v; render(); }));
+      card.appendChild(fieldSelect("Stud spacing", r.oc || "16", WALL_W_CHOICES, v => { r.oc = v; render(); }));
       showSf(); card.appendChild(sfOut);
       const wrapRow = el("div", "toggle-row");
       wrapRow.appendChild(el("span", null, "Wrap"));
@@ -2362,7 +2365,7 @@ function renderAssemblyEditors() {
       const sf = round2(wallFactor(r) * n(r.cavities));
       card.innerHTML = '<div class="row-title">Wall #' + (idx+1) + ' · ' + wallExcelDesc(r, r.materialMode) + ' → ' + fmt(sf) + ' SF</div>';
       card.appendChild(fieldSelect("Kind", r.kind, Object.keys(WALL_KIND_LABELS).map(k => [k, WALL_KIND_LABELS[k]]), v => { r.kind = v; render(); }));
-      card.appendChild(fieldSelect("OC", r.oc, OC_CHOICES, v => { r.oc = v; render(); }));
+      card.appendChild(fieldSelect("Stud spacing", r.oc, WALL_W_CHOICES, v => { r.oc = v; render(); }));
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
       card.appendChild(fieldInput("Cavities", r.cavities, v => { r.cavities = v; schedule(); }, "number"));
@@ -2382,7 +2385,7 @@ function renderAssemblyEditors() {
       const card = el("div", "row-card");
       const sf = round2(interiorWallSf(r));
       card.innerHTML = '<div class="row-title">Interior walls #' + (idx+1) + ' · ' + fmt(interiorCavities(r)) + ' cav → ' + fmt(sf) + ' SF</div>';
-      card.appendChild(fieldSelect("OC", r.oc, OC_CHOICES, v => { r.oc = v; render(); }));
+      card.appendChild(fieldSelect("Stud spacing", r.oc, WALL_W_CHOICES, v => { r.oc = v; render(); }));
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
       const g = el("div", "grid2");
@@ -2421,7 +2424,7 @@ function renderAssemblyEditors() {
       card.appendChild(fieldSelect("Shape", r.shape, [["triangle","Triangle"],["rectangle","Rectangle"]], v => { r.shape = v; render(); }));
       card.appendChild(fieldInput("Length", r.length, v => { r.length = v; schedule(); }, "number"));
       card.appendChild(fieldInput("Height", r.height, v => { r.height = v; schedule(); }, "number"));
-      if (battUse.gable) card.appendChild(fieldSelect("Batt width", battW(r.oc, "16"), BATT_W_CHOICES, v => { r.oc = v; render(); }));
+      if (battUse.gable) card.appendChild(fieldSelect("Stud spacing", battW(r.oc, "16"), WALL_W_CHOICES, v => { r.oc = v; render(); }));
       const wrapRow = el("div", "toggle-row"); wrapRow.appendChild(el("span", null, "Wrap W"));
       const sw = el("button", "switch" + (r.wrap ? " on" : "")); sw.type = "button";
       sw.onclick = () => { r.wrap = !r.wrap; render(); }; wrapRow.appendChild(sw); card.appendChild(wrapRow);
@@ -2501,7 +2504,7 @@ function renderAssemblyEditors() {
     card.innerHTML = '<div class="row-title">Crawl – new batts (no removal)</div>';
     card.appendChild(fieldInput("Subfloor SF (blank = flat SF)", S.crawlNewSf, v => { S.crawlNewSf = v; schedule(); }, "number"));
     card.appendChild(fieldSelect("Batt R-value", S.crawlNewR, [["R-19","R19"],["R-13","R13"],["R-30","R30"]], v => { S.crawlNewR = v; render(); }));
-    card.appendChild(fieldSelect("OC", S.crawlNewOc, OC_CHOICES, v => { S.crawlNewOc = v; render(); }));
+    card.appendChild(fieldSelect("Batt width", battW(S.crawlNewOc, "16"), BATT_W_CHOICES, v => { S.crawlNewOc = v; render(); }));
     const row = el("div", "toggle-row"); row.appendChild(el("span", null, "Add poly?"));
     const b = el("button", "switch" + (S.crawlNewPoly ? " on" : "")); b.type = "button";
     b.onclick = () => {
@@ -3413,7 +3416,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29m";
+const APP_BUILD = "2026-10-29n";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
