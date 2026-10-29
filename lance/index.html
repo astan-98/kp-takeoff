@@ -1113,7 +1113,7 @@ function wallExcelDesc(row, mode) {
   const inside = wallWidthLabel(row.oc);
   const h = wallHeightFt(row);
   const hLabel = h + "'";
-  if (mode === "foam") return '3.5" OC foam'; // 29ap: spray foam — no batt width/height
+  if (mode === "foam") return '3.5" OC'; // 29ap: spray foam — no batt width/height; 29ar: no trailing "foam"
   if (mode === "cellulose" || mode === "spider") {
     const depth = (row.kind === "ext_2x6" || row.kind === "daylight") ? '5.5"' : '3.5"';
     return (mode === "spider" ? "Spider" : "Cellulose") + " " + depth + " / " + inside + " / " + hLabel;
@@ -1161,7 +1161,7 @@ function interiorWallLine(r, idx, count, noteTag) {
   const hLabel = wallHeightFt(r) + "'";
   const mode = r.materialMode || "batt";
   let product, desc;
-  if (mode === "foam") { product = "Open-cell spray foam"; desc = '3.5" OC foam'; } // 29ap: no width/height on spray foam
+  if (mode === "foam") { product = "Open-cell spray foam"; desc = '3.5" OC'; } // 29ap: no width/height on spray foam; 29ar: no trailing "foam"
   else if (mode === "cellulose") { product = "Cellulose"; desc = 'Cellulose 3.5" / ' + inside + " / " + hLabel; }
   else if (mode === "spider") { product = "Spider"; desc = 'Spider 3.5" / ' + inside + " / " + hLabel; }
   else if (mode === "acoustical") { product = "Rock wool"; desc = 'AcousticalBat 3" / ' + inside + " / " + hLabel; }
@@ -2302,6 +2302,9 @@ function buildLinesForPackage(p, tag) {
       lines.splice(lines.indexOf(L) + 1, 0, Object.assign({ bags: "" }, { area: L.area, assembly: "Seam taping", product: "Seam taping (10 mil)", description: "Tape 10 mil poly seams", footage: L.footage, unit: "SF", notes: noteTag }));
   });
   if (S.includeFp) appendFpLines(lines, noteTag);
+  // 29ar: no foam work-area description ends in "foam" (3.5" OC = open cell, 1" CC = closed cell) — material tables left as-is, stripped here
+  const noFoamWord = t => String(t).replace(/\s+foam(\s*\(#\d+\))?$/i, "$1");
+  lines.forEach(L => { if (/spray foam/i.test(String(L.product || ""))) { L.description = noFoamWord(L.description); if (L._mergeDesc != null) L._mergeDesc = noFoamWord(L._mergeDesc); } });
   return mergeLikeLines(lines, noteTag);
 }
 
@@ -4195,7 +4198,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29aq";
+const APP_BUILD = "2026-10-29ar";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
