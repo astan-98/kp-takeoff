@@ -58,6 +58,14 @@ button { cursor: pointer; border: none; background: none; }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-secondary { background: var(--bg3); color: var(--text); }
 .btn-danger { background: var(--danger); color: #fff; }
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+.photo-grid:empty { display: none; }
+.photo-th { position: relative; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; background: var(--bg2); border: 1px solid var(--border); }
+.photo-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-th .photo-x { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 14px; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 18px; line-height: 28px; padding: 0; }
+.photo-th .photo-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 6px; font-size: .7rem; color: #fff; background: rgba(0,0,0,.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.photo-view { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; overflow: auto; }
+.photo-view img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .btn-sm { min-height: 36px; padding: 6px 12px; font-size: .85rem; border-radius: 10px; }
 .btn-block { width: 100%; }
 .tabs-panel { display: none; padding: 12px 16px 24px; }
@@ -324,6 +332,15 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <p class="status" id="statusNote"></p>
     </div>
 
+    <div class="section" id="sec-photos">
+      <h2>Photos</h2>
+      <p class="cap">Snap or pick photos for this job. They save with the job and go along with the work order to Sky.</p>
+      <button type="button" class="btn btn-secondary btn-block" id="btnAddPhoto">📷 Add photo</button>
+      <input type="file" id="photoInput" accept="image/*" multiple class="hidden">
+      <div class="photo-grid" id="photoGrid"></div>
+      <p class="status" id="photoStatus"></p>
+    </div>
+
     <div class="section" id="sec-assemblies">
       <h2>What's on this house?</h2>
       <p class="cap">Gates skip unused assemblies. Foam roof packages skip dead air / vaults / knees; gables only on foam roofline. Flat asked once.</p>
@@ -402,7 +419,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       </div>
       <div class="divider"></div>
       <h2>Work order → Sky</h2>
-      <p class="cap">Same KP work order sheet, filled from this job (customer, address, city, subdivision). Walls / batts lines go to Sky; attic blow / roof foam lines make a separate Attic sheet. Preview, then share.</p>
+      <p class="cap">Same KP work order sheet, filled from this job (customer, address, city, subdivision). The whole takeoff — walls/batts and attic/roof lines — goes to Sky as one work order (long jobs continue onto extra sheets in the same file). Photos ride along, and a fireplace job adds a Fireplace sheet + details file. Preview, then share.</p>
       <div class="grid2">
         <div class="field"><label>Rep</label><input id="woRep" autocapitalize="words"></div>
         <div class="field"><label>Date (blank = none)</label><input id="woDate" type="date"></div>
@@ -568,6 +585,7 @@ const DB_NAME = "kp-takeoff-v2";
 const STORE = "jobs";
 const SPEC_STORE = "fp_specs";
 const PRICE_STORE = "price_library";
+const PHOTO_STORE = "photos"; // build q: job photos {id, jobId, type, data: ArrayBuffer, at} — only ids/captions live in the draft/job
 const DRAFT_KEY = "kp-takeoff-draft-v1";
 const MARGIN_FLOOR = 30;
 const MARGIN_BASE = 40;
@@ -1072,9 +1090,10 @@ function copyText(text) {
 function openDb() {
   return new Promise((resolve, reject) => {
     if (!indexedDB) { reject(new Error("IndexedDB unavailable")); return; }
-    const req = indexedDB.open(DB_NAME, 3);
+    const req = indexedDB.open(DB_NAME, 4);
     req.onupgradeneeded = () => {
       const db = req.result;
+      if (!db.objectStoreNames.contains(PHOTO_STORE)) db.createObjectStore(PHOTO_STORE, { keyPath: "id" });
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
       if (!db.objectStoreNames.contains(SPEC_STORE)) db.createObjectStore(SPEC_STORE, { keyPath: "modelId" });
       if (!db.objectStoreNames.contains(PRICE_STORE)) db.createObjectStore(PRICE_STORE, { keyPath: "materialKey" });
@@ -1144,6 +1163,7 @@ const S = {
   dateMeasured: todayISO(),
   owner: APP_EDITION === "lance" ? "lance" : "asher",
   woRep: "", woDate: "", woNotes: "",
+  photos: [],
   builder: "", city: "", address: "", keywords: "",
   siteState: "GA", siteZip: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
   billSame: true, billAddress: "", billCity: "", billState: "", billZip: "", showFgMap: false,
@@ -1561,7 +1581,7 @@ function renderFgMap() {
   });
 }
 
-/* ===== Takeoff → work order (Walls/Batts → Sky, Attic → Josh), build 29i =====
+/* ===== Takeoff → work order → Sky (whole takeoff on one WO since build 29q; was Walls/Batts → Sky, Attic → Josh in 29i) =====
    Same sheet layout + preview as the Chafin work orders (KPWO.sheetLayout / buildXlsx / previewHtml in wo-core.js),
    filled from this takeoff's own job info instead of the Chafin lot log. */
 const TWO_DEFAULT_CONTACTS = {
@@ -1590,8 +1610,9 @@ const TWO_LABELS = {
   "Roof foam": "Roof Foam", "Porch roof foam": "Porch Roof Foam", "Garage roof foam": "Garage Roof Foam",
 };
 function twoCatOf(L) { return TWO_ATTIC_SECS.indexOf(fgSection(L.assembly)) >= 0 ? "attic" : "walls"; }
-function twoLines(cat) {
-  return allLines().filter(L => !lineIsUnpriced(L) && L.dollars == null && twoCatOf(L) === cat);
+// build q: the field takeoff goes to Sky as ONE work order with every line (walls/batts + attic/roof foam); no Josh/attic split here.
+function twoLines() {
+  return allLines().filter(L => !lineIsUnpriced(L) && L.dollars == null);
 }
 function twoOrder() {
   const first = (S.custFirst || "").trim(), last = (S.custLast || "").trim();
@@ -1604,23 +1625,85 @@ function twoOrder() {
     line7: optionsOn() ? optionTitle(S.optionView | 0) : packageLabel().replace(/ · FP .*$/, ""), plan: "",
     date: d.length === 3 ? new Date(+d[0], +d[1] - 1, +d[2]) : null, dateText: "", sheets: {}, overflow: {},
   };
-  ["walls", "attic"].forEach(cat => {
-    const ls = twoLines(cat); if (!ls.length) { o.sheets[cat] = null; return; }
-    const rows = ls.map(L => ({ p: TWO_LABELS[fgSection(L.assembly)] || L.area || "", d: L.description || L.product,
-      f: wholeQty(L), b: L.bags || "" }));
-    const fit = rows.slice(0, 21), extra = rows.slice(21);
-    o.overflow[cat] = extra.length;
-    const notes = [(S.woNotes || "").trim()].concat(extra.length ? ["More: " + extra.map(x => x.p + " " + x.d + " " + fmt(n(x.f))).join("; ")] : []).filter(Boolean).join("\n");
-    o.sheets[cat] = { cat, kind: cat === "attic" ? "Attic" : "Walls/Batts", variant: "", title: cat === "attic" ? "Attic" : "Walls-Batts",
+  // Order: walls/batts lines first, then attic/roof lines; 21 rows per sheet, extra lines continue on more sheets (tabs) — nothing dropped.
+  const ls = twoLines(), ordered = ls.filter(L => twoCatOf(L) === "walls").concat(ls.filter(L => twoCatOf(L) === "attic"));
+  const rows = ordered.map(L => ({ p: TWO_LABELS[fgSection(L.assembly)] || L.area || "", d: L.description || L.product, f: wholeQty(L), b: L.bags || "" }));
+  const PER = 21, pages = Math.max(1, Math.ceil(rows.length / PER));
+  o.pages = []; o.lineCount = rows.length; o.fpPages = []; o.fpCount = 0;
+  const fpDet = twoFpDetails(), fpLs = twoFpLines();
+  for (let k = 0; rows.length && k < pages; k++) {
+    const key = "p" + (k + 1), fit = rows.slice(k * PER, (k + 1) * PER);
+    const notes = [k === 0 ? (S.woNotes || "").trim() : "", k === 0 && fpDet.length ? "FIREPLACE: see the Fireplace sheet (and fireplace .txt) for every fireplace detail." : "", pages > 1 ? "Page " + (k + 1) + " of " + pages + (k < pages - 1 ? " — continued on next sheet" : "") : ""].filter(Boolean).join("\n");
+    o.sheets[key] = { cat: "walls", kind: "Work Order", variant: "", title: pages > 1 ? "Work Order " + (k + 1) + " of " + pages : "Work Order",
       rep: (S.woRep || "").trim() || ownerName(), note: "", items: fit.map((x, i) => Object.assign({ r: 9 + i }, x)), notes };
-  });
+    o.pages.push(key);
+  }
+  if (fpDet.length) {
+    // Fireplace sheet(s): same WO layout. Fireplace lines first, then every recorded field (label → description). 21 rows/sheet, continues if needed.
+    const fr = fpLs.map(L => ({ p: L.assembly || "Fireplace", d: [L.product, L.description].filter(Boolean).join(" — "), f: (L.footage && L.unit !== "—") ? wholeQty(L) : "", b: "" }))
+      .concat(fpDet.map(r => ({ p: r[0], d: r[1], f: "", b: "" })));
+    o.fpCount = fr.length;
+    const fpN = Math.max(1, Math.ceil(fr.length / 21));
+    for (let k = 0; k < fpN; k++) {
+      const key = "fp" + (k + 1);
+      o.sheets[key] = { cat: "walls", kind: "Fireplace", variant: "", title: fpN > 1 ? "Fireplace " + (k + 1) + " of " + fpN : "Fireplace",
+        rep: (S.woRep || "").trim() || ownerName(), note: "", items: fr.slice(k * 21, (k + 1) * 21).map((x, i) => Object.assign({ r: 9 + i }, x)),
+        notes: ["FIREPLACE — " + (fpDet.find(r => r[0] === "Model") || ["", ""])[1], (fpDet.find(r => r[0] === "Gas type") || ["", ""])[1] ? "Gas: " + fpDet.find(r => r[0] === "Gas type")[1] : "",
+          fpN > 1 ? "Page " + (k + 1) + " of " + fpN : ""].filter(Boolean).join("\n") };
+      o.pages.push(key); o.fpPages.push(key);
+    }
+  }
   return o;
 }
-function twoFileName(o, cat) { return ("WO - " + o.jobSite + " - " + (cat === "attic" ? "Attic" : "Walls-Batts")).replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() + ".xlsx"; }
-function twoShareText(o, cat) {
-  const who = twoWho(cat).name, where = [o.jobSite, (S.city || "").trim()].filter(Boolean).join(", ");
-  return { title: "WO - " + o.jobSite + " - " + (cat === "attic" ? "Attic" : "Walls/Batts"),
-    text: who + ", attached is the " + (cat === "attic" ? "attic" : "walls/batts") + " work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + ". - " + ownerName() };
+// build q: every fireplace field Asher recorded, as [label, value] rows (only when the house has a fireplace).
+function twoFpDetails() {
+  if (!S.includeFp) return [];
+  const model = findFpModel(S.fpModelId), R = [], yn = b => b ? "Yes" : "No";
+  const add = (k, v) => { v = v == null ? "" : String(v).trim(); if (v !== "") R.push([k, v]); };
+  const retro = S.fpMode === "retro";
+  add("Job type", retro ? "Retrofit" : "New construction");
+  if (retro) add("Retrofit path", { tearout: "Complete tear-out", wood_stove: "Wood stove", insert: "Insert" }[S.fpRetroKind] || S.fpRetroKind);
+  if (retro && S.fpRetroKind === "tearout") add("Demo by other contractor", yn(S.fpOtherDemo));
+  if (retro && S.fpRetroKind === "wood_stove") add("90° wall clearance OK", yn(S.fpWall90));
+  if (retro && S.fpRetroKind === "insert") {
+    add("Existing shell", { masonry: "Masonry", prefab: "Prefab" }[S.fpInsertShell] || S.fpInsertShell);
+    add("Insert fuel", { wood: "Wood", dv: "Direct vent (DV)", vf: "Vent-free (VF)" }[S.fpFuel] || S.fpFuel);
+    add("Front width (in)", S.fpFrontW); add("Back width (in)", S.fpBackW); add("Front height (in)", S.fpFrontH); add("Back height (in)", S.fpBackH); add("Depth (in)", S.fpDepth);
+  }
+  add("Model", model ? fpDisplayName(model) : S.fpModelId);
+  if (model) add("Unit type", FP_TYPE_LABELS[model.category] || model.category);
+  add("Gas type", { natural: "Natural gas", propane: "Propane", idk: "UNKNOWN — confirm with builder" }[S.gasType] || S.gasType);
+  if (model && model.spec) { try { fpSpecRows(model).forEach(r => add("Spec: " + r[0], r[1])); } catch (e) {} }
+  add("Total pipe (ft)", S.fpPipeFt); add("Elbows", S.fpElbows);
+  add("Termination", { roof: "Roof", wall: "Wall", chimney: "Chimney" }[S.fpTerm] || S.fpTerm);
+  if (S.fpTerm === "chimney") {
+    add("Chimney / roof pitch", S.fpChimPitch === "custom" ? "Custom rise " + (S.fpChimCustomRise || "?") + "/12" : S.fpChimPitch + "/12");
+    add("Roof type", S.fpRoofType); add("Chimney cap / shroud", String(S.fpCap || "").replace(/_/g, " "));
+  }
+  add("Chase clear", S.fpChaseClear ? "Yes" : "NO — BLOCKED" + ((S.fpChaseNote || "").trim() ? ": " + S.fpChaseNote.trim() : ""));
+  add("Access notes", S.fpAccessNotes); add("Hearth platform height (in)", S.fpHearthPlatform); add("Gas starter", yn(S.fpWoodGasStarter));
+  const bl = (model && model.blower) || "none";
+  add("Blower", bl === "vf_none" ? "None (vent-free)" : bl === "none" ? "No blower for this model" : (bl === "dv_default" ? S.fpBlowerChoice !== "none" : S.fpBlowerChoice === "include") ? "Included" : "Not included");
+  add("Spec RO H × W × D (in)", (S.fpSpecRoH || S.fpSpecRoW || S.fpSpecRoD) ? [S.fpSpecRoH || "?", S.fpSpecRoW || "?", S.fpSpecRoD || "?"].join(" × ") : "");
+  add("Spec hearth lip (in)", S.fpSpecLip); add("Spec platform height (in)", S.fpSpecPlatform);
+  if (S.fpSpecRoH || S.fpSpecRoW || S.fpSpecRoD) add("Spec source", S.fpSpecUser ? "Saved spec" : (model && model.spec ? (model.spec.placeholder ? "Placeholder — not on spec sheet" : model.spec.src) : "Catalog default"));
+  add("Measured RO H × W × D (in)", (S.fpMeasRoH || S.fpMeasRoW || S.fpMeasRoD) ? [S.fpMeasRoH || "?", S.fpMeasRoW || "?", S.fpMeasRoD || "?"].join(" × ") : "");
+  const pass = fpSpecPass(); if (pass) add("RO check", (pass.ok ? "PASS" : "FAIL") + " — measured " + pass.mH + "×" + pass.mW + "×" + pass.mD + " vs need " + pass.needH + "×" + pass.needW + "×" + pass.needD);
+  return R;
+}
+// Fireplace lines exactly as on the takeoff (Fireplace area + gas-type flag); they're unpriced so they never sit on the main WO rows.
+function twoFpLines() { return S.includeFp ? allLines().filter(L => L.area === "Fireplace" || L.assembly === "Gas type") : []; }
+function twoFpText(o) {
+  const det = twoFpDetails(), ls = twoFpLines();
+  const head = ["FIREPLACE — " + o.jobSite, [o.address, o.customer].filter(Boolean).join(" · "), "Measured " + (S.dateMeasured || "") + " by " + ((S.woRep || "").trim() || ownerName()), ""];
+  return head.concat(det.map(r => r[0] + ": " + r[1]), ["", "FIREPLACE LINES"],
+    ls.map(L => "- " + (L.assembly || "") + " | " + (L.product || "") + " | " + (L.description || "") + ((L.footage && L.unit !== "—") ? " | " + fmt(n(L.footage)) + " " + (L.unit || "") : "") + (L.notes ? " (" + String(L.notes).trim() + ")" : ""))).join("\n") + "\n";
+}
+function twoFileName(o) { return ("WO - " + o.jobSite).replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() + ".xlsx"; }
+function twoShareText(o) {
+  const who = twoWho("walls").name, where = [o.jobSite, (S.city || "").trim()].filter(Boolean).join(", ");
+  return { title: "WO - " + o.jobSite,
+    text: who + ", attached is the work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + ". - " + ownerName() };
 }
 function twoRecipient(cat) {
   const c = twoWho(cat), d = el("div", "wo-recip");
@@ -1630,55 +1713,71 @@ function twoRecipient(cat) {
   b.onclick = () => copyText(c.email).then(ok => { b.textContent = ok ? "Copied ✓" : "Copy failed"; setTimeout(() => { b.textContent = "Copy email"; }, 1800); });
   d.appendChild(b); return d;
 }
-function twoExport(cat, msgEl) {
-  const o = twoOrder(); if (!o.sheets[cat]) return Promise.resolve();
-  const bytes = KPWO.buildXlsx(o, [cat]), name = twoFileName(o, cat), XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-  window.__lastTwo = { name, bytes };
-  const t = twoShareText(o, cat), m = msgEl || $("twoStatus");
+function twoExport(msgEl) {
+  const o = twoOrder(); if (!o.pages.length) return Promise.resolve();
+  const bytes = KPWO.buildXlsx(o, o.pages), name = twoFileName(o), XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const t = twoShareText(o), m = msgEl || $("twoStatus");
   let file = null; try { file = new File([bytes], name, { type: XT }); } catch (e) {}
-  const dl = () => { const url = URL.createObjectURL(new Blob([bytes], { type: XT }));
-    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
-    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); if (m) m.textContent = "Downloaded " + name + "."; };
-  if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
-    return navigator.share({ files: [file], title: t.title, text: t.text }).then(() => { if (m) m.textContent = "Shared " + name + "."; },
-      e => { if (e && e.name === "AbortError") { if (m) m.textContent = "Share canceled."; } else { dl(); if (m) m.textContent = "Share didn't open, so I downloaded the file instead."; } });
+  // build q: job photos ride along in the same share sheet (Sky's walls/batts sheet). Bytes are already in memory so the share stays inside the tap.
+  const ph = photoFilesForShare(o.jobSite), pFiles = ph.files.slice(), pn = ph.files.length;
+  if (o.fpPages.length) { try { pFiles.unshift(new File([twoFpText(o)], photoFileBase(o.jobSite) + " - fireplace.txt", { type: "text/plain" })); } catch (e) {} }
+  const withFp = o.fpPages.length ? " + fireplace details" : "";
+  const missing = ph.missing ? " (" + ph.missing + " photo" + (ph.missing > 1 ? "s" : "") + " still loading — not attached)" : "";
+  window.__lastTwo = { name, bytes, pages: o.pages.length, fpPages: o.fpPages.length, lines: o.lineCount, extras: pFiles.map(f => f.name) };
+  const withP = withFp + (pn ? " + " + pn + " photo" + (pn > 1 ? "s" : "") : "");
+  const dlBlob = (b, nm) => { const url = URL.createObjectURL(b);
+    const a = document.createElement("a"); a.href = url; a.download = nm; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); };
+  const dl = () => { dlBlob(new Blob([bytes], { type: XT }), name); pFiles.forEach(f => dlBlob(f, f.name));
+    if (m) m.textContent = "Downloaded " + name + withP + "." + missing; };
+  const canShare = fs => { try { return !!(navigator.canShare && navigator.share && navigator.canShare({ files: fs })); } catch (e) { return false; } };
+  const att = [o.fpPages.length ? "fireplace details" : "", pn ? pn + " photo" + (pn > 1 ? "s" : "") : ""].filter(Boolean).join(" + ");
+  const text = att ? t.text.replace(/\. - /, " (" + att + " attached). - ") : t.text;
+  if (file && pFiles.length && canShare([file].concat(pFiles))) {
+    return navigator.share({ files: [file].concat(pFiles), title: t.title, text }).then(() => { if (m) m.textContent = "Shared " + name + withP + "." + missing; },
+      e => { if (e && e.name === "AbortError") { if (m) m.textContent = "Share canceled."; } else { dl(); if (m) m.textContent = "Share didn't open, so I downloaded the files instead." + missing; } });
+  }
+  if (file && canShare([file])) {
+    const note = pFiles.length ? " Photos/fireplace file couldn't go in the same share on this phone — the Fireplace sheet is still in the work order; send photos from the Photos app." : "";
+    return navigator.share({ files: [file], title: t.title, text: t.text }).then(() => { if (m) m.textContent = "Shared " + name + "." + note + missing; },
+      e => { if (e && e.name === "AbortError") { if (m) m.textContent = "Share canceled."; } else { dl(); if (m) m.textContent = "Share didn't open, so I downloaded the files instead." + missing; } });
   }
   dl(); return Promise.resolve();
 }
-function twoPreview(cat) {
-  const o = twoOrder(); if (!o.sheets[cat]) return;
+function twoPreview() {
+  const o = twoOrder(); if (!o.pages.length) return;
   twoClose();
   const m = el("div", "xl-modal"); m.id = "twoPreview";
   m.innerHTML = '<div class="xl-bar"><button type="button" class="btn btn-secondary btn-sm" id="twoXlClose">Close</button>' +
-    '<div class="xl-title">' + escHtml(twoFileName(o, cat).replace(/\.xlsx$/, "")) + "</div>" +
+    '<div class="xl-title">' + escHtml(twoFileName(o).replace(/\.xlsx$/, "")) + "</div>" +
     '<button type="button" class="btn btn-secondary btn-sm" id="twoXlZoom">100%</button></div>' +
-    '<div class="xl-scroll" id="twoXlScroll"><div class="xl-zoom" id="twoXlZoomBox">' + KPWO.previewHtml(o, cat) + "</div></div>" +
-    '<div class="xl-foot">' + (o.overflow[cat] ? '<p class="status">' + o.overflow[cat] + " more line(s) than the sheet's 21 rows — listed in Notes.</p>" : "") +
-    '<button type="button" class="btn btn-primary btn-block" id="twoXlShare">Share this file to ' + escHtml(twoWho(cat).name) + "</button>" +
+    '<div class="xl-scroll" id="twoXlScroll"><div class="xl-zoom" id="twoXlZoomBox">' + o.pages.map(k => KPWO.previewHtml(o, k)).join('<div style="height:12px"></div>') + "</div></div>" +
+    '<div class="xl-foot">' + ((o.pages.length - o.fpPages.length) > 1 ? '<p class="status">' + o.lineCount + " lines — continues across " + (o.pages.length - o.fpPages.length) + " sheets (tabs) in the same file.</p>" : "") +
+    (o.fpPages.length ? '<p class="status">🔥 Fireplace sheet + fireplace details file included.</p>' : "") +
+    (S.photos.length ? '<p class="status">📷 ' + S.photos.length + " job photo" + (S.photos.length > 1 ? "s" : "") + " will be attached too.</p>" : "") +
+    '<button type="button" class="btn btn-primary btn-block" id="twoXlShare">Share ' + (S.photos.length ? "work order + photos" : "this file") + " to " + escHtml(twoWho("walls").name) + "</button>" +
     '<div id="twoXlRecip"></div><p class="status" id="twoXlMsg" style="text-align:center"></p></div>';
   document.body.appendChild(m); document.body.classList.add("xl-open");
-  $("twoXlRecip").appendChild(twoRecipient(cat));
+  $("twoXlRecip").appendChild(twoRecipient("walls"));
   let fit = true; const box = $("twoXlZoomBox");
   const apply = () => { const page = box.firstChild, w = (page && page.offsetWidth) || 806, avail = $("twoXlScroll").clientWidth - 16;
     box.style.zoom = fit ? Math.min(1, avail > 0 ? avail / w : 1) : 1; $("twoXlZoom").textContent = fit ? "100%" : "Fit"; };
   apply(); window.addEventListener("resize", apply); m._apply = apply;
   $("twoXlZoom").onclick = () => { fit = !fit; apply(); };
   $("twoXlClose").onclick = twoClose;
-  $("twoXlShare").onclick = () => twoExport(cat, $("twoXlMsg"));
+  $("twoXlShare").onclick = () => twoExport($("twoXlMsg"));
 }
 function twoClose() { const m = $("twoPreview"); if (!m) return; if (m._apply) window.removeEventListener("resize", m._apply); m.remove(); document.body.classList.remove("xl-open"); }
 function renderTwo() {
   const box = $("twoActions"); if (!box) return;
-  const hasW = twoLines("walls").length > 0, hasA = twoLines("attic").length > 0;
+  const hasW = twoLines().length > 0 || twoFpDetails().length > 0;
   if ($("woRep") && document.activeElement !== $("woRep")) { $("woRep").value = S.woRep || ""; $("woRep").placeholder = ownerName(); }
   if ($("woDate") && document.activeElement !== $("woDate")) $("woDate").value = S.woDate || "";
   if ($("woNotes") && document.activeElement !== $("woNotes")) $("woNotes").value = S.woNotes || "";
   box.innerHTML = "";
   const b = el("button", "btn btn-primary btn-block", "Work order → " + escHtml(twoWho("walls").name)); b.type = "button"; b.id = "btnTwoWalls";
-  b.disabled = !hasW; b.onclick = () => twoPreview("walls"); box.appendChild(b); box.appendChild(twoRecipient("walls"));
-  if (hasA) { const a = el("button", "btn btn-secondary btn-block", "Attic work order → " + escHtml(twoWho("attic").name)); a.type = "button"; a.id = "btnTwoAttic"; a.style.marginTop = "8px";
-    a.onclick = () => twoPreview("attic"); box.appendChild(a); }
-  if (!hasW) box.appendChild(el("p", "status", "No walls / batts lines on this takeoff yet."));
+  b.disabled = !hasW; b.onclick = () => twoPreview(); box.appendChild(b); box.appendChild(twoRecipient("walls"));
+  if (!hasW) box.appendChild(el("p", "status", "No lines on this takeoff yet."));
 }
 
 function wallModeOptions() {
@@ -2964,7 +3063,7 @@ function renderArchive() {
     card.innerHTML = '<div class="meta">' + escHtml(j.dateMeasured) + " · " + ownerName(j.owner) +
       " · " + escHtml(j.builder || "—") + " · " + escHtml(j.city || "—") + '</div>' +
       '<div class="title">' + escHtml(j.address || "(no address)") + '</div>' +
-      '<div class="meta">' + escHtml(relabelPkg(j.packageLabel)) + '</div>' +
+      '<div class="meta">' + escHtml(relabelPkg(j.packageLabel)) + (j.photoCount ? " · 📷 " + j.photoCount : "") + '</div>' +
       (j.chaseBlocked ? '<div class="callout danger" style="margin:6px 0 8px;padding:8px"><strong>⚠ Chase blocked</strong>' + escHtml(j.chaseNote || "No note") + '</div>' : '');
     const actions = el("div", "archive-actions");
     const open = el("button", "btn btn-primary btn-sm"); open.type = "button"; open.textContent = "Open";
@@ -2972,7 +3071,8 @@ function renderArchive() {
     const del = el("button", "btn btn-danger btn-sm"); del.type = "button"; del.textContent = "Delete";
     del.onclick = () => {
       if (!confirm("Delete this archived takeoff?")) return;
-      idbDelete(j.id).then(() => { setStatus("Deleted from archive."); refreshArchive(); }).catch(() => setStatus("Delete failed."));
+      const full = (S._fullJobs || []).find(x => x.id === j.id), pids = ((full && full.draft && full.draft.photos) || []).map(x => x && x.id).filter(Boolean);
+      idbDelete(j.id).then(() => { setStatus("Deleted from archive."); refreshArchive(); photoForget(pids, j.id); }).catch(() => setStatus("Delete failed."));
     };
     actions.appendChild(open); actions.appendChild(del); card.appendChild(actions); list.appendChild(card);
   });
@@ -3046,6 +3146,7 @@ function setStatus(msg) {
 }
 
 function render() {
+  renderPhotos();
   const F = flags();
   // header fields
   $("builder").value = S.builder;
@@ -3153,7 +3254,7 @@ function render() {
 function draftPayload() {
   const copy = {};
   Object.keys(S).forEach(k => {
-    if (k === "archive" || k === "draftReady" || k === "_suppressSave" || k === "statusNote" || k === "idbOk") return;
+    if (k === "archive" || k === "draftReady" || k === "_suppressSave" || k === "_fullJobs" || k === "statusNote" || k === "idbOk") return;
     if (k.startsWith("filter")) return;
     copy[k] = S[k];
   });
@@ -3173,6 +3274,8 @@ function migrateState(d) {
   // customer fields (build h): jobs saved before them start blank, never inherit the previous job's customer
   Object.keys(CUST_DEFAULTS).forEach(k => { if (!(k in d)) S[k] = CUST_DEFAULTS[k]; });
   if (typeof S.billSame !== "boolean") S.billSame = true;
+  if (!Array.isArray(S.photos) || !("photos" in d)) S.photos = [];
+  S.photos = S.photos.filter(x => x && x.id).map(x => ({ id: String(x.id), caption: typeof x.caption === "string" ? x.caption : "" }));
   ["woRep", "woDate", "woNotes"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
   if (!OWNER_LABELS[S.owner]) S.owner = APP_EDITION === "lance" ? "lance" : "asher";
   if (d.caulkFoam) S.airSealed = true;
@@ -3232,7 +3335,7 @@ function restoreDraft() {
   try {
     const d = JSON.parse(raw);
     Object.keys(d).forEach(k => {
-      if (k in S && k !== "archive" && k !== "priceLibrary") S[k] = d[k];
+      if (k in S && k !== "archive" && k !== "priceLibrary" && k !== "_fullJobs") S[k] = d[k];
     });
     migrateState(d);
   } catch (e) {}
@@ -3245,7 +3348,7 @@ function refreshArchive() {
     S.archive = jobs.sort((a, b) => b.dateMeasured.localeCompare(a.dateMeasured)).map(j => ({
       id: j.id, dateMeasured: j.dateMeasured, owner: j.owner, builder: j.builder,
       city: j.city, address: j.address, packageLabel: j.packageLabel, keywords: j.keywords || "",
-      miscText: j.miscText || "",
+      miscText: j.miscText || "", photoCount: ((j.draft && j.draft.photos) || []).length,
       chaseBlocked: !!j.chaseBlocked, chaseNote: j.chaseNote || ""
     }));
     S._fullJobs = jobs;
@@ -3280,7 +3383,8 @@ function savePermanent() {
       excelRows: optionLines(i).map(L => ({ product: L.product, description: L.description, footage: (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), bags: L.bags })) })) : undefined,
     draft: draftPayload()
   };
-  idbPut(snap).then(() => { setStatus("Saved permanently to archive."); refreshArchive(); })
+  const prev = (S._fullJobs || []).find(j => j.id === S.jobId), prevPh = ((prev && prev.draft && prev.draft.photos) || []).map(x => x && x.id).filter(Boolean);
+  idbPut(snap).then(() => { setStatus("Saved permanently to archive."); refreshArchive(); if (prevPh.length) photoForget(prevPh, S.jobId); })
     .catch(() => { S.idbOk = false; setStatus("Archive save failed (IndexedDB blocked). Draft still autosaved."); });
 }
 
@@ -3305,7 +3409,7 @@ function openArchiveJob(id) {
 function applySnapshot(job) {
   S._suppressSave = true;
   const d = job.draft || {};
-  Object.keys(d).forEach(k => { if (k in S && k !== "priceLibrary" && k !== "archive") S[k] = d[k]; });
+  Object.keys(d).forEach(k => { if (k in S && k !== "priceLibrary" && k !== "archive" && k !== "_fullJobs") S[k] = d[k]; });
   S.jobId = job.id;
   S.dateMeasured = job.dateMeasured;
   S.owner = job.owner;
@@ -3318,6 +3422,7 @@ function applySnapshot(job) {
   S.jobMode = job.jobMode;
   S.airSealed = !!(job.airSealed || job.caulkFoam);
   migrateState(d);
+  photoLoadAll();
   S.outputView = job.owner === "sky" ? "excel" : "fg";
   S._suppressSave = false;
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === "wizard"));
@@ -3331,6 +3436,7 @@ function newJob() {
   S.dateMeasured = todayISO();
   S.builder = ""; S.city = ""; S.address = ""; S.keywords = "";
   resetCustomer(); S.woRep = ""; S.woDate = ""; S.woNotes = "";
+  photoForget(S.photos.map(x => x.id)); S.photos = [];
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard";
   S.compareOn = false; S.optionPkgs = ["standard", "hybrid_foam_batts"]; S.optionView = 0;
   S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38"; S.customAtticBattOc = "24"; S.garageCeilOc = "16"; S.porchCeilOc = "16"; S.touchupOc = "16";
@@ -3459,7 +3565,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29p";
+const APP_BUILD = "2026-10-29q";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -3559,6 +3665,152 @@ function wirePullToRefresh() {
   document.addEventListener("touchcancel", () => { ptrState = null; ptrShow(0, "hide"); }, { passive: true });
 }
 
+/* ---------- Job photos (build q) ----------
+   Images live in IndexedDB (kp-takeoff-v2 / "photos") as downscaled JPEG bytes; the draft and archived job keep only
+   [{id, caption}] in S.photos, so localStorage stays small. PHOTO_MEM caches bytes + thumbnail URLs for the open job so the
+   work-order share can build File objects synchronously inside the tap (iOS needs that for navigator.share). */
+const PHOTO_MAX = 1600, PHOTO_Q = 0.8;
+const PHOTO_MEM = new Map(); // id -> { data: ArrayBuffer, type, url }
+function idbPhotoPut(rec) { return idbTx(PHOTO_STORE, "readwrite", os => { os.put(rec); }); }
+function idbPhotoGet(id) {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, "readonly"), rq = tx.objectStore(PHOTO_STORE).get(id);
+    rq.onsuccess = () => { db.close(); resolve(rq.result || null); }; rq.onerror = () => { db.close(); reject(rq.error); };
+  }));
+}
+function idbPhotoIds() {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(PHOTO_STORE, "readonly"), rq = tx.objectStore(PHOTO_STORE).getAllKeys();
+    rq.onsuccess = () => { db.close(); resolve(rq.result || []); }; rq.onerror = () => { db.close(); reject(rq.error); };
+  }));
+}
+function idbPhotoDelete(ids) { return ids.length ? idbTx(PHOTO_STORE, "readwrite", os => { ids.forEach(id => os.delete(id)); }) : Promise.resolve(); }
+function abToB64(ab) {
+  const u = new Uint8Array(ab); let s = "";
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function b64ToAb(b64) { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; }
+function photoMemSet(id, data, type) {
+  const old = PHOTO_MEM.get(id); if (old && old.url) URL.revokeObjectURL(old.url);
+  const url = URL.createObjectURL(new Blob([data], { type: type || "image/jpeg" }));
+  PHOTO_MEM.set(id, { data, type: type || "image/jpeg", url });
+}
+function photoMemDrop(id) { const m = PHOTO_MEM.get(id); if (m && m.url) URL.revokeObjectURL(m.url); PHOTO_MEM.delete(id); }
+// Load bytes for every photo on the open job into memory (after draft restore / opening an archived job).
+function photoLoadAll() {
+  const want = new Set(S.photos.map(x => x.id));
+  Array.from(PHOTO_MEM.keys()).forEach(id => { if (!want.has(id)) photoMemDrop(id); });
+  const need = S.photos.filter(x => !PHOTO_MEM.has(x.id));
+  if (!need.length) { renderPhotos(); return Promise.resolve(); }
+  return Promise.all(need.map(x => idbPhotoGet(x.id).then(r => { if (r && r.data) photoMemSet(x.id, r.data, r.type); }).catch(() => {})))
+    .then(() => renderPhotos());
+}
+// Ids still used by an archived job (other than skipJobId) or by the open draft are kept.
+function photoRefs(skipJobId) {
+  const used = new Set(S.photos.map(x => x.id));
+  (S._fullJobs || []).forEach(j => { if (j.id === skipJobId) return; ((j.draft && j.draft.photos) || []).forEach(x => { if (x && x.id) used.add(x.id); }); });
+  return used;
+}
+function photoForget(ids, skipJobId) {
+  // called before S.photos is cleared (New job) or after an archived job is deleted: drop images nothing else points to
+  const keepOpen = skipJobId != null;
+  if (!Array.isArray(S._fullJobs)) { if (!keepOpen) (ids || []).forEach(photoMemDrop); return Promise.resolve(); } // archive not loaded: never guess, keep the images
+  const used = keepOpen ? photoRefs(skipJobId) : (() => { const u = new Set(); (S._fullJobs || []).forEach(j => ((j.draft && j.draft.photos) || []).forEach(x => { if (x && x.id) u.add(x.id); })); return u; })();
+  const gone = (ids || []).filter(id => id && !used.has(id));
+  if (!keepOpen) ids.forEach(photoMemDrop);
+  return idbPhotoDelete(gone).catch(() => {});
+}
+function photoCompress(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      try {
+        const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+        const k = Math.min(1, PHOTO_MAX / Math.max(w0, h0 || 1)), w = Math.max(1, Math.round(w0 * k)), h = Math.max(1, Math.round(h0 * k));
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        c.toBlob(b => { c.width = c.height = 0; if (!b) { reject(new Error("Couldn't compress photo")); return; }
+          b.arrayBuffer().then(data => resolve({ data, type: "image/jpeg", w, h }), reject); }, "image/jpeg", PHOTO_Q);
+      } catch (e) { URL.revokeObjectURL(url); reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Couldn't read " + (file.name || "photo"))); };
+    img.src = url;
+  });
+}
+function photoStatus(msg) { const e = $("photoStatus"); if (e) e.textContent = msg || ""; }
+function addPhotos(files) {
+  files = Array.from(files || []).filter(f => f && (!f.type || /^image\//.test(f.type)));
+  if (!files.length) return Promise.resolve();
+  let done = 0, failed = 0;
+  photoStatus("Adding " + files.length + " photo" + (files.length > 1 ? "s" : "") + "…");
+  return files.reduce((p, f) => p.then(() => photoCompress(f).then(r => {
+    const id = "ph-" + uid(), rec = { id, jobId: S.jobId, type: r.type, data: r.data, w: r.w, h: r.h, at: new Date().toISOString() };
+    return idbPhotoPut(rec).then(() => {
+      photoMemSet(id, r.data, r.type);
+      S.photos = S.photos.concat([{ id, caption: "" }]); done++;
+      saveDraft(); renderPhotos();
+    });
+  }).catch(() => { failed++; })), Promise.resolve()).then(() => {
+    photoStatus(done + " photo" + (done === 1 ? "" : "s") + " added" + (failed ? " · " + failed + " couldn't be saved" : "") + ". Tap Save to archive to keep them with the job.");
+  });
+}
+function removePhoto(id) {
+  if (!confirm("Remove this photo from the job?")) return;
+  S.photos = S.photos.filter(x => x.id !== id); saveDraft();
+  photoMemDrop(id);
+  if (!photoRefs().has(id)) idbPhotoDelete([id]).catch(() => {});
+  photoClose(); renderPhotos(); photoStatus("Photo removed.");
+}
+function renderPhotos() {
+  const g = $("photoGrid"); if (!g) return;
+  const sig = S.photos.map(x => x.id + (PHOTO_MEM.has(x.id) ? "+" : "-") + x.caption).join("|");
+  if (g._sig === sig) return; g._sig = sig;
+  g.innerHTML = "";
+  S.photos.forEach((x, i) => {
+    const m = PHOTO_MEM.get(x.id), t = el("div", "photo-th");
+    t.innerHTML = (m ? '<img alt="Photo ' + (i + 1) + '" src="' + m.url + '">' : '<div class="cap" style="padding:8px">Loading…</div>') +
+      (x.caption ? '<div class="photo-cap">' + escHtml(x.caption) + "</div>" : "") + '<button type="button" class="photo-x" aria-label="Remove photo">×</button>';
+    t.querySelector(".photo-x").onclick = ev => { ev.stopPropagation(); removePhoto(x.id); };
+    t.onclick = () => photoView(x.id);
+    g.appendChild(t);
+  });
+  const b = $("btnAddPhoto"); if (b) b.textContent = S.photos.length ? "📷 Add photo (" + S.photos.length + " on this job)" : "📷 Add photo";
+}
+function photoClose() { const m = $("photoModal"); if (m) { m.remove(); document.body.classList.remove("xl-open"); } }
+function photoView(id) {
+  const x = S.photos.find(p => p.id === id), mm = PHOTO_MEM.get(id); if (!x || !mm) return;
+  photoClose();
+  const i = S.photos.indexOf(x), m = el("div", "xl-modal"); m.id = "photoModal";
+  m.innerHTML = '<div class="xl-bar"><button type="button" class="btn btn-secondary btn-sm" id="photoClose">Close</button>' +
+    '<div class="xl-title">Photo ' + (i + 1) + " of " + S.photos.length + "</div>" +
+    '<button type="button" class="btn btn-danger btn-sm" id="photoDel">Remove</button></div>' +
+    '<div class="photo-view"><img alt="" src="' + mm.url + '"></div>' +
+    '<div class="xl-foot"><input id="photoCaption" placeholder="Caption (optional)" maxlength="120"></div>';
+  document.body.appendChild(m); document.body.classList.add("xl-open");
+  const cap = $("photoCaption"); cap.value = x.caption || "";
+  cap.oninput = () => { x.caption = cap.value; saveDraft(); };
+  cap.onchange = () => renderPhotos();
+  $("photoClose").onclick = () => { photoClose(); renderPhotos(); };
+  $("photoDel").onclick = () => removePhoto(id);
+}
+function photoFileBase(jobSite) { return String(jobSite || "Job").replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() || "Job"; }
+// Synchronous: File objects for every loaded photo on the open job, named "<job> - photo N.jpg".
+function photoFilesForShare(jobSite) {
+  const base = photoFileBase(jobSite), files = []; let missing = 0;
+  S.photos.forEach((x, i) => {
+    const m = PHOTO_MEM.get(x.id); if (!m) { missing++; return; }
+    try { files.push(new File([m.data], base + " - photo " + (i + 1) + ".jpg", { type: "image/jpeg" })); } catch (e) { missing++; }
+  });
+  return { files, missing };
+}
+function wirePhotos() {
+  const b = $("btnAddPhoto"), f = $("photoInput");
+  if (b && f) { b.onclick = () => { f.value = ""; f.click(); }; f.onchange = () => { addPhotos(f.files).then(() => { f.value = ""; }); }; }
+  photoLoadAll();
+}
+
 /* ---------- Backup / restore (merge, never wipe) ---------- */
 const BACKUP_FORMAT = "kp-takeoff-backup", BACKUP_VERSION = 1, BACKUP_LAST_KEY = "kp-takeoff-last-backup";
 const WO_DB = "kp-chafin-v1";
@@ -3588,12 +3840,13 @@ function buildBackup() {
   const safe = pr => pr.catch(() => []);
   return Promise.all([
     safe(dbReadAll(openDb, STORE)), safe(dbReadAll(openDb, PRICE_STORE)), safe(dbReadAll(openDb, SPEC_STORE)),
-    safe(dbReadAll(openWoDb, "orders")), safe(dbReadAll(openWoDb, "kv", true))
-  ]).then(([jobs, prices, specs, orders, kv]) => {
+    safe(dbReadAll(openWoDb, "orders")), safe(dbReadAll(openWoDb, "kv", true)), safe(dbReadAll(openDb, PHOTO_STORE))
+  ]).then(([jobs, prices, specs, orders, kv, photos]) => {
     saveDraft();
     let draft = null; try { draft = JSON.parse(lsGet(DRAFT_KEY) || "null"); } catch (e) {}
     return { format: BACKUP_FORMAT, version: BACKUP_VERSION, createdAt: new Date().toISOString(), app: APP_BUILD,
-      takeoff: { jobs, prices, fpSpecs: specs, draft, fgMap: fgOverrides() },
+      takeoff: { jobs, prices, fpSpecs: specs, draft, fgMap: fgOverrides(),
+        photos: photos.filter(x => x && x.id && x.data).map(x => ({ id: x.id, jobId: x.jobId || "", type: x.type || "image/jpeg", at: x.at || "", b64: abToB64(x.data) })) },
       workOrders: { orders, kv } };
   });
 }
@@ -3624,7 +3877,7 @@ function runBackup() {
     return backupDeliver(name, text).then(how => {
       if (how === "cancelled") { backupStatus("Backup cancelled — nothing saved."); return; }
       markBackedUp();
-      backupStatus("Backup ready: " + name + " · " + b.takeoff.jobs.length + " takeoffs, " + b.workOrders.orders.length + " work orders" + (how === "downloaded" ? " (downloaded)" : "") + ".");
+      backupStatus("Backup ready: " + name + " · " + b.takeoff.jobs.length + " takeoffs, " + b.workOrders.orders.length + " work orders" + (b.takeoff.photos.length ? ", " + b.takeoff.photos.length + " photos" : "") + (how === "downloaded" ? " (downloaded)" : "") + ".");
     });
   }).catch(e => backupStatus("Backup failed: " + (e && e.message || e)));
 }
@@ -3646,8 +3899,15 @@ function restoreBackup(b, opts) {
   if (!ask(summary)) return Promise.resolve(null);
   const safe = pr => pr.catch(() => []);
   return Promise.all([safe(dbReadAll(openDb, STORE)), safe(dbReadAll(openDb, PRICE_STORE)), safe(dbReadAll(openDb, SPEC_STORE)),
-    safe(dbReadAll(openWoDb, "orders")), safe(dbReadAll(openWoDb, "kv", true))]).then(([jobs, prices, specs, orders, kv]) => {
-    const r = { added: 0, replaced: 0, kept: 0, woAdded: 0, woReplaced: 0, woKept: 0, prices: 0, specs: 0, kv: 0, draft: false };
+    safe(dbReadAll(openWoDb, "orders")), safe(dbReadAll(openWoDb, "kv", true)), safe(idbPhotoIds())]).then(([jobs, prices, specs, orders, kv, havePhotos]) => {
+    const r = { added: 0, replaced: 0, kept: 0, woAdded: 0, woReplaced: 0, woKept: 0, prices: 0, specs: 0, kv: 0, draft: false, photos: 0 };
+    // photos (build q+ backups; older backups have none): add any this phone doesn't have, never overwrite
+    const haveP = new Set(havePhotos || []), photoPuts = [];
+    (Array.isArray(T.photos) ? T.photos : []).forEach(x => {
+      if (!x || !x.id || typeof x.b64 !== "string" || haveP.has(x.id)) return;
+      try { photoPuts.push({ id: String(x.id), jobId: x.jobId || "", type: x.type || "image/jpeg", at: x.at || "", data: b64ToAb(x.b64) }); haveP.add(x.id); } catch (e) {}
+    });
+    r.photos = photoPuts.length;
     const jobMap = new Map(jobs.map(j => [j.id, j]));
     const jobPuts = [];
     T.jobs.forEach(j => {
@@ -3696,6 +3956,7 @@ function restoreBackup(b, opts) {
     const writes = [];
     if (jobPuts.length) writes.push(dbWrite(openDb, STORE, os => jobPuts.forEach(j => os.put(j))));
     if (pricePuts.length) writes.push(dbWrite(openDb, PRICE_STORE, os => pricePuts.forEach(p => os.put(p))));
+    if (photoPuts.length) writes.push(dbWrite(openDb, PHOTO_STORE, os => photoPuts.forEach(x => os.put(x))));
     if (specPuts.length) writes.push(dbWrite(openDb, SPEC_STORE, os => specPuts.forEach(x => os.put(x))));
     if (orderPuts.length) writes.push(dbWrite(openWoDb, "orders", os => orderPuts.forEach(o => os.put(o))));
     if (kvPuts.length) writes.push(dbWrite(openWoDb, "kv", os => kvPuts.forEach(e => os.put(e.value, e.key))));
@@ -3713,7 +3974,7 @@ function restoreBackup(b, opts) {
 }
 function restoreSummaryText(r) {
   return "Restored: " + r.added + " new takeoffs, " + r.replaced + " updated, " + r.kept + " already up to date · work orders " + r.woAdded + " new, " + r.woReplaced + " updated" +
-    (r.prices ? " · " + r.prices + " prices" : "") + (r.draft ? " · in-progress takeoff restored" : "") + ".";
+    (r.prices ? " · " + r.prices + " prices" : "") + (r.photos ? " · " + r.photos + " photos" : "") + (r.draft ? " · in-progress takeoff restored" : "") + ".";
 }
 function runRestore(file) {
   if (!file) return;
@@ -3753,6 +4014,7 @@ function init() {
   wirePullToRefresh();
   showVersion();
   wireBackup();
+  wirePhotos();
   if (APP_EDITION === "lance") document.querySelectorAll(".edition-lance").forEach(e => e.classList.remove("hidden"));
   twoLoadContacts().then(() => renderTwo());
   idbGetAllPrices().then(stored => { S.priceLibrary = mergePriceLibrary(stored); render(); })
