@@ -1688,7 +1688,7 @@ function buildLinesForPackage(p, tag) {
     const own = (v, label) => (v || "").trim() !== "" ? [n(v), label + " SF entered"] : (PR.onlyAttic ? [derived, derivedCalc] : [0, ""]);
     if (PR.blow) {
       const [sf, note] = own(S.customBlowSf, "Blow"); const r = S.customBlowR || "R-38";
-      if (sf > 0) push(lines, { area: "Attic", assembly: "Attic blow", product: "Blown fiberglass", priceKey: "Blown fiberglass " + r, description: r.replace("R-", "R") + "/24",
+      if (sf > 0) push(lines, { area: "Attic", assembly: "Attic blow", product: "Blown fiberglass", priceKey: "Blown fiberglass " + r, description: r.replace("R-", "R"),
         footage: round2(sf), unit: "SF", notes: noteTag + note });
     }
     if (PR.batts) {
@@ -1704,7 +1704,7 @@ function buildLinesForPackage(p, tag) {
       const calc = derivedCalc;
       {
         const rLabel = F.isNew ? "R-38" : F.atticBlowR;
-        push(lines, { area: "Attic", assembly: "Attic blow", product: "Blown fiberglass", priceKey: "Blown fiberglass " + rLabel + (F.isNew ? "" : " (retro)"), description: rLabel.replace("R-", "R") + "/24",
+        push(lines, { area: "Attic", assembly: "Attic blow", product: "Blown fiberglass", priceKey: "Blown fiberglass " + rLabel + (F.isNew ? "" : " (retro)"), description: rLabel.replace("R-", "R"),
           footage: round2(blow), unit: "SF", notes: noteTag + calc });
       }
     }
@@ -3363,7 +3363,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29l";
+const APP_BUILD = "2026-10-29m";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
