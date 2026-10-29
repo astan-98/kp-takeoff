@@ -214,6 +214,9 @@ html, body { overscroll-behavior-y: none; overflow-x: clip; max-width: 100%; }
 .ptr.busy .ptr-ico { animation: ptrspin .8s linear infinite; }
 @keyframes ptrspin { to { transform: rotate(360deg); } }
 .app-ver { font-size: .68rem; color: var(--text2); opacity: .8; }
+/* 29au: New job always at hand — its own row under the title (sticky header), never over the title */
+.hdr-actions { margin-top: 8px; display: flex; }
+.hdr-actions .btn { min-height: 36px; padding: 6px 14px; font-weight: 700; }
 body.xl-open { overflow: hidden; }
 .xl-modal { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column;
   padding-top: var(--safe-t); padding-bottom: var(--safe-b); }
@@ -240,6 +243,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
   <h1>Insulation Work Assistant</h1>
   <div class="sub">Keith Porter takeoff · offline Safari · Excel handoff</div>
   <div class="app-ver" id="appVer"></div>
+  <div class="hdr-actions"><button type="button" class="btn btn-primary btn-sm" id="btnNewJobTop">＋ New job</button></div>
   <div class="live-bar" id="liveBar"></div>
 </header>
 
@@ -692,6 +696,8 @@ const ROOF_FOAM_DEPTH_KEYS = ["5.5", "6", "7", "8", "9", "10", "11", "12"];
 const ROOF_FOAM_PLACEHOLDERS = {};
 const ROOF_FOAM_BASE = "Open-cell foam (roofline)";
 function roofFoamBaseKey(k) { return /^Open-cell foam \(roofline\) /.test(k) ? ROOF_FOAM_BASE : k; }
+// TODO(29au): Closed-cell foam 1.5", 2.5", 3.5", 4", 4.5" and 5" still need Asher's prices — no price rows/values guessed.
+// Until he sends them (enter in Pricing, or fill the rows below), jobs using those depths show "incomplete" ballparks on purpose.
 const DEFAULT_PRICE_KEYS = [
   { materialKey: "Blown fiberglass", unit: "SF", price: "" },
   { materialKey: "Blown fiberglass R-19", unit: "SF", price: "0.55375" },
@@ -4519,6 +4525,8 @@ function wireInputs() {
     window.scrollTo(0, 0);
   });
   $("btnNewJob").onclick = newJob;
+  // 29au: same handler as the Customer/builder New job (one code path), then show the Wizard if another tab was open
+  $("btnNewJobTop").onclick = () => { $("btnNewJob").click(); const w = document.querySelector('.nav-btn[data-tab="wizard"]'); if (w && !w.classList.contains("active")) w.click(); window.scrollTo(0, 0); };
   $("btnCopyCsv").onclick = () => {
     const text = buildExcelCsv();
     $("csvText").value = text;
@@ -4563,7 +4571,7 @@ function syncSaveDock() {
   document.body.classList.toggle("has-save-dock", on);
 }
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29at";
+const APP_BUILD = "2026-10-29au";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
