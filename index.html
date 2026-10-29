@@ -164,6 +164,16 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .fail { color: var(--danger); font-weight: 800; }
 .csv-box { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; white-space: pre-wrap; word-break: break-all; }
 .fp-spec-t{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px}.fp-spec-t th{text-align:left;font-weight:600;padding:3px 6px 3px 0;vertical-align:top;white-space:nowrap;width:1%}.fp-spec-t td{padding:3px 0;word-break:break-word}.fp-spec .status{margin:6px 0 0}
+html, body { overscroll-behavior-y: none; }
+.ptr { position: fixed; left: 50%; top: 0; z-index: 300; transform: translate(-50%, -60px); transition: transform .2s ease, opacity .2s ease; opacity: 0;
+  margin-top: calc(var(--safe-t) + 6px); background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 999px;
+  box-shadow: var(--shadow); padding: 7px 14px; font-size: .8rem; font-weight: 600; display: flex; align-items: center; gap: 8px; pointer-events: none; white-space: nowrap; }
+.ptr.dragging { transition: none; }
+.ptr .ptr-ico { display: inline-block; transition: transform .15s ease; font-size: 1rem; line-height: 1; }
+.ptr.ready .ptr-ico { transform: rotate(180deg); }
+.ptr.busy .ptr-ico { animation: ptrspin .8s linear infinite; }
+@keyframes ptrspin { to { transform: rotate(360deg); } }
+.app-ver { font-size: .68rem; color: var(--text2); opacity: .8; }
 body.xl-open { overflow: hidden; }
 .xl-modal { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column;
   padding-top: var(--safe-t); padding-bottom: var(--safe-b); }
@@ -185,9 +195,11 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 </style>
 </head>
 <body>
+<div class="ptr" id="ptr" aria-live="polite"><span class="ptr-ico">↓</span><span class="ptr-txt">Pull to refresh</span></div>
 <header class="app-header">
   <h1>Insulation Work Assistant</h1>
   <div class="sub">Keith Porter takeoff · offline Safari · Excel handoff</div>
+  <div class="app-ver" id="appVer"></div>
   <div class="live-bar" id="liveBar"></div>
 </header>
 
@@ -2343,10 +2355,104 @@ function wireInputs() {
   });
 }
 
+/* ---------- Build stamp + pull-to-refresh ---------- */
+const APP_BUILD = "2026-10-29 · pull-to-refresh";
+function showVersion() {
+  const v = $("appVer"); if (!v) return;
+  let upd = "";
+  const lm = new Date(document.lastModified);
+  if (!isNaN(lm)) upd = " · updated " + lm.toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
+  v.textContent = "Build " + APP_BUILD + upd + " · pull down to refresh";
+}
+const PTR_THRESHOLD = 70, PTR_MAX = 120;
+let ptrState = null, ptrBusy = false;
+function ptrScrollTop() { return Math.max(window.scrollY || 0, (document.scrollingElement || document.documentElement).scrollTop || 0); }
+function ptrBlocked(target) {
+  if (document.querySelector(".xl-modal")) return true;
+  const ae = document.activeElement;
+  if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return true;
+  for (let t = target; t && t !== document.body && t.nodeType === 1; t = t.parentElement) {
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) return true;
+    if (t.classList && (t.classList.contains("xl-modal") || t.classList.contains("bottom-nav"))) return true;
+    if (t.scrollTop > 0) return true; // inner scroller not at its top
+  }
+  return false;
+}
+function ptrShow(dist, mode) {
+  const el = $("ptr"); if (!el) return;
+  const txt = el.querySelector(".ptr-txt"), ico = el.querySelector(".ptr-ico");
+  el.classList.toggle("dragging", mode === "drag");
+  el.classList.toggle("ready", mode === "drag" && dist >= PTR_THRESHOLD);
+  el.classList.toggle("busy", mode === "busy");
+  if (mode === "hide") { el.style.transform = "translate(-50%, -60px)"; el.style.opacity = "0"; return; }
+  if (mode === "busy") { ico.textContent = "↻"; txt.textContent = "Refreshing…"; el.style.transform = "translate(-50%, 12px)"; el.style.opacity = "1"; return; }
+  if (mode === "msg") { ico.textContent = "⚠️"; el.style.transform = "translate(-50%, 12px)"; el.style.opacity = "1"; return; }
+  ico.textContent = "↓";
+  txt.textContent = dist >= PTR_THRESHOLD ? "Release to refresh" : "Pull to refresh";
+  el.style.transform = "translate(-50%, " + Math.round(dist - 60) + "px)";
+  el.style.opacity = String(Math.min(1, dist / PTR_THRESHOLD));
+}
+function ptrNavigate(url) { window.location.replace(url); }
+function ptrRefresh() {
+  if (ptrBusy) return;
+  ptrBusy = true;
+  ptrShow(PTR_THRESHOLD, "busy");
+  try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (e) {}
+  try { saveDraft(); } catch (e) {}
+  const u = new URL(window.location.href);
+  u.searchParams.set("v", String(Date.now()));
+  const go = () => ptrNavigate(u.toString());
+  const f = window.fetch ? window.fetch(u.toString(), { cache: "reload" }) : Promise.resolve({ ok: true });
+  let done = false;
+  const timer = setTimeout(() => { if (!done) { done = true; go(); } }, 6000);
+  f.then(r => {
+    if (done) return; done = true; clearTimeout(timer);
+    if (r && r.ok === false) throw new Error("HTTP " + r.status);
+    go();
+  }).catch(() => {
+    if (done) return; done = true; clearTimeout(timer);
+    ptrBusy = false;
+    const el = $("ptr"); if (el) el.querySelector(".ptr-txt").textContent = "No connection — kept this version";
+    ptrShow(0, "msg");
+    setTimeout(() => ptrShow(0, "hide"), 2500);
+  });
+}
+function wirePullToRefresh() {
+  document.addEventListener("touchstart", e => {
+    ptrState = null;
+    if (ptrBusy || !e.touches || e.touches.length !== 1) return;
+    if (ptrScrollTop() > 0 || ptrBlocked(e.target)) return;
+    ptrState = { x: e.touches[0].clientX, y: e.touches[0].clientY, pulling: false, dist: 0 };
+  }, { passive: true });
+  document.addEventListener("touchmove", e => {
+    const st = ptrState; if (!st || !e.touches || e.touches.length !== 1) { if (st) { ptrState = null; ptrShow(0, "hide"); } return; }
+    const dx = e.touches[0].clientX - st.x, dy = e.touches[0].clientY - st.y;
+    if (!st.pulling) {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { ptrState = null; return; } // horizontal swipe
+      if (dy < -2 || ptrScrollTop() > 0) { ptrState = null; return; } // normal scroll down the page
+      if (dy < 10) return;
+      st.pulling = true;
+    }
+    if (dy <= 0 || ptrScrollTop() > 0) { st.dist = 0; ptrShow(0, "hide"); return; }
+    if (e.cancelable) e.preventDefault();
+    st.dist = Math.min(PTR_MAX, dy * 0.55);
+    ptrShow(st.dist, "drag");
+  }, { passive: false });
+  const end = () => {
+    const st = ptrState; ptrState = null;
+    if (!st || !st.pulling) return;
+    if (st.dist >= PTR_THRESHOLD) ptrRefresh(); else ptrShow(0, "hide");
+  };
+  document.addEventListener("touchend", end, { passive: true });
+  document.addEventListener("touchcancel", () => { ptrState = null; ptrShow(0, "hide"); }, { passive: true });
+}
+
 function init() {
   restoreDraft();
   if (!$("dateMeasured").value) S.dateMeasured = todayISO();
   wireInputs();
+  wirePullToRefresh();
+  showVersion();
   idbGetAllPrices().then(stored => { S.priceLibrary = mergePriceLibrary(stored); render(); })
     .catch(() => { S.priceLibrary = mergePriceLibrary([]); render(); });
   refreshArchive();
