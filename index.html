@@ -1770,16 +1770,23 @@ function twoLoadContacts() {
 function twoWho(cat) { return TWO_CONTACTS[cat] || TWO_DEFAULT_CONTACTS[cat]; }
 const TWO_ATTIC_SECS = ["Attic blow", "Attic batts", "Attic prep", "Roof foam", "Porch roof foam", "Garage roof foam"];
 const TWO_LABELS = {
-  "Wall — 2x4 exterior (R-13)": "Exterior Walls", "Wall — 2x6 exterior (R-19)": "Exterior Walls 2x6", "Wall — Daylight basement (R-19)": "Daylight Walls",
+  "Wall — 2x4 exterior (R-13)": "Ext Walls", "Wall — 2x6 exterior (R-19)": "Ext Walls 2x6", "Wall — Daylight basement (R-19)": "Daylight Walls",
   "Wall — Concrete basement (R-13)": "Basement Walls", "Wall — Garage exterior": "Garage Walls", "Wall — Interior": "Interior Walls", "Interior walls": "Interior Walls",
   "Knee wall": "Knee Walls", "Knee wrap": "Knee Wrap", "Dead air": "Dead Air", "Open vault": "Open Vault", "Closed vault": "Closed Vault", "Poly vent": "Poly Vents",
   "Garage ceiling": "Garage Ceiling", "Baffles": "Baffles", "Band / rim": "Bands", "Between floors (sound)": "Between Floors", "Cantilever": "Cantilever",
-  "Gable": "Gables", "Gable wrap": "Open Gables", "Crawl subfloor": "Crawl", "Crawl touch-up": "Crawl Touch-up", "Crawl prep": "Crawl Removal", "Poly": "Crawl Poly",
+  "Gable": "Gables", "Gable wrap": "Gable Wrap", "Crawl subfloor": "Crawl", "Crawl touch-up": "Crawl Touch-up", "Crawl prep": "Crawl Removal", "Poly": "Crawl Poly",
   "UFBC": "UFBC", "Porch ceiling": "Porch Ceiling", "Porch gable-off": "Porch Gable", "Floor dense-pack": "Dense-pack", "Netting": "Netting",
   "Encap poly": "Encap Poly", "Seam taping": "Seam Tape", "Crawl wall foam": "Crawl Walls", "Dehumidifier": "Dehumidifier",
   "Air seal (caulk & foam)": "Air Seal", "Miscellaneous": "Misc", "Attic blow": "Attic", "Attic batts": "Attic Batts", "Attic prep": "Attic Removal",
-  "Roof foam": "Roof Line", "Porch roof foam": "Porch Roof Foam", "Garage roof foam": "Garage Roof Foam",
+  "Roof foam": "Roof Foam", "Porch roof foam": "Porch Roof Foam", "Garage roof foam": "Garage Roof Foam",
 };
+// 29ap: Sky order product column wording, applied at the output layer (TWO_LABELS map left as-is).
+function twoProductText(p) {
+  p = String(p || "");
+  if (p === "Roof Foam") return "Roof Line";
+  if (p === "Gable Wrap") return "Open Gables";
+  return p.replace(/^Ext Walls\b/, "Exterior Walls");
+}
 function twoCatOf(L) { return TWO_ATTIC_SECS.indexOf(fgSection(L.assembly)) >= 0 ? "attic" : "walls"; }
 // build q: the field takeoff goes to Sky as ONE work order with every line (walls/batts + attic/roof foam); no Josh/attic split here.
 function twoLines() {
@@ -1799,7 +1806,7 @@ function twoOrder(foamChoice) {
   };
   // Order: walls/batts lines first, then attic/roof lines; 21 rows per sheet, extra lines continue on more sheets (tabs) — nothing dropped.
   const ls = twoLines(), ordered = ls.filter(L => twoCatOf(L) === "attic").concat(ls.filter(L => twoCatOf(L) === "walls")); // attic lines first, like KP work orders
-  const rows = ordered.map(L => ({ p: TWO_LABELS[fgSection(L.assembly)] || L.area || "", d: L.description || L.product, f: wholeQty(L), b: L.bags || "" }));
+  const rows = ordered.map(L => ({ p: twoProductText(TWO_LABELS[fgSection(L.assembly)] || L.area || ""), d: L.description || L.product, f: wholeQty(L), b: L.bags || "" }));
   const PER = 21, NOTE_ROWS = 6;
   o.pages = []; o.lineCount = rows.length; o.fpPages = []; o.fpCount = 0;
   const fpDet = twoFpDetails(), fpLs = twoFpLines();
