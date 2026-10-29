@@ -1153,7 +1153,7 @@ function renderGates() {
   addToggle("Cantilevers", "hasCants", F.canAskCants);
   addToggle("Garage", "hasGarage", F.canAskGarage);
   addToggle("Porch", "hasPorch", F.canAskPorch);
-  addToggle("Subfloor / crawl", "hasSubfloor", F.canAskSubfloor);
+  addToggle("UFBC / crawl", "hasSubfloor", F.canAskSubfloor);
   addToggle("Crawl walls to foam", "hasCrawlWalls", F.canAskCrawlEncap);
   addToggle("Dense-pack floors", "hasDense", F.canAskDense);
   addToggle("Poured floor (skip poly)", "pouredFloor", F.canAskCrawlEncap);
@@ -1331,7 +1331,7 @@ function renderAssemblyEditors() {
     box.appendChild(card);
   }
   if (S.hasSubfloor && F.canAskSubfloor) {
-    box.appendChild(fieldInput("Override subfloor SF (blank = flat)", S.subfloorOverride, v => { S.subfloorOverride = v; schedule(); }, "number"));
+    box.appendChild(fieldInput("Override UFBC/crawl SF (blank = flat)", S.subfloorOverride, v => { S.subfloorOverride = v; schedule(); }, "number"));
   }
   if (F.canAskCrawlEncap && S.hasCrawlWalls) {
     S.crawlWalls.forEach((r, idx) => {
