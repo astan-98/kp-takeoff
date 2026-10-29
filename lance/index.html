@@ -295,6 +295,9 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
           <option value="custom">Custom mix</option>
         </select>
       </div>
+      <div id="totalBatField" class="hidden">
+        <div class="toggle-row"><span>Total Bat (R38 batts instead of blow — one truck)</span><button type="button" class="switch" id="totalBat"></button></div>
+      </div>
       <div id="optionsBlock">
         <div class="toggle-row"><span>Compare packages (2–3 options)?</span><button type="button" class="switch" id="compareOn"></button></div>
         <div id="optionChipsWrap" class="hidden">
@@ -388,7 +391,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <div class="field hidden" id="houseCustomRiseField"><label>Custom rise (over 12)</label><input id="houseCustomRise" type="number" inputmode="decimal"></div>
         <div class="props"><span class="k">Foam roof from flat</span><span class="v" id="foamRoofLive">0 SF</span></div>
       </div>
-      <div id="blowLiveBlock" class="props"><span class="k">Attic blow SF</span><span class="v" id="atticBlowLive">0 SF</span></div>
+      <div id="blowLiveBlock" class="props"><span class="k" id="atticBlowLiveLabel">Attic blow SF</span><span class="v" id="atticBlowLive">0 SF</span></div>
       <div id="touchupField" class="field hidden"><label>Crawl touch-up patch SF</label><input id="touchupPatchSf" type="number" inputmode="decimal"></div>
       <div id="assemblyEditors"></div>
     </div>
@@ -946,6 +949,8 @@ function packageUsesFoamRoof(pkg) {
   return pkg === "hybrid_foam_batts" || pkg === "foam_cellulose" || pkg === "foam_spider" || pkg === "total_foam";
 }
 function packageIsCrawlEncap(pkg) { return pkg === "crawl_encap"; }
+// 29ao: Total Bat — Standard package on new construction, attic blow area goes in as R38 dead-air batts (no blow truck).
+function totalBatOn(pkg) { return S.jobMode === "new" && !!S.totalBat && pkg === "standard"; }
 // 29al: "Foam band/rim joist" option — new-construction foam roofline packages that don't already foam the band (not total foam).
 function rimFoamAllowed(pkg) { if (S.jobMode !== "new" || pkg == null) return false; const pr = pkgProfile(pkg); return !!pr.foamRoof && !pr.totalFoam; }
 const CUSTOM_ROOF_KEYS = ["blow", "foam", "batts"], CUSTOM_WALL_KEYS = ["batt", "foam", "cellulose", "spider"];
@@ -1271,6 +1276,7 @@ const S = {
   crawlRetro: "remove_replace",
   blowR: "R-38",
   pkg: "standard",
+  totalBat: false, // 29ao: Standard sub-option — attic blow area becomes R38 dead-air batts
   compareOn: false, optionPkgs: ["standard", "hybrid_foam_batts"], optionView: 0,
   customRoofs: ["blow"], customWallList: ["batt"], customBlowSf: "", customBlowR: "R-38", customBattSf: "", customAtticBattR: "R-38", customAtticBattOc: "24",
   airSealed: false, airSealAddon: "", extraLabor: "", extraLaborNote: "", ccDepth: "1.5",
@@ -2004,7 +2010,12 @@ function buildLinesForPackage(p, tag) {
     }
   }
   const newUsesBlow = F.isNew && PR.standardBlow;
-  if ((newUsesBlow || F.atticIsBlow) && !foamRoof) {
+  const totalBat = totalBatOn(p);
+  if (totalBat && !foamRoof && derived > 0) {
+    // 29ao Total Bat: the would-be blow area (footprint − dead air rows − vaults) is all dead air → same R38 dead-air line/Sky item/price/FieldGroove as the Dead air rows
+    push(lines, { area: "Dead air", assembly: "Dead air", product: "R-38 fiberglass batts", description: "R38/24", footage: round2(derived), unit: "SF", notes: noteTag + "Total Bat: " + derivedCalc });
+  }
+  if ((newUsesBlow || F.atticIsBlow) && !foamRoof && !totalBat) {
     const blow = derived;
     if (blow > 0) {
       const calc = derivedCalc;
@@ -3686,6 +3697,7 @@ function renderLiveOnly() {
   const atticBlow = Math.max(0, flat - da - vf);
   const foam = flat * resolvePitchFactor(S.housePitch, S.houseCustomRise);
   $("atticBlowLive").textContent = fmt(atticBlow) + " SF";
+  if ($("atticBlowLiveLabel")) $("atticBlowLiveLabel").textContent = totalBatOn(optionsOn() ? optionPkgs()[S.optionView | 0] : S.pkg) ? "Total Bat R38 dead air SF (no blow)" : "Attic blow SF";
   $("foamRoofLive").textContent = fmt(foam) + " SF";
   const lines = allLines();
   const pricedCount = S.priceLibrary.filter(p => n(p.unitPrice40) > 0).length;
@@ -3766,6 +3778,8 @@ function render() {
   toggleField("optionsBlock", S.jobMode === "new");
   toggleField("optionChipsWrap", S.jobMode === "new" && !!S.compareOn);
   setSwitch($("compareOn"), !!S.compareOn);
+  toggleField("totalBatField", S.jobMode === "new" && (S.compareOn ? optionPkgs().includes("standard") : S.pkg === "standard"));
+  setSwitch($("totalBat"), !!S.totalBat);
   {
     const cur = optionPkgs();
     $("optionChips").querySelectorAll("button").forEach(btn => {
@@ -3849,6 +3863,7 @@ function migrateState(d) {
   ["woRep", "woDate", "woNotes"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
   if (!OWNER_LABELS[S.owner]) S.owner = APP_EDITION === "lance" ? "lance" : "asher";
   if (d.caulkFoam) S.airSealed = true;
+  if (typeof S.totalBat !== "boolean" || !("totalBat" in d)) S.totalBat = false; // 29ao: old jobs default Total Bat off
   if (S.jobMode === "new") S.hasBaffles = true; // 29an: old new-construction jobs saved with baffles off still get baffles
   if (S.fpModelId && FP_LEGACY_IDS[S.fpModelId]) S.fpModelId = FP_LEGACY_IDS[S.fpModelId];
   if (typeof S.fpChaseClear !== "boolean") S.fpChaseClear = true;
@@ -4023,7 +4038,7 @@ function newJob() {
   resetCustomer(); S.woRep = ""; S.woDate = ""; S.woNotes = "";
   photoForget(S.photos.map(x => x.id)); S.photos = [];
   S.accessScaffold = "no"; S.accessScaffoldNote = ""; S.accessDriveway = ""; S.accessDrivewayNote = "";
-  S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard";
+  S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard"; S.totalBat = false;
   S.compareOn = false; S.optionPkgs = ["standard", "hybrid_foam_batts"]; S.optionView = 0;
   S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38"; S.customAtticBattOc = "24"; S.garageCeilOc = "16"; S.porchCeilOc = "16"; S.touchupOc = "16";
   S.porchFlat = ""; S.includePorchCeiling = true; S.porchCeilMat = "batt_r19"; S.porchRoofPitch = "6";
@@ -4089,6 +4104,7 @@ function wireInputs() {
   });
 
   $("airSealed").onclick = () => { S.airSealed = !S.airSealed; render(); };
+  $("totalBat").onclick = () => { S.totalBat = !S.totalBat; render(); };
   $("compareOn").onclick = () => {
     S.compareOn = !S.compareOn;
     if (S.compareOn) {
@@ -4156,7 +4172,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29an";
+const APP_BUILD = "2026-10-29ao";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
