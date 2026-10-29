@@ -3716,7 +3716,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29ah";
+const APP_BUILD = "2026-10-29ai";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -4295,12 +4295,13 @@ function monthDay(mo, day, year, today) {
   if (dt < t0 && (t0 - dt) > 60 * 864e5) dt = mkDate(today.getFullYear() + 1, mo, day);
   return dt;
 }
+var LAST_DATE_HIT = null; // span of the last date extractDate matched (used by findDates)
 /* returns {date: Date|null, text: string|null, rest: string} */
 function extractDate(s, today) {
   today = today || new Date();
   var t0 = mkDate(today.getFullYear(), today.getMonth(), today.getDate());
   var m, re;
-  function cut(mm) { return (s.slice(0, mm.index) + " " + s.slice(mm.index + mm[0].length)).replace(/\s+/g, " ").trim(); }
+  function cut(mm) { LAST_DATE_HIT = mm; return (s.slice(0, mm.index) + " " + s.slice(mm.index + mm[0].length)).replace(/\s+/g, " ").trim(); }
   if ((m = /\b(asap|a\.s\.a\.p\.?)\b/i.exec(s))) return { date: null, text: "ASAP", rest: cut(m) };
   if ((m = /\b(ready)\b/i.exec(s))) return { date: null, text: "Ready", rest: cut(m) };
   if ((m = /\b(today)\b/i.exec(s))) return { date: t0, rest: cut(m) };
@@ -4415,7 +4416,205 @@ function findLotList(raw, today) {
   if (nums.length < 2) return null;
   return { nums: nums, dt: dt, rest: rest.replace(/&/g, " ").replace(/\s+/g, " ").trim() };
 }
-function parseRequest(text, lots, today) {
+/* ---------- ticket types (29ai): one request can ask for several ticket TYPES per lot, each with its own date.
+   "Greenfield lot 6 and lot 42, pre-hang on the 17th, fiberglass on the 25th of November" -> 4 tickets.
+   Prehang / Caulk & Foam lines come from Asher's "Prehang-Caulk and Foam Template.xlsx" (Chafin). Fiberglass = the
+   plan's Walls/Batts sheet; Attic = the plan's Attic sheet (to Josh), only when asked for.
+   Rule: never guess. No type -> flagged. Only assumption: a bare day ("the 3rd") already past this month -> next month.
+   Weekdays / today / tomorrow -> suggested date Asher must confirm. Past m/d -> flagged. Unreadable -> flagged. ---------- */
+var TICKET_TYPES = {
+  prehang: { key: "prehang", label: "Prehang", file: "Prehang", product: "Prehang", desc: "Prehang Tub/FP Insulation - HW", to: "walls" },
+  cf: { key: "cf", label: "Caulk & Foam", file: "Caulk and Foam", product: "C/F", desc: "Caulk & Foam Air Penetrations", to: "walls" },
+  fiberglass: { key: "fiberglass", label: "Fiberglass", file: "Fiberglass", to: "walls" },
+  attic: { key: "attic", label: "Attic", file: "Attic", to: "attic" }
+};
+var TYPE_RES = [
+  ["info", /\b(?:exterior\s+|outdoor\s+|outside\s+)?(?:gas\s+)?fire[\s-]*places?\b|\bgas\s+logs?\b|\bwood\s*stoves?\b/gi],
+  ["cf", /\bcaulk(?:ing)?\s*(?:and|&|n|\+)\s*foam(?:ing)?\b|\bc\s*(?:\/|&|\+|\band\b)\s*f\b|\bcf\b|\bair[\s-]*seal(?:ing|ed|s)?\b|\bpenetrations?\b|\bcaulk(?:ing)?\b/gi],
+  ["prehang", /\bpre[\s-]*hang(?:s|ing)?\b|\bpre[\s-]*batt?s?\b|\btubs?(?:\s*\/\s*fp)?(?:\s*batt?s?)?(?:\s+insulation)?\b|\bph\b/gi],
+  ["attic", /\b(?:blown\s+|blow[\s-]*in\s+)?attics?\b|\bblow(?:n|ing)?(?:[\s-]*in)?\b/gi],
+  ["fiberglass", /\bfib(?:er|re)[\s-]*glass\b|\bbatt?s?(?:\s+install(?:ation|ed)?)?\b|\bwalls?\b|\binsulation\b|\bfg\b/gi]
+];
+var INFO_NOTE = "Fireplace mentioned \u2014 not a Sky ticket";
+function maskSpan(s, i, n) { return s.slice(0, i) + new Array(n + 1).join(" ") + s.slice(i + n); }
+function findTypes(s) {
+  var found = [];
+  TYPE_RES.forEach(function (tr) {
+    var re = new RegExp(tr[1].source, "gi"), m, mine = [];
+    while ((m = re.exec(s))) { if (!m[0]) { re.lastIndex++; continue; } mine.push({ type: tr[0], i: m.index, n: m[0].length, w: m[0] }); }
+    mine.forEach(function (f) { found.push(f); s = maskSpan(s, f.i, f.n); });
+  });
+  found.sort(function (a, b) { return a.i - b.i; });
+  var out = [], run = 0;
+  found.forEach(function (f) {
+    var p = out[out.length - 1], gap = p ? s.slice(p.i + p.n, f.i) : null;
+    // "blown insulation" is one attic mention, "walls/batts" one fiberglass mention
+    if (p && /insulation/i.test(f.w) && /^\s*$/.test(gap)) { p.n = f.i + f.n - p.i; return; }
+    if (p && p.type === f.type && /^[\s\/&,+\-]*(?:and\s*)?[\s\/&,+\-]*$/i.test(gap)) { p.n = f.i + f.n - p.i; return; }
+    // "prehang and caulk & foam on the 17th": types joined only by and/&/, share the date that follows
+    if (!(p && /^[\s,\/&+]*(?:and|n|or)?[\s,\/&+]*$/i.test(gap) && !/\n\s*\n/.test(gap))) run++;
+    out.push({ type: f.type, i: f.i, n: f.n, w: f.w, run: run });
+  });
+  return out;
+}
+function dateIssue(kind, msg, suggested) { return { kind: kind, msg: msg, suggested: suggested || null }; }
+function niceDate(d) { return DAYS[d.getDay()].charAt(0).toUpperCase() + DAYS[d.getDay()].slice(1) + " " + MONTHS[d.getMonth()].charAt(0).toUpperCase() + MONTHS[d.getMonth()].slice(1) + " " + d.getDate(); }
+function findDates(s, today) {
+  var t0 = mkDate(today.getFullYear(), today.getMonth(), today.getDate()), out = [], m;
+  // explicit m/d(/y) first, all of them, so "Air seal-11/2 ... Insulation -11/6" both read
+  var re = /\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/g, hits = [];
+  while ((m = re.exec(s))) {
+    var mo = +m[1] - 1, d = +m[2]; if (mo < 0 || mo > 11 || d < 1 || d > 31) continue;
+    var y = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : today.getFullYear(), dt = mkDate(y, mo, d);
+    if (dt.getDate() !== d) continue;
+    hits.push({ i: m.index, n: m[0].length, w: m[0], date: dt, text: null, issue: dt < t0 ? dateIssue("past", "\u201c" + m[0] + "\u201d has already passed \u2014 check the date") : null });
+  }
+  hits.forEach(function (h) { out.push(h); s = maskSpan(s, h.i, h.n); });
+  for (var k = 0; k < 10; k++) {
+    LAST_DATE_HIT = null;
+    var r = extractDate(s, today), hit = LAST_DATE_HIT;
+    if (!hit) break;
+    var w = hit[0], o = { i: hit.index, n: w.length, w: w, date: r.date, text: r.text || null, issue: null };
+    if (/\b(today|tomorrow)\b/i.test(w) || /\b(sun|mon|tue|wed|thu|fri|sat)/i.test(w) && !/\d/.test(w)) {
+      o.issue = dateIssue("confirm", "\u201c" + w.trim() + "\u201d \u2014 the text has no sent date, so confirm: " + niceDate(r.date) + "?", r.date);
+    } else if (new RegExp(MON_RE, "i").test(w) && r.date) {
+      if (!/\d{4}/.test(w) && r.date.getFullYear() !== today.getFullYear()) o.date = mkDate(today.getFullYear(), r.date.getMonth(), r.date.getDate());
+      if (o.date < t0) o.issue = dateIssue("past", "\u201c" + w.trim() + "\u201d has already passed \u2014 check the date");
+    } else if (!r.date && !r.text) {
+      o.issue = dateIssue("unreadable", "Couldn't read the date \u201c" + w.trim() + "\u201d");
+    }
+    out.push(o); s = maskSpan(s, hit.index, w.length);
+  }
+  // date-looking leftovers we couldn't read: flag them (and keep their numbers from being read as lots)
+  var lre = /\b\d{1,2}\s*[\/\-]\s*\d{1,2}(?:\s*[\/\-]\s*\d{2,4})?\b|\b\d{1,2}(?:st|nd|rd|th)\b|\b(?:january|february|march|april|june|july|august|september|october|november|december|jan|feb|aug|sept?|oct|nov|dec)\b\.?(?:\s+\d{1,2})?|\b(?:next|this)\s+week\b|\bend\s+of\s+(?:the\s+)?(?:week|month)\b/gi, bad = [];
+  while ((m = lre.exec(s))) bad.push({ i: m.index, n: m[0].length, w: m[0].trim() });
+  bad.forEach(function (b) { s = maskSpan(s, b.i, b.n); });
+  return { dates: out, s: s, unreadable: bad };
+}
+/* like scoreSubs but also says when a typo/partial word was used ("Greenfeild" -> Greenfield) so Asher can confirm */
+function subMatch(s, lots) {
+  var subs = scoreSubs(s, lots), words = s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(function (w) { return w && !STOP[w]; });
+  var heard = [], bases = [];
+  subs.forEach(function (sub) {
+    var b = subDisplay(sub); if (bases.indexOf(b) < 0) bases.push(b);
+    b.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(function (w) { return w && !STOP[w]; }).forEach(function (bt) {
+      var best = 0, bw = ""; words.forEach(function (w) { var v = tokMatch(w, bt); if (v > best) { best = v; bw = w; } });
+      if (best > 0 && best < 1 && heard.indexOf(bw) < 0) heard.push(bw);
+    });
+  });
+  return { subs: subs, heard: heard, bases: bases };
+}
+var BLOCK_RE = /^[ \t]*[*#\-\u2022>]*[ \t]*lots?[ \t]*#?[ \t]*(\d{1,4})[a-z]?[ \t]*[*:\-]*[ \t]*$/gim;
+var RESCHED_RE = /\b(move|moved|moving|push(?:ed|ing)?|reschedul\w*|bump(?:ed)?|postpone\w*|change(?:d)?\s+(?:the\s+)?date)\b/i;
+function parseTyped(text, lots, today) {
+  lots = lots || DATA.lots; today = today || new Date();
+  var raw = String(text || "").trim();
+  var s = raw.replace(/[;!?]/g, " ");
+  s = s.replace(/\bas\s+of\s+(?:today|now)\b/gi, function (x) { return new Array(x.length + 1).join(" "); }); // filler, not a date
+  var ev = [], m, resched = RESCHED_RE.exec(raw);
+  // "**Lot 49" header lines start a per-lot block: the lines under it apply only to that lot
+  var bre = new RegExp(BLOCK_RE.source, "gim");
+  while ((m = bre.exec(s))) ev.push({ k: "break", i: m.index, n: 0, lot: parseInt(m[1], 10) });
+  var types = findTypes(s);
+  types.forEach(function (t) { ev.push({ k: "type", i: t.i, n: t.n, type: t.type, run: t.run, w: t.w }); s = maskSpan(s, t.i, t.n); });
+  var rre = /\b(?:lots?|lts?|l)\s*(?:#|no\.?|number)?\s*#?(\d{1,4})[a-z]?\s*(?:-|\u2013|\u2014|\bthrough\b|\bthru\b|\bto\b)\s*(?:lots?\s*)?#?(\d{1,4})[a-z]?\b/gi, rng = [];
+  while ((m = rre.exec(s))) {
+    var a = parseInt(m[1], 10), b = parseInt(m[2], 10);
+    if (b > a && b - a + 1 <= MAX_RANGE) { var nums = []; for (var q = a; q <= b; q++) nums.push(q); rng.push({ k: "lot", i: m.index, n: m[0].length, nums: nums }); }
+  }
+  rng.forEach(function (e) { ev.push(e); s = maskSpan(s, e.i, e.n); });
+  var fd = findDates(s, today); s = fd.s;
+  fd.dates.forEach(function (d) { ev.push({ k: "date", i: d.i, n: d.n, date: d.date, text: d.text, issue: d.issue, w: d.w }); });
+  var lre = /(?:\b(?:lots?|lts?|l)\s*(?:#|no\.?|number)?\s*#?|#\s*|\b)(\d{1,4})[a-z]?\b|\blots?\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/gi, lotEv = [];
+  while ((m = lre.exec(s))) lotEv.push({ k: "lot", i: m.index, n: m[0].length, nums: [m[1] ? parseInt(m[1], 10) : NUMWORDS[m[2].toLowerCase()]] });
+  lotEv.forEach(function (e) { ev.push(e); s = maskSpan(s, e.i, e.n); });
+  var KORD = { "break": 0, lot: 1, type: 2, date: 3 };
+  ev.sort(function (x, y) { return x.i - y.i || KORD[x.k] - KORD[y.k]; });
+  // walk: lots, then their clauses (type + date). A lot named after a clause starts a new group, so
+  // "lot 6 prehang on the 17th and lot 42 prehang on the 18th" pairs each lot with its own date.
+  var groups = [], pending = null, lastEnd = 0, runDate = {};
+  function newGroup(start, block) { return { lots: [], clauses: [], start: start, block: !!block }; }
+  var cur = newGroup(0, false);
+  function close(at) { cur.end = at; cur.pending = pending; pending = null; groups.push(cur); }
+  ev.forEach(function (e) {
+    if (e.k === "break") { close(e.i); cur = newGroup(e.i, true); }
+    else if (e.k === "lot") {
+      if (cur.clauses.length && cur.lots.length) { close(lastEnd); cur = newGroup(lastEnd, false); }
+      e.nums.forEach(function (n) { if (cur.lots.indexOf(n) < 0) cur.lots.push(n); });
+    } else if (e.k === "type") {
+      var key = cur.start + ":" + e.run, c = { type: e.type, run: key, w: e.w, date: null, text: null, issue: null, has: false };
+      if (pending) { runDate[key] = pending; pending = null; }
+      if (runDate[key]) { c.date = runDate[key].date; c.text = runDate[key].text; c.issue = runDate[key].issue; c.has = true; }
+      cur.clauses.push(c);
+    } else {
+      var last = cur.clauses[cur.clauses.length - 1];
+      if (last && !last.has) {
+        runDate[last.run] = e;
+        cur.clauses.forEach(function (c) { if (c.run === last.run && !c.has) { c.date = e.date; c.text = e.text; c.issue = e.issue; c.has = true; } });
+      } else pending = e;
+    }
+    lastEnd = e.i + e.n;
+  });
+  close(s.length);
+  // preamble lots ("lots 49&89 rosewood lake") that have their own **Lot block are covered there
+  var blockLots = {}; groups.forEach(function (g) { if (g.block) g.lots.forEach(function (n) { blockLots[n] = 1; }); });
+  groups.forEach(function (g) { if (!g.block && !g.clauses.length) g.lots = g.lots.filter(function (n) { return !blockLots[n]; }); });
+  var G = subMatch(s, lots), items = [], index = {}, tickets = [], seenT = {}, flags = [], notes = [];
+  if (resched) flags.push("Reads like a reschedule/change (\u201c" + resched[0] + "\u201d), not a new job. Check the ticket already sent before sending a new one.");
+  fd.unreadable.forEach(function (b) { flags.push("Couldn't read the date \u201c" + b.w + "\u201d."); });
+  groups.forEach(function (g) {
+    var real = g.clauses.filter(function (c) { return c.type !== "info"; });
+    if (!g.lots.length) { if (real.length) flags.push("No lot number for " + real.map(function (c) { return TICKET_TYPES[c.type].label; }).join(", ") + "."); return; }
+    var SM = subMatch(s.slice(g.start, g.end), lots), guessed = false;
+    if (!SM.subs.length) { SM = G; guessed = G.bases.length > 1; }
+    var subs = SM.subs, pool = subs.length ? lots.filter(function (l) { return subs.indexOf(l.s) >= 0; }) : lots;
+    var idx = g.lots.map(function (n) {
+      var key = subs.join("|") + "#" + n;
+      if (index[key] == null) {
+        var matches = pool.filter(function (l) { return l.n === n; });
+        var st = !subs.length ? (matches.length ? "nosubname" : "nosub") : matches.length === 1 ? "ok" : matches.length > 1 ? "choose" : "nolotinsub";
+        var it = { lot: n, matches: matches, subs: subs, status: st, confirm: null, notes: [], noType: false, textDate: g.pending ? { date: g.pending.date, text: g.pending.text } : null };
+        if (st === "ok" && SM.heard.length) it.confirm = "Subdivision matched from \u201c" + SM.heard.join(" ") + "\u201d \u2192 " + subDisplay(matches[0].s) + ". Is that right?";
+        else if (st === "ok" && guessed) it.confirm = "No subdivision named next to lot " + n + "; found it in " + subDisplay(matches[0].s) + ". Is that right?";
+        items.push(it); index[key] = items.length - 1;
+      }
+      return index[key];
+    });
+    g.clauses.forEach(function (c) {
+      if (c.type === "info") { idx.forEach(function (li) { var t = INFO_NOTE + (c.text ? " (" + c.text.toLowerCase() + ")" : ""); if (items[li].notes.indexOf(t) < 0) items[li].notes.push(t); }); return; }
+      idx.forEach(function (li) {
+        var k = li + "|" + c.type + "|" + (c.date ? fmtDate(c.date) : c.text || "");
+        if (seenT[k]) return; seenT[k] = 1;
+        var issues = [];
+        if (!c.has) issues.push(dateIssue("nodate", "No date for " + TICKET_TYPES[c.type].label + " \u2014 set it in Review / edit"));
+        else if (c.issue) issues.push(c.issue);
+        if (resched) issues.push(dateIssue("reschedule", "Reschedule/change wording \u2014 confirm this should go out as a new ticket"));
+        tickets.push({ lotIndex: li, lot: items[li].lot, type: c.type, heard: c.w, date: c.date || null, dateText: c.text || null, issues: issues });
+      });
+    });
+    if (!real.length) idx.forEach(function (li) { if (!tickets.some(function (t) { return t.lotIndex === li; })) items[li].noType = true; });
+  });
+  items.forEach(function (it, li) { if (tickets.some(function (t) { return t.lotIndex === li; })) it.noType = false; });
+  items.forEach(function (it) {
+    if (it.noType) flags.push("Lot " + it.lot + ": no ticket type \u2014 add prehang, fiberglass, or caulk & foam.");
+    if (it.status === "nolotinsub") flags.push("Lot " + it.lot + " isn't in the lot log for " + subDisplay(it.subs[0]) + ".");
+    else if (it.status === "choose") flags.push("Lot " + it.lot + " is in more than one subdivision \u2014 pick one.");
+    else if (it.status === "nosubname") flags.push("Lot " + it.lot + ": no subdivision I know was named \u2014 pick one.");
+    else if (it.status === "nosub") flags.push("Lot " + it.lot + ": no subdivision named and no lot " + it.lot + " in the lot log.");
+    if (it.confirm) flags.push("Lot " + it.lot + ": " + it.confirm);
+  });
+  if (!items.length && !flags.length) flags.push("Need a lot number, like \u201cSummerlin lots 59 and 60, prehang on the 17th\u201d.");
+  tickets.forEach(function (t) { t.issues.forEach(function (x) { if (x.kind !== "reschedule") flags.push("Lot " + t.lot + " " + TICKET_TYPES[t.type].label + ": " + x.msg + "."); }); });
+  return {
+    input: raw, multi: true, typed: true, status: "typed", lots: items, tickets: tickets, flags: flags, reschedule: !!resched,
+    lot: items.length ? items[0].lot : null, subCandidates: G.subs, matches: [],
+    date: tickets.length ? tickets[0].date : null, dateText: tickets.length ? tickets[0].dateText : null
+  };
+}
+/* 29ai: every request goes through parseTyped (a request with no ticket type is flagged, never defaulted). */
+function parseRequest(text, lots, today) { return parseTyped(text, lots || DATA.lots, today || new Date()); }
+/* 29ah lot-list parser, kept for reference/tests only (no longer used by the app) */
+function parseLegacy(text, lots, today) {
   lots = lots || DATA.lots;
   var L = findLotList(text, today);
   if (!L) return parseOne(text, lots, today);
@@ -4462,7 +4661,42 @@ function buildOrder(lot, opts) {
   });
   return o;
 }
+/* one ticket = one lot + one type + its own date. Prehang / C/F need only the lot info (job site, address, city);
+   Fiberglass is the plan's Walls/Batts sheet (attic sheet rides along for the Josh send, as before). */
+function buildTicket(lot, type, opts) {
+  var o = buildOrder(lot, opts || {}), T = TICKET_TYPES[type];
+  o.ticketType = type;
+  if (type === "fiberglass") o.sheets = { walls: o.sheets.walls };
+  else if (type === "attic") o.sheets = { attic: o.sheets.attic };
+  else {
+    o.line7 = "";
+    o.sheets = {};
+    o.sheets[type] = { cat: type, kind: T.label, variant: "", variants: ["Standard"], variantIndex: 0, title: T.label, rep: "Sky", note: "",
+      mod: "Chafin template (Prehang-Caulk and Foam Template.xlsx)", items: [{ r: 10, p: T.product, d: T.desc, f: "", b: "" }], notes: "" };
+  }
+  return o;
+}
+/* which sheet of a ticket gets sent: walls (fiberglass), attic, prehang, cf */
+function ticketCat(o) { var t = o.ticketType || "fiberglass"; return t === "fiberglass" ? "walls" : t; }
+/* who gets it: "walls" contact (Sky) for prehang / C/F / fiberglass, "attic" contact (Josh) for attic */
+function ticketTo(o) { return TICKET_TYPES[o.ticketType || "fiberglass"].to; }
+function ticketDateStr(o) { return o.date ? fmtDate(o.date) : (o.dateText || "no date"); }
+function ticketLabel(o) { return TICKET_TYPES[o.ticketType || "fiberglass"].label; }
+/* "Sky, attached are the work orders for Summerlin Lots 59 and 60." + one line per ticket: lot, type, date */
+function typedShareText(orders, name) {
+  var subs = [], bySub = {};
+  orders.forEach(function (o) { var n = String(isNaN(o.lot.n) ? o.lot.l : o.lot.n); if (!bySub[o.sub]) { bySub[o.sub] = []; subs.push(o.sub); } if (bySub[o.sub].indexOf(n) < 0) bySub[o.sub].push(n); });
+  function jn(a) { return a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]; }
+  var lotsTxt = jn(subs.map(function (sb) { return sb + " Lot" + (bySub[sb].length > 1 ? "s " : " ") + jn(bySub[sb]); }));
+  var lines = orders.map(function (o) { return (subs.length > 1 ? o.sub + " " : "") + "Lot " + (isNaN(o.lot.n) ? o.lot.l : o.lot.n) + " - " + ticketLabel(o) + " - " + ticketDateStr(o); });
+  return {
+    title: "Chafin WOs - " + subs.map(function (sb) { return sb + " Lot" + (bySub[sb].length > 1 ? "s " : " ") + bySub[sb].join(", "); }).join(" + "),
+    text: (name || "Sky") + ", attached " + (orders.length === 1 ? "is the work order" : "are the work orders") + " for " + lotsTxt + ".\n" + lines.join("\n")
+  };
+}
 function fileNameFor(o, cat) {
+  if (o.ticketType) // typed tickets: "Summerlin Lot 59 - Prehang - 11-17-26.xlsx"
+    return sanitizeName(o.sub + " Lot " + (isNaN(o.lot.n) ? o.lot.l : o.lot.n) + " - " + TICKET_TYPES[o.ticketType].file + " - " + ticketDateStr(o)) + ".xlsx";
   var sh = o.sheets[cat];
   var kind = cat === "attic" ? "Attic" : (sh ? sh.kind : "Walls") + (sh && sh.variant ? " " + sh.variant : "");
   return sanitizeName("Chafin - " + o.sub + " Lot " + (isNaN(o.lot.n) ? o.lot.l : o.lot.n) + " - " + o.plan + " - " + kind) + ".xlsx";
@@ -4794,7 +5028,7 @@ return {
   DATA: DATA, KNOWN_CITIES: KNOWN_CITIES, parseRequest: parseRequest, extractDate: extractDate, buildOrder: buildOrder,
   buildXlsx: buildXlsx, fileNameFor: fileNameFor, planInfo: planInfo, subDisplay: subDisplay, subPhase: subPhase,
   subdivisions: subdivisions, cityFor: cityFor, fmtDate: fmtDate, unzip: unzip, xlsxRows: xlsxRows, csvRows: csvRows,
-  rowsToLots: rowsToLots, previewHtml: previewHtml, sheetLayout: sheetLayout, normLot: normLot, crc32: crc32, zipStore: zipStore, canonPlan: canonPlan
+  rowsToLots: rowsToLots, TICKET_TYPES: TICKET_TYPES, buildTicket: buildTicket, ticketCat: ticketCat, ticketTo: ticketTo, parseTyped: parseTyped, parseLegacy: parseLegacy, findDates: findDates, subMatch: subMatch, INFO_NOTE: INFO_NOTE, ticketLabel: ticketLabel, ticketDateStr: ticketDateStr, typedShareText: typedShareText, findTypes: findTypes, previewHtml: previewHtml, sheetLayout: sheetLayout, normLot: normLot, crc32: crc32, zipStore: zipStore, canonPlan: canonPlan
 };
 })();
 
