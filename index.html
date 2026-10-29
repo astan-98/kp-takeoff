@@ -149,7 +149,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   height: calc(var(--nav-h) + var(--safe-b)); padding-bottom: var(--safe-b);
   background: color-mix(in srgb, var(--bg2) 92%, transparent);
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-  border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(5, 1fr);
 }
 .nav-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -330,6 +330,11 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
       <p class="status" id="archiveCount">0 saved job(s)</p>
       <div id="archiveList"></div>
     </div>
+    <div class="section">
+      <h2>Chafin work orders</h2>
+      <p class="cap">Recent work orders made on the Work Order tab.</p>
+      <div id="woRecentArchive"><p class="status">None yet.</p></div>
+    </div>
   </section>
 
   <section id="tab-pricing" class="tabs-panel">
@@ -366,12 +371,49 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
       </div>
     </div>
   </section>
+  <section id="tab-workorder" class="tabs-panel">
+    <div class="section">
+      <h2>Chafin work order</h2>
+      <p class="cap">Type or dictate the job, like “Fowler Farms 362 on the 9th” or “Summerlin lot 59 Nov 12”. Tap the mic on the keyboard to talk.</p>
+      <div class="field"><label>Which job?</label>
+        <textarea id="woAsk" rows="2" style="min-height:56px" placeholder="Fowler Farms 362 on the 9th" autocapitalize="words"></textarea>
+      </div>
+      <button type="button" class="btn btn-primary btn-block" id="woFind">Find lot</button>
+      <div id="woMsg" style="margin-top:12px"></div>
+      <div class="divider"></div>
+      <p class="cap" style="margin-bottom:8px">Or pick it:</p>
+      <div class="grid2">
+        <div class="field"><label>Subdivision</label><select id="woSub"></select></div>
+        <div class="field"><label>Lot</label><select id="woLot"></select></div>
+      </div>
+    </div>
+
+    <div id="woOrder" class="hidden"></div>
+
+    <div class="section">
+      <h2>Recent work orders</h2>
+      <div id="woRecent"><p class="status">None yet.</p></div>
+    </div>
+
+    <div class="section">
+      <h2>Lot log</h2>
+      <p class="status" id="woLogInfo"></p>
+      <p class="cap" style="margin-top:8px">When Chafin sends a newer Construction Report, load it here as Excel (.xlsx) or CSV. If you only have the PDF, send it to me and I'll update the app.</p>
+      <label class="btn btn-secondary btn-block" for="woLogFile" style="margin-bottom:8px">Update lot log (.xlsx / .csv)</label>
+      <input type="file" id="woLogFile" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden">
+      <button type="button" class="btn btn-secondary btn-block hidden" id="woLogReset">Go back to built-in lot log</button>
+      <p class="status" id="woLogMsg"></p>
+      <div class="divider"></div>
+      <p class="status" id="woMissing"></p>
+    </div>
+  </section>
 </main>
 
 <nav class="bottom-nav">
   <button type="button" class="nav-btn active" data-tab="wizard"><span class="ico">📋</span>Wizard</button>
   <button type="button" class="nav-btn" data-tab="output"><span class="ico">📊</span>Excel</button>
   <button type="button" class="nav-btn" data-tab="archive"><span class="ico">🗂️</span>Archive</button>
+  <button type="button" class="nav-btn" data-tab="workorder"><span class="ico">🏗️</span>Work Order</button>
   <button type="button" class="nav-btn" data-tab="pricing"><span class="ico">💰</span>Pricing</button>
 </nav>
 
@@ -2008,6 +2050,795 @@ if (document.readyState === "loading") document.addEventListener("DOMContentLoad
 else init();
 
 })();
+</script>
+<script>
+/* Chafin lot log + plan sheets (built from Asher's workbooks, Oct 2026) */
+var KPWO_DATA = {"plans":{"Abby":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1194,"b":1194},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2530,"b":23},{"r":11,"p":"Dead Air","d":"R38/24","f":128,"b":3},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":360,"b":4},{"r":13,"p":"Baffles","d":"24\" Baffles","f":25,"b":25}]}]},"Arlington II":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1076,"b":1076},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2544,"b":23},{"r":11,"p":"Ext Walls","d":"R19/15/9","f":30,"b":1},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":322,"b":4},{"r":13,"p":"Dead Air, Slopes","d":"R38/24","f":353,"b":7},{"r":14,"p":"Dead Air","d":"R38/16","f":50,"b":2},{"r":15,"p":"Knee Walls","d":"R19/15","f":47,"b":1},{"r":16,"p":"Knee Walls","d":"R19/24","f":228,"b":3},{"r":17,"p":"Baffles","d":"24\" Baffles","f":22,"b":22}]}]},"Aspen":{"attic":[{"kind":"Attic","variant":"","rep":"Sky","mod":"2026-10-29","note":"","items":[{"r":10,"p":"Attic","d":"R38 Blow","f":1593,"b":""},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Walls","variant":"","rep":"Sky","mod":"2026-10-19","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":96,"b":""},{"r":11,"p":"Ext Walls","d":"R19/15","f":39,"b":""},{"r":12,"p":"Ext Walls/Bands","d":"R13/15/9","f":1164,"b":""},{"r":13,"p":"Ext Walls","d":"R13/15/8","f":776,"b":""},{"r":14,"p":"Knee Walls","d":"R19/15","f":624,"b":""},{"r":15,"p":"Soffit","d":"24\" Baffles","f":50,"b":""}]}]},"Aurora":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-19","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1548,"b":1548},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-10-19","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1483,"b":14},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1211,"b":13},{"r":12,"p":"Dead Air","d":"R38/24","f":126,"b":3},{"r":13,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":425,"b":4},{"r":14,"p":"Baffles","d":"24\" Baffles","f":36,"b":36}]}]},"Blackburn":{"attic":[{"kind":"Attic","variant":"","rep":"Sky","mod":"2026-10-29","note":"","items":[{"r":10,"p":"Attic","d":"R38 Blow","f":1722,"b":""},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Walls","variant":"","rep":"Sky","mod":"2026-10-29","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":128,"b":""},{"r":11,"p":"Knee Walls","d":"R19/15","f":104,"b":""},{"r":12,"p":"Ext Walls","d":"","f":1050,"b":""},{"r":13,"p":"Ext Walls","d":"R13/15/8","f":756,"b":""},{"r":14,"p":"Soffit","d":"Baffles 24\"","f":40,"b":""}]}]},"Bluff":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-19","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1760,"b":1760},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Walls","variant":"","rep":"Sky","mod":"2026-10-29","note":"Loft Option Included","items":[{"r":10,"p":"Ext Walls","d":"R13/15/8","f":200,"b":""},{"r":11,"p":"Ext Walls","d":"R13/15/9","f":1652,"b":""},{"r":12,"p":"Ext Walls","d":"R19/15","f":244,"b":""},{"r":13,"p":"Knee Walls","d":"R19/15","f":736,"b":""},{"r":14,"p":"Garage Ceiling","d":"R19/24","f":34,"b":""},{"r":15,"p":"Dead Air","d":"R38/24","f":128,"b":""},{"r":16,"p":"Soffit","d":"24\" Baffles","f":30,"b":""}]},{"kind":"Walls","variant":"No Loft","rep":"Sky","mod":"2026-10-29","note":"Loft Option Not Included","items":[{"r":10,"p":"Ext Walls","d":"R13/15/9","f":1652,"b":""},{"r":11,"p":"Ext Walls","d":"R19/15","f":180,"b":""},{"r":12,"p":"Dead Air","d":"R38/24","f":128,"b":""},{"r":13,"p":"Soffit","d":"24\" Baffles","f":30,"b":""}]}]},"Brentwood II":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1444,"b":1444},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1474,"b":14},{"r":11,"p":"Knee Walls","d":"R19/15","f":535,"b":7},{"r":12,"p":"Ext Walls","d":"R13/15/8","f":60,"b":1},{"r":13,"p":"Dead Air","d":"R38/24","f":359,"b":7},{"r":14,"p":"Baffles","d":"24\" Baffles","f":52,"b":52}]}]},"Briar":{"attic":[{"kind":"Attic","variant":"","rep":"Sky","mod":"2026-10-29","note":"","items":[{"r":10,"p":"Attic","d":"R38 Blow","f":1159,"b":""},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Walls","variant":"","rep":"Sky","mod":"2026-10-29","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":96,"b":""},{"r":11,"p":"Ext Walls","d":"R19/15","f":25,"b":""},{"r":12,"p":"Ext Walls/Bands","d":"R13/15/9","f":1415,"b":""},{"r":13,"p":"Ext Walls","d":"R13/15/8","f":943,"b":""},{"r":14,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":267,"b":""},{"r":15,"p":"Soffit","d":"Baffles","f":50,"b":""},{"r":16,"p":"Knee Walls","d":"R19/15","f":40,"b":""}]}]},"Bristol":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1532,"b":1532},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2775,"b":25},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":425,"b":4},{"r":12,"p":"Dead Air","d":"R38/24","f":130,"b":3},{"r":13,"p":"Baffles","d":"24\" Baffles","f":23,"b":23}]}]},"Brookfield":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-08-25","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1746,"b":1746},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-08-25","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":170,"b":4},{"r":11,"p":"Knee Walls","d":"R19/24","f":614,"b":6},{"r":12,"p":"Ext Walls, Bands","d":"R13/15/9","f":1759,"b":17},{"r":13,"p":"Ext Walls","d":"R13/15/8","f":150,"b":2},{"r":14,"p":"Ext Walls","d":"R19/15/9","f":101,"b":2},{"r":15,"p":"Baffles","d":"24\" Baffles","f":10,"b":10}]}]},"Brookmont":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1929,"b":1929},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":3295,"b":30},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":466,"b":5},{"r":12,"p":"Dead Air","d":"R38/24","f":272,"b":5},{"r":13,"p":"Baffles","d":"24\" Baffles","f":30,"b":30}]}]},"Brunswick":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1523,"b":1523},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2563,"b":23},{"r":11,"p":"Knee Walls","d":"R19/15","f":128,"b":2},{"r":12,"p":"Knee Walls","d":"R19/24","f":32,"b":1},{"r":13,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":246,"b":3},{"r":14,"p":"Dead Air","d":"R38/24","f":199,"b":4},{"r":15,"p":"Baffles","d":"24\" Baffles","f":40,"b":40}]}]},"Brunswick II":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":2745,"b":2745},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2745,"b":25},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":305,"b":4},{"r":12,"p":"Ext Walls","d":"R19/15","f":114,"b":2},{"r":13,"p":"Knee Walls","d":"R19/15","f":88,"b":2},{"r":14,"p":"Slopes","d":"R30/24","f":76,"b":2},{"r":15,"p":"Slopes","d":"24\" Poly Vents","f":10,"b":10},{"r":16,"p":"Dead Air","d":"R38/24","f":156,"b":4},{"r":17,"p":"Baffles","d":"24\" Baffles","f":35,"b":35}]}]},"Callington":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1343,"b":1343},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2577,"b":23},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":438,"b":4},{"r":12,"p":"Dead Air","d":"R38/24","f":128,"b":3},{"r":13,"p":"Baffles","d":"24\" Baffles","f":27,"b":27}]}]},"Cambridge":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1552,"b":1552},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-08-25","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2625,"b":24},{"r":11,"p":"Dead Air","d":"R38/24","f":106,"b":2},{"r":12,"p":"Knee Walls","d":"R19/15","f":29,"b":1},{"r":13,"p":"Slopes","d":"R38/24","f":60,"b":2},{"r":14,"p":"Baffles","d":"24\" Baffles","f":50,"b":50},{"r":15,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":441,"b":4}]}]},"Camelot":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1963,"b":1963},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Sky","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":3135,"b":26},{"r":11,"p":"Cantilever","d":"R30/24","f":30,"b":1},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":526,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":128,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":26,"b":26}]}]},"Canterbury":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1678,"b":1678},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2924,"b":26},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":463,"b":5},{"r":12,"p":"Dead Air","d":"R38/24","f":184,"b":4},{"r":13,"p":"Baffles","d":"24\" Baffles","f":33,"b":33}]}]},"Canyon":{"attic":[{"kind":"Attic","variant":"","rep":"Sky","mod":"2026-10-29","note":"","items":[{"r":10,"p":"Attic","d":"R38 Blow","f":970,"b":""},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Walls","variant":"","rep":"Sky","mod":"2026-10-29","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":96,"b":""},{"r":11,"p":"Ext Walls","d":"R19/15","f":30,"b":""},{"r":12,"p":"Ext Walls/Bands","d":"R13/15/9","f":1525,"b":""},{"r":13,"p":"Ext Walls","d":"R13/15/8","f":1016,"b":""},{"r":14,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":452,"b":""},{"r":15,"p":"Soffit","d":"Baffles","f":50,"b":""}]}]},"Cascade":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-19","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1594,"b":1594},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-10-19","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1658,"b":15},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1105,"b":12},{"r":12,"p":"Dead Air","d":"R38/24","f":128,"b":3},{"r":13,"p":"Ext Walls","d":"R19/15","f":27,"b":1},{"r":14,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":440,"b":5},{"r":15,"p":"Soffit","d":"24\" Baffles","f":40,"b":40}]}]},"Castle":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1807,"b":1807},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2934,"b":27},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":593,"b":6},{"r":12,"p":"Dead Air","d":"R38/24","f":128,"b":3},{"r":13,"p":"Baffles","d":"24\" Baffles","f":27,"b":27}]}]},"Chestnut":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1532,"b":1532},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":96,"b":2},{"r":11,"p":"Cantilever","d":"R30/24 - Tiger Teeth","f":200,"b":3},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":400,"b":4},{"r":13,"p":"Ext Walls, Bands","d":"R13/15/9","f":2288,"b":21},{"r":14,"p":"Ext Walls","d":"R19/15","f":326,"b":5},{"r":15,"p":"Baffles","d":"24\" Baffles","f":18,"b":18}]}]},"Clayton End Unit":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1123,"b":1123},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1724,"b":16},{"r":11,"p":"Party Walls","d":"R13/15/9","f":738,"b":8},{"r":12,"p":"Dead Air","d":"R38/24","f":128,"b":3},{"r":13,"p":"Baffles","d":"24\" Baffles","f":21,"b":21},{"r":14,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":414,"b":4}]}]},"Clayton Int Unit":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1182,"b":1182},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":64,"b":2},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":420,"b":4},{"r":12,"p":"Ext Walls,  Bands","d":"R13/15/9","f":1030,"b":10},{"r":13,"p":"Party Walls","d":"R13/15/9","f":956,"b":9},{"r":14,"p":"Baffles","d":"24\" Baffles","f":24,"b":24}]}]},"Colburn":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-08-25","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1569,"b":1569},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Sky","mod":"2026-08-25","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":102,"b":2},{"r":11,"p":"Dead Air","d":"R38/16","f":55,"b":2},{"r":12,"p":"Ext Walls, Bands","d":"R13/15/9","f":2621,"b":24},{"r":13,"p":"Knee Walls","d":"R19/15","f":29,"b":1},{"r":14,"p":"Baffles","d":"24\" Baffles","f":31,"b":31},{"r":15,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":400,"b":4}]}]},"Cottonwood":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1733,"b":1733},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2968,"b":27},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":254,"b":3},{"r":12,"p":"Ext Walls","d":"R19/15","f":163,"b":3},{"r":13,"p":"Knee Walls","d":"R19/15","f":80,"b":1},{"r":14,"p":"Dead Air","d":"R38/24","f":64,"b":2},{"r":15,"p":"Baffles","d":"24\" Baffles","f":46,"b":46}]}]},"Cove":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-19","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":2105,"b":2105},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Walls","variant":"","rep":"Sky","mod":"2026-10-19","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":162,"b":""},{"r":11,"p":"Ext Walls","d":"R19/15","f":108,"b":""},{"r":12,"p":"Ext Walls/Bands","d":"R13/15/9","f":1509,"b":""},{"r":13,"p":"Ext Walls","d":"R13/15/8","f":1006,"b":""},{"r":14,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":457,"b":""},{"r":15,"p":"Soffit","d":"Baffles","f":50,"b":""},{"r":16,"p":"Cantilever","d":"R30/24","f":11,"b":""},{"r":17,"p":"Knee Walls","d":"R19/15","f":376,"b":""}]}]},"Davenport":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1089,"b":1089},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1094,"b":11},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1066,"b":12},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":382,"b":4},{"r":13,"p":"Cantilever","d":"R30/24","f":42,"b":1},{"r":14,"p":"Dead Air","d":"R38/24","f":120,"b":3},{"r":15,"p":"Baffles","d":"24\" Baffles","f":20,"b":20}]}]},"Davis":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1383,"b":1383},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2775,"b":25},{"r":11,"p":"Knee Walls","d":"R19/15","f":90,"b":2},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":70,"b":1},{"r":13,"p":"Dead Air","d":"R38/24","f":98,"b":2},{"r":14,"p":"Baffles","d":"24\" Baffles","f":44,"b":44}]}]},"Denton":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1612,"b":1612},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1693,"b":16},{"r":11,"p":"Dead Air","d":"R38/24","f":188,"b":4},{"r":12,"p":"Baffles","d":"24\" Baffles","f":23,"b":23}]}]},"Dover":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1308,"b":1308},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2203,"b":20},{"r":11,"p":"Knee Walls","d":"R19/15","f":270,"b":4},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":25,"b":1},{"r":13,"p":"Dead Air","d":"R38/24","f":136,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":61,"b":61}]}]},"Dresden":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1917,"b":1917},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2325,"b":21},{"r":11,"p":"Knee Walls","d":"R19/15","f":479,"b":7},{"r":12,"p":"Dead Air","d":"R38/24","f":64,"b":2},{"r":13,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":307,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":18,"b":18}]}]},"Durham":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-09-24","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1288,"b":1288},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[]},"Edison":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1606,"b":1606},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2950,"b":27},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":86,"b":1},{"r":12,"p":"Dead Air","d":"R38/24","f":102,"b":2},{"r":13,"p":"Baffles","d":"24\" Baffles","f":38,"b":38},{"r":14,"p":"Knee Walls","d":"R19/15","f":88,"b":2}]}]},"Edmond":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1299,"b":1299},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1632,"b":15},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":66,"b":1},{"r":12,"p":"Dead Air","d":"R38/24","f":508,"b":9},{"r":13,"p":"Knee Walls","d":"R19/15","f":517,"b":7},{"r":14,"p":"Slopes","d":"R30/24","f":56,"b":1},{"r":15,"p":"Baffles","d":"24\" Baffles","f":30,"b":30}]}]},"Everett":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1548,"b":1548},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1483,"b":14},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1211,"b":13},{"r":12,"p":"Dead Air","d":"R38/24","f":126,"b":3},{"r":13,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":425,"b":4},{"r":14,"p":"Baffles","d":"24\" Baffles","f":36,"b":36}]}]},"Fairfield":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1046,"b":1046},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1173,"b":12},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1011,"b":11},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":314,"b":4},{"r":13,"p":"Dead Air","d":"R38/24","f":124,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":10,"b":10}]}]},"Glendale":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1261,"b":1261},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1351,"b":13},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1098,"b":11},{"r":12,"p":"Dead Air","d":"R38/24","f":156,"b":4},{"r":13,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":458,"b":5},{"r":14,"p":"Baffles","d":"24\" Baffles","f":28,"b":28}]}]},"Greenbriar":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1619,"b":1619},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1454,"b":14},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1239,"b":13},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":417,"b":4},{"r":13,"p":"Dead Air","d":"R38/24","f":136,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":34,"b":34}]}]},"Greenwood":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1289,"b":1289},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1301,"b":12},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1123,"b":12},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":438,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":158,"b":4},{"r":14,"p":"Baffles","d":"24\" Baffles","f":27,"b":27}]}]},"Hammond":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1739,"b":1739},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1529,"b":15},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1284,"b":14},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":420,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":147,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":35,"b":35}]}]},"Harlow":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1578,"b":1578},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1734,"b":16},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":60,"b":1},{"r":12,"p":"Knee Walls","d":"R19/15","f":850,"b":11},{"r":13,"p":"Slopes","d":"R38/24","f":40,"b":1},{"r":14,"p":"Slopes","d":"24\" Poly Vents","f":5,"b":5},{"r":15,"p":"Dead Air","d":"R38/24","f":416,"b":8},{"r":16,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":210,"b":3},{"r":17,"p":"Baffles","d":"24\" Baffles","f":71,"b":71}]}]},"Hawethorne":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1532,"b":1532},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":112,"b":3},{"r":11,"p":"Cantilever","d":"R30/24 - Tiger Teeth","f":88,"b":2},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":462,"b":5},{"r":13,"p":"Ext Walls, Bands","d":"R13/15/9","f":2149,"b":20},{"r":14,"p":"Ext Walls","d":"R19/15","f":135,"b":2},{"r":15,"p":"Baffles","d":"24\" Baffles","f":19,"b":19}]}]},"Hemlock":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1360,"b":1360},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2319,"b":21},{"r":11,"p":"Cantilever","d":"R30/24","f":126,"b":2},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":441,"b":4},{"r":13,"p":"Dead Air, Slopes","d":"R38/24","f":253,"b":5},{"r":14,"p":"Knee Walls","d":"R19/15","f":112,"b":2},{"r":15,"p":"Baffles","d":"24\" Baffles","f":15,"b":15}]}]},"Holdsbrook End Unit":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1197,"b":1197},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":64,"b":2},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":399,"b":4},{"r":12,"p":"Ext Walls, Bands","d":"R13/15/9","f":1649,"b":16},{"r":13,"p":"Party Walls","d":"R13/15/9","f":664,"b":7},{"r":14,"p":"Cantilever","d":"R30/16","f":24,"b":1},{"r":15,"p":"Baffles","d":"24\" Baffles","f":21,"b":21}]}]},"Holdsbrook Int Unit":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1214,"b":1214},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":64,"b":2},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":420,"b":4},{"r":12,"p":"Ext Walls, Bands","d":"R13/15/9","f":917,"b":9},{"r":13,"p":"Party Walls","d":"R13/15/9","f":1373,"b":13},{"r":14,"p":"Cantilever","d":"R30/24","f":35,"b":1},{"r":15,"p":"Baffles","d":"24\" Baffles","f":21,"b":21}]}]},"Holly":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1233,"b":1233},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2581,"b":24},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":398,"b":4},{"r":12,"p":"Dead Air","d":"R38/24","f":499,"b":9},{"r":13,"p":"Knee Walls","d":"R19/15","f":131,"b":2},{"r":14,"p":"Baffles","d":"24\" Baffles","f":21,"b":21}]}]},"Hunter":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1320,"b":1320},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2722,"b":25},{"r":11,"p":"Ext Walls","d":"R19/15","f":55,"b":1},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":266,"b":3},{"r":13,"p":"Dead Air","d":"R38/24","f":64,"b":2},{"r":14,"p":"Baffles","d":"24\" Baffles","f":30,"b":30}]}]},"Hunter II":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1344,"b":1344},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2659,"b":24},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":280,"b":3},{"r":12,"p":"Knee Walls","d":"R19/15","f":90,"b":2},{"r":13,"p":"Ext Walls","d":"R19/15/9","f":55,"b":1},{"r":14,"p":"Dead Air","d":"R38/24","f":130,"b":3},{"r":15,"p":"Baffles","d":"24\" Baffles","f":34,"b":34}]}]},"Joshua":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1126,"b":1126},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1193,"b":12},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1106,"b":13},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":386,"b":4},{"r":13,"p":"Cantilever","d":"R30/24","f":36,"b":1},{"r":14,"p":"Dead Air","d":"R38/24","f":126,"b":3},{"r":15,"p":"Baffles","d":"24\" Baffles","f":16,"b":16}]}]},"Kingston":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":2323,"b":2323},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[]},"Kirkwood":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1456,"b":1456},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1401,"b":13},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1191,"b":13},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":401,"b":4},{"r":13,"p":"Dead Air","d":"R38/24","f":168,"b":4},{"r":14,"p":"Baffles","d":"24\" Baffles","f":25,"b":25}]}]},"Kolsen":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":2137,"b":2137},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1923,"b":18},{"r":11,"p":"Knee Walls","d":"R19/15","f":608,"b":8},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":371,"b":4},{"r":13,"p":"Dead Air","d":"R38/24","f":100,"b":2},{"r":14,"p":"Baffles","d":"24\" Baffles","f":60,"b":60}]}]},"Lenox":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1390,"b":1390},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2661,"b":24},{"r":11,"p":"Knee Walls","d":"R19/15","f":292,"b":4},{"r":12,"p":"Dead Air","d":"R38/24","f":192,"b":4},{"r":13,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":298,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":29,"b":29}]}]},"Magnolia":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1967,"b":1967},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1656,"b":16},{"r":11,"p":"Dead Air","d":"R38/24","f":96,"b":2},{"r":12,"p":"Baffles","d":"24\" Baffles","f":31,"b":31}]}]},"McKinley":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1177,"b":1177},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1198,"b":12},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1085,"b":12},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":446,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":124,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":22,"b":22}]}]},"Meadows End Unit":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1224,"b":1224},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1723,"b":16},{"r":11,"p":"Party Walls","d":"R13/15/9","f":882,"b":9},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":436,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":128,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":20,"b":20}]}]},"Meadows Int Unit":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1224,"b":1224},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1030,"b":10},{"r":11,"p":"Party Walls","d":"R13/15/9","f":1629,"b":15},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":436,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":128,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":20,"b":20}]}]},"Mulberry":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1406,"b":1406},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2691,"b":25},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":380,"b":4},{"r":12,"p":"Dead Air","d":"R38/24","f":119,"b":3},{"r":13,"p":"Baffles","d":"24\" Baffles","f":39,"b":39}]}]},"Mulberry II":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1452,"b":1452},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2859,"b":26},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":380,"b":4},{"r":12,"p":"Dead Air","d":"R38/24","f":151,"b":3},{"r":13,"p":"Baffles","d":"24\" Baffles","f":34,"b":34}]}]},"Noah":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":2068,"b":2068},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1859,"b":17},{"r":11,"p":"Knee Walls","d":"R19/15","f":464,"b":6},{"r":12,"p":"Ext Walls","d":"R13/15/8","f":98,"b":2},{"r":13,"p":"Dead Air","d":"R38/24","f":464,"b":5},{"r":14,"p":"Baffles","d":"24\" Baffles","f":30,"b":30}]}]},"Noble":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1277,"b":1277},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":1037,"b":""},{"r":11,"p":"Ext Walls","d":"R13/15/9","f":1870,"b":""},{"r":12,"p":"Knee Walls","d":"R19/15","f":816,"b":""},{"r":13,"p":"Soffit","d":"Baffles","f":24,"b":""}]}]},"Oakwood Int Townhouse":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":788,"b":788},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":231,"b":3},{"r":11,"p":"Dead Air","d":"R38/16","f":160,"b":5},{"r":12,"p":"Dead Air","d":"R38/24","f":39,"b":1},{"r":13,"p":"Party Walls","d":"R13/15/8","f":600,"b":7},{"r":14,"p":"Party Walls","d":"R13/15/9","f":630,"b":7},{"r":15,"p":"Ext Walls","d":"R13/15/8","f":290,"b":4},{"r":16,"p":"Ext Walls, Bands","d":"R13/15/9","f":559,"b":6},{"r":17,"p":"Baffles","d":"24\" Baffles","f":13,"b":13}]}]},"Oakwood Townhouse Ext":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":788,"b":788},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":231,"b":3},{"r":11,"p":"Dead Air","d":"R38/24","f":39,"b":1},{"r":12,"p":"Dead Air","d":"R38/16","f":160,"b":5},{"r":13,"p":"Party Wall","d":"R13/15/8","f":300,"b":4},{"r":14,"p":"Party Wall","d":"R13/15/9","f":236,"b":3},{"r":15,"p":"Ext Walls","d":"R13/15/8","f":530,"b":6},{"r":16,"p":"Ext Walls","d":"R13/15/9","f":743,"b":7},{"r":17,"p":"Baffles","d":"24\" Baffles","f":13,"b":13},{"r":18,"p":"Bands","d":"R13/15","f":165,"b":2}]}]},"Oxford":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1661,"b":1661},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1485,"b":14},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":60,"b":1},{"r":12,"p":"Ext Walls","d":"R19/15","f":540,"b":8},{"r":13,"p":"Dead Air","d":"R38/24","f":64,"b":2},{"r":14,"p":"Baffles","d":"24\" Baffles","f":90,"b":90}]}]},"Parkside":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1624,"b":1624},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2911,"b":26},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":265,"b":3},{"r":12,"p":"Knee Walls","d":"R19/15","f":182,"b":3},{"r":13,"p":"Slopes","d":"R30/24","f":94,"b":2},{"r":14,"p":"Slopes","d":"24\" Poly Vents","f":10,"b":10},{"r":15,"p":"Dead Air","d":"R38/24","f":188,"b":4},{"r":16,"p":"Baffles","d":"24\" Baffles","f":30,"b":30}]}]},"Patterson":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1379,"b":1379},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1496,"b":14},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1148,"b":13},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":412,"b":4},{"r":13,"p":"Dead Air","d":"R38/24","f":164,"b":4},{"r":14,"p":"Baffles","d":"24\" Baffles","f":25,"b":25}]}]},"Peachtree":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1230,"b":1230},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2478,"b":23},{"r":11,"p":"Knee Walls","d":"R19/24","f":52,"b":1},{"r":12,"p":"Dead Air","d":"R38/24","f":447,"b":5},{"r":13,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":428,"b":5},{"r":14,"p":"Baffles","d":"24\" Baffles","f":36,"b":36}]}]},"Pembroke":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1288,"b":1288},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1161,"b":11},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1113,"b":12},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":458,"b":5},{"r":13,"p":"Cantilever","d":"R30/24","f":67,"b":2},{"r":14,"p":"Dead Air","d":"R38/24","f":122,"b":3},{"r":15,"p":"Baffles","d":"24\" Baffles","f":20,"b":20}]}]},"Piedmont":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1111,"b":1111},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2468,"b":23},{"r":11,"p":"Slopes, Dead Air","d":"R38/24","f":442,"b":8},{"r":12,"p":"Knee Walls","d":"R19/15","f":54,"b":1},{"r":13,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":380,"b":4},{"r":14,"p":"Baffles","d":"24\" Baffles","f":45,"b":45}]}]},"Preston":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1518,"b":1518},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2364,"b":22},{"r":11,"p":"Knee Walls","d":"R19/15","f":203,"b":3},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":153,"b":2},{"r":13,"p":"Dead Air","d":"R38/24","f":96,"b":2},{"r":14,"p":"Cantilever","d":"R30/24 - Tiger Teeth","f":32,"b":1},{"r":15,"p":"Baffles","d":"24\" Baffles","f":70,"b":70}]}]},"Preswick":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1646,"b":1646},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2610,"b":24},{"r":11,"p":"Dead Air","d":"R38/24","f":168,"b":4},{"r":12,"p":"Knee Walls","d":"R19/15","f":38,"b":1},{"r":13,"p":"Slopes","d":"R38/24","f":52,"b":1},{"r":14,"p":"Baffles","d":"24\" Baffles","f":50,"b":50},{"r":15,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":440,"b":4}]}]},"Redford":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1324,"b":1324},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1296,"b":12},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1119,"b":12},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":450,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":162,"b":4},{"r":14,"p":"Baffles","d":"24\" Baffles","f":26,"b":26}]}]},"Richmond":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1726,"b":1726},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1530,"b":15},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":1263,"b":14},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":424,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":102,"b":2},{"r":14,"p":"Baffles","d":"24\" Baffles","f":33,"b":33}]}]},"Rosewood":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1859,"b":1859},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":109,"b":3},{"r":11,"p":"Knee Walls","d":"R19/15","f":57,"b":1},{"r":12,"p":"Baffles","d":"24\" Baffles","f":40,"b":40},{"r":13,"p":"Ext Walls, Bands","d":"R13/15/9","f":2796,"b":25},{"r":14,"p":"Ext Walls","d":"R19/15","f":23,"b":1},{"r":15,"p":"Garage Ceiling","d":"R19/19 - Tiger Teeth","f":434,"b":5}]}]},"Rutherford End Unit":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1153,"b":1153},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":64,"b":2},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":400,"b":4},{"r":12,"p":"Ext Walls, Bands","d":"R13/15/9","f":1863,"b":17},{"r":13,"p":"Party Walls","d":"R13/15/9","f":923,"b":9},{"r":14,"p":"Cantilever","d":"R30/24","f":40,"b":1},{"r":15,"p":"Baffles","d":"24\" Baffles","f":21,"b":21}]}]},"Rutherford Int Unit":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1150,"b":1150},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":64,"b":2},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":399,"b":4},{"r":12,"p":"Ext Walls, Bands","d":"R13/15/9","f":997,"b":9},{"r":13,"p":"Party Walls","d":"R13/15/9","f":1384,"b":13},{"r":14,"p":"Cantilever","d":"R30/24","f":35,"b":1},{"r":15,"p":"Baffles","d":"24\" Baffles","f":19,"b":19}]}]},"Savannah":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":960,"b":960},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2671,"b":24},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":240,"b":3},{"r":12,"p":"Knee Walls","d":"R19/15","f":90,"b":2},{"r":13,"p":"Dead Air","d":"R38/24","f":124,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":24,"b":24}]}]},"Scottsdale End Unit":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1236,"b":1236},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1825,"b":17},{"r":11,"p":"Party Walls","d":"R13/15/9","f":945,"b":9},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":437,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":128,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":15,"b":15}]}]},"Scottsdale Int Unit":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1236,"b":1236},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1109,"b":11},{"r":11,"p":"Party Walls","d":"R13/15/9","f":1701,"b":16},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":437,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":128,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":15,"b":15}]}]},"Shiloh":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1603,"b":1603},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2643,"b":24},{"r":11,"p":"Knee Walls","d":"R19/24","f":56,"b":1},{"r":12,"p":"Knee Walls","d":"R19/15","f":70,"b":1},{"r":13,"p":"Dead Air","d":"R38/24","f":167,"b":4},{"r":14,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":256,"b":3},{"r":15,"p":"Baffles","d":"24\" Baffles","f":52,"b":52}]}]},"Shiloh II":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1233,"b":1233},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2926,"b":26},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":218,"b":3},{"r":12,"p":"Knee Walls","d":"R19/15","f":198,"b":3},{"r":13,"p":"Slopes","d":"R38/24","f":504,"b":7},{"r":14,"p":"Slopes","d":"24\" Poly Vents","f":15,"b":15},{"r":15,"p":"Dead Air","d":"R38/24","f":64,"b":2},{"r":16,"p":"Baffles","d":"24\" Baffles","f":25,"b":25}]}]},"Stanford":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-08-25","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1145,"b":1145},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-08-25","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":127,"b":3},{"r":11,"p":"Knee Walls","d":"R19/15","f":28,"b":1},{"r":12,"p":"Ext Walls, Bands","d":"R13/15/9","f":2445,"b":22},{"r":13,"p":"Baffles","d":"24\" Baffles","f":32,"b":32},{"r":14,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":260,"b":3}]}]},"Stratford":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1730,"b":1730},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2547,"b":23},{"r":11,"p":"Knee Walls","d":"R19/15","f":41,"b":1},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":440,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":128,"b":3},{"r":14,"p":"Slopes","d":"R30/16","f":113,"b":3},{"r":15,"p":"Slopes","d":"16\" Poly Vents","f":20,"b":20},{"r":16,"p":"Baffles","d":"24\" Baffles","f":65,"b":65}]}]},"Sycamore":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1008,"b":1008},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2554,"b":23},{"r":11,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":313,"b":4},{"r":12,"p":"Dead Air","d":"R38/24","f":308,"b":6},{"r":13,"p":"Baffles","d":"24\" Baffles","f":17,"b":17},{"r":14,"p":"Knee Walls","d":"R19/15","f":163,"b":3}]}]},"Turnbridge":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1619,"b":1619},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-10-15","note":"","items":[{"r":10,"p":"Ext Walls , Bands","d":"R13/15/9","f":2671,"b":24},{"r":11,"p":"Ext Walls","d":"R19/15/9","f":211,"b":3},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":360,"b":4},{"r":13,"p":"Knee Walls","d":"R19/15","f":162,"b":3},{"r":14,"p":"Slopes","d":"R30/24","f":115,"b":2},{"r":15,"p":"Slopes","d":"24\" PolyVents","f":28,"b":28},{"r":16,"p":"Dead Air","d":"R38/24","f":298,"b":6},{"r":17,"p":"Baffles","d":"24\" Baffles","f":12,"b":12}]}]},"Victory":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1432,"b":1432},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2699,"b":24},{"r":11,"p":"Knee Walls","d":"R19/15","f":13,"b":1},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":428,"b":4},{"r":13,"p":"Dead Air","d":"R38/24","f":220,"b":5},{"r":14,"p":"Baffles","d":"24\" Baffles","f":41,"b":41}]}]},"Wakefield":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1454,"b":1454},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":192,"b":4},{"r":11,"p":"Knee Walls","d":"R19/15","f":41,"b":1},{"r":12,"p":"Baffles","d":"24\" Baffles","f":48,"b":48},{"r":13,"p":"Ext Walls, Bands","d":"R13/15/9","f":2704,"b":25},{"r":14,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":420,"b":4}]}]},"Wellington":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1696,"b":1696},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":1508,"b":14},{"r":11,"p":"Ext Walls","d":"R13/15/8","f":70,"b":1},{"r":12,"p":"Knee Walls","d":"R19/24","f":576,"b":5},{"r":13,"p":"Knee Walls","d":"R19/15","f":178,"b":3},{"r":14,"p":"Dead Air","d":"R38/24","f":422,"b":8},{"r":15,"p":"Cantilever","d":"R30/24","f":126,"b":2},{"r":16,"p":"Baffles","d":"24\" Baffles","f":70,"b":70}]}]},"Westgate":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1112,"b":1112},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":370,"b":7},{"r":11,"p":"Knee Walls","d":"R19/15","f":50,"b":1},{"r":12,"p":"Ext Walls, Bands","d":"R13/15/9","f":2535,"b":23},{"r":13,"p":"Ext Walls","d":"R19/15/9","f":68,"b":2},{"r":14,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":357,"b":4}]}]},"Whitley":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":2116,"b":2116},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2301,"b":21},{"r":11,"p":"Knee Walls","d":"R19/15","f":301,"b":5},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":401,"b":4},{"r":13,"p":"Dead Air","d":"R38/24","f":64,"b":2},{"r":14,"p":"Baffles","d":"24\" Baffles","f":74,"b":74}]}]},"Windermere":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1346,"b":1346},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2811,"b":25},{"r":11,"p":"Ext Walls, Knee Walls","d":"R19/15","f":201,"b":3},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":366,"b":4},{"r":13,"p":"Dead Air","d":"R38/24","f":181,"b":4},{"r":14,"p":"Slopes","d":"R38/24","f":240,"b":5},{"r":15,"p":"Cantilever","d":"R30/24","f":29,"b":1},{"r":16,"p":"Baffles","d":"24\" Baffles","f":40,"b":40}]}]},"Winsford":{"attic":[{"kind":"Attic","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1371,"b":1371},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"","mod":"2026-04-08","note":"","items":[{"r":10,"p":"Ext Walls, Bands","d":"R13/15/9","f":2650,"b":24},{"r":11,"p":"Cantilever","d":"R30/24","f":24,"b":1},{"r":12,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":450,"b":5},{"r":13,"p":"Dead Air","d":"R38/24","f":132,"b":3},{"r":14,"p":"Baffles","d":"24\" Baffles","f":22,"b":22}]}]},"Winston":{"attic":[{"kind":"Attic","variant":"","rep":"Asher","mod":"2026-08-25","note":"","items":[{"r":10,"p":"Attic","d":"R38 Attic Blow","f":1461,"b":1461},{"r":11,"p":"","d":"Foam","f":"","b":""}]}],"walls":[{"kind":"Batts","variant":"","rep":"Asher","mod":"2026-08-25","note":"","items":[{"r":10,"p":"Dead Air","d":"R38/24","f":58,"b":2},{"r":11,"p":"Knee Walls","d":"R19/15","f":38,"b":1},{"r":12,"p":"Baffles","d":"24\" Baffles","f":30,"b":30},{"r":13,"p":"Ext Walls, Bands","d":"R13/15/9","f":2653,"b":24},{"r":14,"p":"Garage Ceiling","d":"R19/24 - Tiger Teeth","f":462,"b":5}]}]}},"lots":[{"s":"AUBURN STATION/EAST","l":"001A","n":1,"p":"Durham","a":"373 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"011A","n":11,"p":"Durham","a":"329 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"013A","n":13,"p":"Durham","a":"321 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"019A","n":19,"p":"Cheshire","a":"291 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"021A","n":21,"p":"Durham","a":"283 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"022A","n":22,"p":"Medlock","a":"279 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"064A","n":64,"p":"Durham","a":"318 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"065A","n":65,"p":"Durham","a":"314 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"066A","n":66,"p":"Medlock","a":"310 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"067A","n":67,"p":"Medlock","a":"306 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"068A","n":68,"p":"Durham","a":"302 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"069A","n":69,"p":"Cheshire","a":"298 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"070A","n":70,"p":"Durham","a":"294 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"071A","n":71,"p":"Durham","a":"290 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"072A","n":72,"p":"Durham","a":"280 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"073A","n":73,"p":"Durham","a":"276 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"074A","n":74,"p":"Medlock","a":"272 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"075A","n":75,"p":"Medlock","a":"268 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"076A","n":76,"p":"Durham","a":"264 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"077A","n":77,"p":"Cheshire","a":"260 Brook Landing Circle"},{"s":"AUBURN STATION/EAST","l":"078A","n":78,"p":"Durham","a":"256 Brook Landing Circle"},{"s":"CROFTON PLACE/ENCLAVE","l":"029B","n":29,"p":"Mayfield","a":"3780 Ivy Cottage Drive"},{"s":"CROFTON PLACE/ENCLAVE","l":"030B","n":30,"p":"Jackson","a":"3770 Ivy Cottage Drive"},{"s":"CROFTON PLACE/ENCLAVE","l":"080C","n":80,"p":"Jackson","a":"3799 Ivy Cottage Drive"},{"s":"CROFTON PLACE/ENCLAVE","l":"081C","n":81,"p":"Pembrooke","a":"3789 Ivy Cottage Drive"},{"s":"CROFTON PLACE/ENCLAVE","l":"083C","n":83,"p":"Coleford","a":"3769 Ivy Cottage Drive"},{"s":"CROFTON PLACE/ENCLAVE","l":"101A","n":101,"p":"Chestnut","a":"4222 Portsbrooke Avenue"},{"s":"FOWLER FARMS/MEADOWS","l":"006A","n":6,"p":"Brooke","a":"85 Chickadee Court"},{"s":"FOWLER FARMS/MEADOWS","l":"009A","n":9,"p":"Canyon","a":"103 Chickadee Court"},{"s":"FOWLER FARMS/MEADOWS","l":"010A","n":10,"p":"Brooke","a":"105 Chickadee Court"},{"s":"FOWLER FARMS/MEADOWS","l":"284A","n":284,"p":"Canyon","a":"220 Fowler Farms Drive"},{"s":"FOWLER FARMS/MEADOWS","l":"285A","n":285,"p":"Briar","a":"214 Fowler Farms Drive"},{"s":"FOWLER FARMS/MEADOWS","l":"431A","n":431,"p":"Cove","a":"263 Fowler Farms Drive"},{"s":"FOWLER FARMS/MEADOWS","l":"432A","n":432,"p":"Brooke","a":"261 Fowler Farms Drive"},{"s":"FOWLER FARMS/MEADOWS","l":"433A","n":433,"p":"Briar","a":"253 Fowler Farms Drive"},{"s":"FOWLER FARMS/MEADOWS","l":"434A","n":434,"p":"Cove","a":"241 Fowler Farms Drive"},{"s":"FOWLER FARMS/RIDGE","l":"002A","n":2,"p":"Cambridge","a":"33 Chickadee Court"},{"s":"FOWLER FARMS/RIDGE","l":"005A","n":5,"p":"Turnbridge","a":"71 Chickadee Court"},{"s":"FOWLER FARMS/RIDGE","l":"015A","n":15,"p":"Brookmont","a":"94 Chickadee Court"},{"s":"FOWLER FARMS/RIDGE","l":"016A","n":16,"p":"Canyon","a":"80 Chickadee Court"},{"s":"FOWLER FARMS/RIDGE","l":"018A","n":18,"p":"Cove","a":"56 Chickadee Court"},{"s":"FOWLER FARMS/RIDGE","l":"019A","n":19,"p":"Rosewood","a":"44 Chickadee Court"},{"s":"FOWLER FARMS/RIDGE","l":"020A","n":20,"p":"Turnbridge","a":"28 Chickadee Court"},{"s":"FOWLER FARMS/VILLAGE","l":"004A","n":4,"p":"Noah","a":"59 Chickadee Court"},{"s":"FOWLER FARMS/VILLAGE","l":"286A","n":286,"p":"Noah","a":"13 Piney Grove Court"},{"s":"FOWLER FARMS/VILLAGE","l":"287A","n":287,"p":"Noble","a":"23 Piney Grove Court"},{"s":"FOWLER FARMS/VILLAGE","l":"288A","n":288,"p":"Owin","a":"35 Piney Grove Court"},{"s":"FOWLER FARMS/VILLAGE","l":"290A","n":290,"p":"Noah","a":"73 Piney Grove Court"},{"s":"FOWLER FARMS/VILLAGE","l":"292A","n":292,"p":"Noah","a":"97 Piney Grove Court"},{"s":"FOWLER FARMS/VILLAGE","l":"362A","n":362,"p":"Noble","a":"30 Maple Leaf Lane"},{"s":"FOWLER FARMS/VILLAGE","l":"364A","n":364,"p":"Kingston","a":"42 Piney Grove Court"},{"s":"FOWLER FARMS/VILLAGE","l":"365A","n":365,"p":"Blackburn","a":"32 Piney Grove Court"},{"s":"FOWLER FARMS/VILLAGE","l":"520A","n":520,"p":"Noah","a":"111 Maple Leaf Lane"},{"s":"GARLAND MEADOWS","l":"006A","n":6,"p":"Bluff","a":"111 Garland Gable Drive"},{"s":"GARLAND MEADOWS","l":"008A","n":8,"p":"Brooke","a":"208 Cantrell View Court"},{"s":"GARLAND MEADOWS","l":"013A","n":13,"p":"Cove","a":"203 Cantrell View Court"},{"s":"GARLAND MEADOWS","l":"016A","n":16,"p":"Cove","a":"209 Cantrell View Court"},{"s":"GARLAND MEADOWS","l":"017A","n":17,"p":"Brooke","a":"211 Cantrell View Court"},{"s":"GARLAND MEADOWS","l":"021A","n":21,"p":"Bluff","a":"117 Garland Gable Drive"},{"s":"GARLAND MEADOWS","l":"022A","n":22,"p":"Bluff","a":"123 Garland Gable Drive"},{"s":"GARLAND MEADOWS","l":"023A","n":23,"p":"Aurora","a":"125 Garland Gable Drive"},{"s":"GARLAND MEADOWS","l":"024A","n":24,"p":"Aspen","a":"403 Grand Oaks Trail"},{"s":"GARLAND MEADOWS","l":"027A","n":27,"p":"Aspen","a":"408 Grand Oaks Trail"},{"s":"GARLAND MEADOWS","l":"098A","n":98,"p":"Cove","a":"303 Hardin Stead Cove"},{"s":"GARLAND MEADOWS","l":"099A","n":99,"p":"Aurora","a":"304 Hardin Stead Cove"},{"s":"GREENEFIELD","l":"002A","n":2,"p":"Brooke","a":"5 Putnam Place"},{"s":"GREENEFIELD","l":"003A","n":3,"p":"Canyon","a":"7 Putnam Place"},{"s":"GREENEFIELD","l":"004A","n":4,"p":"Cascade","a":"9 Putnam Place"},{"s":"GREENEFIELD","l":"044A","n":44,"p":"Cascade","a":"6 Putnam Place"},{"s":"GREENEFIELD","l":"046A","n":46,"p":"Briar","a":"2 Putnam Place"},{"s":"GREENEFIELD","l":"075A","n":75,"p":"Briar","a":"14 Commons Way"},{"s":"GREENEFIELD","l":"076A","n":76,"p":"Cove","a":"12 Commons Way"},{"s":"GREENEFIELD","l":"077A","n":77,"p":"Cascade","a":"10 Commons Way"},{"s":"GREENEFIELD","l":"079A","n":79,"p":"Canyon","a":"6 Commons Way"},{"s":"KENTMERE","l":"029B","n":29,"p":"Jackson","a":"95 Avain Way"},{"s":"KENTMERE","l":"030B","n":30,"p":"Chestnut","a":"97 Avain Way"},{"s":"KENTMERE","l":"031B","n":31,"p":"Pembrooke","a":"99 Avian Way"},{"s":"KENTMERE","l":"032B","n":32,"p":"Coleford","a":"101 Avian Way"},{"s":"KENTMERE","l":"033B","n":33,"p":"Pembrooke","a":"103 Avian Way"},{"s":"KENTMERE","l":"107B","n":107,"p":"Chestnut","a":"39 Butternut Way"},{"s":"KENTMERE","l":"108B","n":108,"p":"Pembrooke","a":"37 Butternut Way"},{"s":"KENTMERE","l":"109B","n":109,"p":"Coleford","a":"35 Butternut Way"},{"s":"KENTMERE","l":"110B","n":110,"p":"Pembrooke","a":"33 Butternut Way"},{"s":"KENTMERE","l":"111B","n":111,"p":"Chestnut","a":"31 Butternut Way"},{"s":"KENTMERE","l":"113B","n":113,"p":"Jackson","a":"27 Butternut Way"},{"s":"KENTMERE","l":"114B","n":114,"p":"Chestnut","a":"25 Butternut Way"},{"s":"KENTMERE","l":"116B","n":116,"p":"Holly","a":"21 Butternut Way"},{"s":"KENTMERE","l":"117B","n":117,"p":"Coleford","a":"19 Butternut Way"},{"s":"KENTMERE","l":"125B","n":125,"p":"Pembrooke","a":"31 Fraser Lane"},{"s":"KENTMERE","l":"137B","n":137,"p":"Chestnut","a":"60 Avian Way"},{"s":"KENTMERE","l":"138B","n":138,"p":"Pembrooke","a":"62 Avian Way"},{"s":"KENTMERE","l":"139B","n":139,"p":"Chestnut","a":"64 Avian Way"},{"s":"KENTMERE","l":"140B","n":140,"p":"Pembrooke","a":"66 Avian Way"},{"s":"KENTMERE","l":"141B","n":141,"p":"Pembrooke","a":"68 Avain Way"},{"s":"KENTMERE","l":"142B","n":142,"p":"Holly","a":"70 Avian Way"},{"s":"KENTMERE","l":"143B","n":143,"p":"Pembrooke","a":"72 Avian Way"},{"s":"MALLARDS LANDING","l":"030A","n":30,"p":"Noah","a":"584 Gadwall Circle"},{"s":"MALLARDS LANDING","l":"031A","n":31,"p":"Cove","a":"608 Gadwall Circle"},{"s":"MALLARDS LANDING","l":"032A","n":32,"p":"Noble","a":"626 Gadwell Circle"},{"s":"MALLARDS LANDING","l":"035A","n":35,"p":"Kingston","a":"672 Gadwall Circle"},{"s":"MALLARDS LANDING","l":"039A","n":39,"p":"Cambridge","a":"722 Gadwall Circle"},{"s":"MALLARDS LANDING","l":"048A","n":48,"p":"Cambridge","a":"1078 Hawkins Creek Driv"},{"s":"MALLARDS LANDING","l":"049A","n":49,"p":"Turnbridge","a":"1096 Hawkins Creek Driv"},{"s":"MALLARDS LANDING","l":"054A","n":54,"p":"Turnbridge","a":"1057 Hawkins Creek Driv"},{"s":"MALLARDS LANDING","l":"207A","n":207,"p":"Turnbridge","a":"909 Hawkins Creek Drive"},{"s":"MALLARDS LANDING","l":"229A","n":229,"p":"Canyon","a":"17 Bufflehead Pass"},{"s":"MALLARDS LANDING","l":"231A","n":231,"p":"Turnbridge","a":"51 Bufflehead Pass"},{"s":"MALLARDS LANDING","l":"232A","n":232,"p":"Canyon","a":"67 Bufflehead Pass"},{"s":"MALLARDS LANDING","l":"233A","n":233,"p":"Cascade","a":"83 Bufflehead Pass"},{"s":"MILLSTONE AT MUNDY MILL","l":"006A","n":6,"p":"Durham","a":"4123 Millstone Park Lane"},{"s":"MILLSTONE AT MUNDY MILL","l":"020A","n":20,"p":"Durham","a":"4179 Millstone Park Lane"},{"s":"MILLSTONE AT MUNDY MILL","l":"027A","n":27,"p":"Cheshire","a":"4190 Millstone Park Lane"},{"s":"MILLSTONE AT MUNDY MILL","l":"028A","n":28,"p":"Durham","a":"4186 Millstone Park Lane"},{"s":"MILLSTONE AT MUNDY MILL","l":"029A","n":29,"p":"Durham","a":"4182 Millstone Park Lane"},{"s":"MILLSTONE AT MUNDY MILL","l":"032A","n":32,"p":"Durham","a":"4170 Millstone Park Lane"},{"s":"MILLSTONE AT MUNDY MILL","l":"036A","n":36,"p":"Durham","a":"4215 Callaway Court"},{"s":"MILLSTONE AT MUNDY MILL","l":"037A","n":37,"p":"Medlock","a":"4219 Callaway Court"},{"s":"MILLSTONE AT MUNDY MILL","l":"038A","n":38,"p":"Durham","a":"4223 Callaway Court"},{"s":"MILLSTONE AT MUNDY MILL","l":"039A","n":39,"p":"Medlock","a":"4227 Callaway Court"},{"s":"MILLSTONE AT MUNDY MILL","l":"040A","n":40,"p":"Cheshire","a":"4231 Callaway Court"},{"s":"MILLSTONE AT MUNDY MILL","l":"041A","n":41,"p":"Durham","a":"4235 Callaway Court"},{"s":"MILLSTONE AT MUNDY MILL","l":"063A","n":63,"p":"Medlock","a":"4230 Oak View Lane"},{"s":"MILLSTONE AT MUNDY MILL","l":"064A","n":64,"p":"Durham","a":"4226 Oak View Lane"},{"s":"MILLSTONE AT MUNDY MILL","l":"065A","n":65,"p":"Cheshire","a":"4222 Oak View Lane"},{"s":"MILLSTONE AT MUNDY MILL","l":"066A","n":66,"p":"Durham","a":"4218 Oak View Lane"},{"s":"MILLSTONE AT MUNDY MILL","l":"067A","n":67,"p":"Medlock","a":"4214 Oak View Lane"},{"s":"MILLSTONE AT MUNDY MILL","l":"068A","n":68,"p":"Durham","a":"4210 Oak View Lane"},{"s":"PINECREST RIDGE","l":"015A","n":15,"p":"Turnbridge","a":"505 Bluebird Nest Lane"},{"s":"PINECREST RIDGE","l":"025A","n":25,"p":"Cove","a":"722 Secret Garden Lane"},{"s":"PINECREST RIDGE","l":"030A","n":30,"p":"Noah","a":"772 Secret Garden Lane"},{"s":"PINECREST RIDGE","l":"032A","n":32,"p":"Noah","a":"813 Secret Garden Lane"},{"s":"PINECREST RIDGE","l":"040A","n":40,"p":"Cascade","a":"733 Secret Garden Lane"},{"s":"PINECREST RIDGE","l":"041A","n":41,"p":"Canterbury","a":"723 Secret Garden Lane"},{"s":"PINECREST RIDGE","l":"042A","n":42,"p":"Brooke","a":"713 Secret Garden Lane"},{"s":"PINECREST RIDGE","l":"044A","n":44,"p":"Cascade","a":"693 Secret Garden Lane"},{"s":"PINECREST RIDGE","l":"050A","n":50,"p":"Camelot","a":"633 Secret Garden Lane"},{"s":"PINECREST RIDGE","l":"052A","n":52,"p":"Camelot","a":"2457 Enchanted Sky Way"},{"s":"PINECREST RIDGE","l":"053A","n":53,"p":"Canyon","a":"2447 Enchanted Sky Way"},{"s":"PINECREST RIDGE","l":"055A","n":55,"p":"Noble","a":"2427 Enchanted Sky Way"},{"s":"PINECREST RIDGE","l":"058A","n":58,"p":"Brooke","a":"652 Secret Garden Lane"},{"s":"PINECREST RIDGE","l":"059A","n":59,"p":"Camelot","a":"662 Secret Garden Lane"},{"s":"PINECREST RIDGE","l":"062A","n":62,"p":"Canyon","a":"692 Secret Garden lane"},{"s":"PONDEROSA FARMS/ESTATES","l":"024A","n":24,"p":"Colburn","a":"5346 Windridge Parkway"},{"s":"PONDEROSA FARMS/ESTATES","l":"225A","n":225,"p":"Colburn","a":"5332 Milford Drive"},{"s":"PONDEROSA FARMS/MANOR","l":"036A","n":36,"p":"Canterbury","a":"5276 Baymont Drive"},{"s":"PONDEROSA FARMS/MANOR","l":"038A","n":38,"p":"Turnbridge","a":"5284 Baymont Drive"},{"s":"PONDEROSA FARMS/MANOR","l":"039A","n":39,"p":"Colburn","a":"5288 Baymont Drive"},{"s":"PONDEROSA FARMS/MANOR","l":"041A","n":41,"p":"Cambridge","a":"5296 Baymont Drive"},{"s":"PONDEROSA FARMS/MANOR","l":"151A","n":151,"p":"Stanford","a":"5291 Baymont Drive"},{"s":"PONDEROSA FARMS/MANOR","l":"152A","n":152,"p":"Winston","a":"5287 Baymont Drive"},{"s":"PONDEROSA FARMS/MANOR","l":"153A","n":153,"p":"Rosewood","a":"5283 Baymont Drive"},{"s":"PONDEROSA FARMS/MANOR","l":"155A","n":155,"p":"Brookmont","a":"5275 Baymont Drive"},{"s":"PONDEROSA FARMS/MANOR","l":"156A","n":156,"p":"Winston","a":"5271 Baymont Drive"},{"s":"PONDEROSA FARMS/MANOR","l":"157A","n":157,"p":"Turnbridge","a":"5267 Baymont Drive"},{"s":"PONDEROSA FARMS/MANOR","l":"224A","n":224,"p":"Brookmont","a":"5336 Milford Drive"},{"s":"PONDEROSA FARMS/RESERVE","l":"111A","n":111,"p":"Noah","a":"5551 Tullis Drive"},{"s":"PONDEROSA FARMS/RESERVE","l":"113A","n":113,"p":"Canterbury","a":"5543 Tullis Drive"},{"s":"PONDEROSA FARMS/RESERVE","l":"114A","n":114,"p":"Turnbridge","a":"5539 Tullis Drive"},{"s":"PONDEROSA FARMS/RESERVE","l":"115A","n":115,"p":"Noble","a":"5535 Tullis Drive"},{"s":"PONDEROSA FARMS/RESERVE","l":"116A","n":116,"p":"Noah","a":"5531 Tullis Drive"},{"s":"PONDEROSA FARMS/RESERVE","l":"117A","n":117,"p":"Rosewood","a":"5527 Tullis Drive"},{"s":"PONDEROSA FARMS/RESERVE","l":"118A","n":118,"p":"Cambridge","a":"5523 Tullis Drive"},{"s":"PONDEROSA FARMS/RESERVE","l":"121A","n":121,"p":"Turnbridge","a":"5511 Tullis Drive"},{"s":"PONDEROSA FARMS/RESERVE","l":"123A","n":123,"p":"Blackburn","a":"5503 Tullis Drive"},{"s":"ROSEWOOD LAKE","l":"027A","n":27,"p":"Canterbury","a":"176 Winding Rose Drive"},{"s":"ROSEWOOD LAKE","l":"045A","n":45,"p":"Rosewood","a":"518 Winding Rose Drive"},{"s":"ROSEWOOD LAKE","l":"047A","n":47,"p":"Turnbridge","a":"548 Winding Rose Drive"},{"s":"ROSEWOOD LAKE","l":"048A","n":48,"p":"Canterbury","a":"562 Winding Rose Drive"},{"s":"ROSEWOOD LAKE","l":"049A","n":49,"p":"Turnbridge","a":"574 Winding Rose Drive"},{"s":"ROSEWOOD LAKE","l":"052A","n":52,"p":"Canterbury","a":"606 Winding Rose Drive"},{"s":"ROSEWOOD LAKE","l":"055A","n":55,"p":"Stanford","a":"646 Winding Rose Drive"},{"s":"ROSEWOOD LAKE","l":"056A","n":56,"p":"Winston","a":"658 Winding Rose Drive"},{"s":"ROSEWOOD LAKE","l":"057A","n":57,"p":"Brookmont","a":"672 Winding Rose Drive"},{"s":"ROSEWOOD LAKE","l":"089A","n":89,"p":"Rosewood","a":"615 Winding Rose Drive"},{"s":"ROSEWOOD LAKE","l":"093A","n":93,"p":"Colburn","a":"681 Winding Rose Drive"},{"s":"ROSEWOOD LAKE","l":"120A","n":120,"p":"Turnbridge","a":"326 Scarlett Rose Way"},{"s":"ROSEWOOD LAKE","l":"122A","n":122,"p":"Cambridge","a":"356 Scarlett Rose Way"},{"s":"ROSEWOOD LAKE","l":"123A","n":123,"p":"Turnbridge","a":"368 Scarlett Rose Way"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"132A","n":132,"p":"Brooke","a":"210 Rosewood Park Drive"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"134A","n":134,"p":"Blackburn","a":"232 Rosewood Park Drive"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"138A","n":138,"p":"Kingston","a":"286 Rosewood Park Drive"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"144A","n":144,"p":"Cove","a":"309 Rosewood Park Drive"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"145A","n":145,"p":"Noah","a":"293 Rosewood Park Drive"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"146A","n":146,"p":"Noble","a":"279 Rosewood Park Drive"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"148A","n":148,"p":"Noah","a":"251 Rosewood Lake Drive"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"150A","n":150,"p":"Noble","a":"16 Rose Lake Court"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"156A","n":156,"p":"Cove","a":"102 Rose Lake Court"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"157A","n":157,"p":"Brooke","a":"112 Rose Lake Court"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"158A","n":158,"p":"Noble","a":"122 Rose Lake Court"},{"s":"ROSEWOOD LAKE/PRESERVE","l":"163A","n":163,"p":"Blackburn","a":"145 Rose Lake Court"},{"s":"SUMMERLIN/VALLEY","l":"015A","n":15,"p":"Cambridge","a":"96 Wingate Drive"},{"s":"SUMMERLIN/VALLEY","l":"041A","n":41,"p":"Winston","a":"39 Cardinal Ridge Court"},{"s":"SUMMERLIN/VALLEY","l":"045A","n":45,"p":"Cambridge","a":"83 Cardinal Ridge Court"},{"s":"SUMMERLIN/VALLEY","l":"059A","n":59,"p":"Cove","a":"53 Brooks Mill Court"},{"s":"SUMMERLIN/VALLEY","l":"060A","n":60,"p":"Colburn","a":"54 Brooks Mill Court"},{"s":"SUMMERLIN/VALLEY","l":"070A","n":70,"p":"Winston","a":"277 Wingate Drive"},{"s":"SUMMERLIN/VALLEY","l":"071A","n":71,"p":"Aurora","a":"289 Wingate Drive"},{"s":"SUMMERLIN/VALLEY","l":"072A","n":72,"p":"Blackburn","a":"301 Wingate Drive"},{"s":"SUMMERLIN/VALLEY","l":"097A","n":97,"p":"Aurora","a":"408 Wingate Drive"},{"s":"SUMMERLIN/VALLEY","l":"105A","n":105,"p":"Colburn","a":"300 Wingate Drive"},{"s":"SUMMERLIN/VALLEY","l":"106A","n":106,"p":"Cove","a":"288 Wingate Drive"},{"s":"SUMMERLIN/VALLEY","l":"109A","n":109,"p":"Brooke","a":"254 Wingate Drive"},{"s":"SUMMERLIN/VALLEY","l":"111A","n":111,"p":"Winston","a":"232 Wingate Drive"},{"s":"SUMMERLIN/VALLEY","l":"112A","n":112,"p":"Colburn","a":"220 Wingate Drive"},{"s":"SUMMERLIN/VALLEY","l":"115A","n":115,"p":"Brooke","a":"190 Wingate Drive"}]};
+</script>
+<script>
+/* KP Chafin Work Order core: matching, dates, xlsx writer/reader. Pure (no DOM). */
+var KPWO = (function () {
+"use strict";
+var DATA = (typeof KPWO_DATA !== "undefined") ? KPWO_DATA : { plans: {}, lots: [] };
+
+/* ---------- names ---------- */
+var PLAN_ALIAS = { "pembrooke": "Pembroke", "balckburn": "Blackburn", "auroura": "Aurora", "everett (aurora)": "Aurora" };
+var SUB_FIX = { "GREENEFIELD": "Greenfield", "MILLSTONE AT MUNDY MILL": "Millstone at Mundy Mill" };
+var SUB_CITY = {
+  "summerlin": "Winder, Ga", "pinecrest ridge": "Dacula, Ga", "rosewood lake": "Hoschton, Ga",
+  "kentmere": "Auburn, Ga", "garland meadows": "Cartersville, Ga", "greenfield": "Cartersville, Ga",
+  "auburn station": "Auburn, Ga"
+};
+var CITY_NOTE = { "fowler farms": "Fowler Farms sheets say both Auburn and Dacula — pick one." };
+var KNOWN_CITIES = ["Auburn, Ga", "Dacula, Ga", "Winder, Ga", "Hoschton, Ga", "Cartersville, Ga", "Oakwood, Ga", "Gainesville, Ga", "Jefferson, Ga", "Braselton, Ga"];
+
+function titleCase(s) {
+  return String(s).toLowerCase().replace(/\b([a-z])/g, function (m) { return m.toUpperCase(); })
+    .replace(/\b(At|Of|The|And)\b/g, function (m) { return m.toLowerCase(); });
+}
+function subBase(sub) { return String(sub).split("/")[0].trim(); }
+function subDisplay(sub) { var b = subBase(sub).toUpperCase(); return SUB_FIX[b] || titleCase(b); }
+function subPhase(sub) { var p = String(sub).split("/")[1]; return p ? titleCase(p.trim()) : ""; }
+function cityFor(sub) { return SUB_CITY[subDisplay(sub).toLowerCase()] || ""; }
+function cityNote(sub) { return CITY_NOTE[subDisplay(sub).toLowerCase()] || ""; }
+function canonPlan(p) {
+  p = String(p || "").trim();
+  var a = PLAN_ALIAS[p.toLowerCase()]; if (a) return a;
+  if (DATA.plans[p]) return p;
+  var lc = p.toLowerCase();
+  for (var k in DATA.plans) if (k.toLowerCase() === lc) return k;
+  return p;
+}
+function planInfo(plan) {
+  var c = canonPlan(plan), P = DATA.plans[c];
+  return { name: c, attic: P ? P.attic : [], walls: P ? P.walls : [], known: !!P };
+}
+function lotNum(raw) { var m = String(raw).match(/\d+/); return m ? parseInt(m[0], 10) : NaN; }
+
+/* ---------- lot log normalisation ---------- */
+function normLot(o) {
+  var plan = String(o.p || "").trim();
+  if (/^balckburn$/i.test(plan)) plan = "Blackburn";
+  return { s: String(o.s || "").trim(), l: String(o.l || "").trim(), n: lotNum(o.l), p: plan, a: String(o.a || "").trim() };
+}
+function subdivisions(lots) {
+  var seen = {}, out = [];
+  lots.forEach(function (l) { if (!seen[l.s]) { seen[l.s] = 1; out.push(l.s); } });
+  return out.sort();
+}
+
+/* ---------- fuzzy ---------- */
+function lev(a, b) {
+  if (a === b) return 0;
+  var m = a.length, n = b.length, d = [], i, j;
+  for (i = 0; i <= m; i++) d[i] = [i];
+  for (j = 0; j <= n; j++) d[0][j] = j;
+  for (i = 1; i <= m; i++) for (j = 1; j <= n; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[m][n];
+}
+function tokMatch(t, w) {
+  if (t === w) return 1;
+  if (t.length >= 4 && w.length >= 4) {
+    if (w.indexOf(t) === 0 || t.indexOf(w) === 0) return 0.9;
+    var L = lev(t, w); if (L === 1) return 0.85; if (L === 2 && w.length >= 7) return 0.7;
+  }
+  return 0;
+}
+var STOP = { lot: 1, on: 1, the: 1, for: 1, at: 1, a: 1, an: 1, and: 1, "#": 1, number: 1, no: 1, job: 1, work: 1, order: 1, wo: 1, chafin: 1, please: 1, in: 1, of: 1, to: 1, make: 1, create: 1, do: 1, set: 1, up: 1, is: 1, date: 1, by: 1 };
+
+/* ---------- dates ---------- */
+var MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+var MON_RE = "(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)";
+var DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+function mkDate(y, m, d) { return new Date(y, m, d); }
+function nextDom(day, today) {
+  var y = today.getFullYear(), m = today.getMonth();
+  for (var k = 0; k < 14; k++) {
+    var dt = mkDate(y, m + k, day);
+    if (dt.getDate() === day && dt >= mkDate(today.getFullYear(), today.getMonth(), today.getDate())) return dt;
+  }
+  return null;
+}
+function monthDay(mo, day, year, today) {
+  var t0 = mkDate(today.getFullYear(), today.getMonth(), today.getDate());
+  if (year) { if (year < 100) year += 2000; return mkDate(year, mo, day); }
+  var dt = mkDate(today.getFullYear(), mo, day);
+  if (dt < t0 && (t0 - dt) > 60 * 864e5) dt = mkDate(today.getFullYear() + 1, mo, day);
+  return dt;
+}
+/* returns {date: Date|null, text: string|null, rest: string} */
+function extractDate(s, today) {
+  today = today || new Date();
+  var t0 = mkDate(today.getFullYear(), today.getMonth(), today.getDate());
+  var m, re;
+  function cut(mm) { return (s.slice(0, mm.index) + " " + s.slice(mm.index + mm[0].length)).replace(/\s+/g, " ").trim(); }
+  if ((m = /\b(asap|a\.s\.a\.p\.?)\b/i.exec(s))) return { date: null, text: "ASAP", rest: cut(m) };
+  if ((m = /\b(ready)\b/i.exec(s))) return { date: null, text: "Ready", rest: cut(m) };
+  if ((m = /\b(today)\b/i.exec(s))) return { date: t0, rest: cut(m) };
+  if ((m = /\b(tomorrow)\b/i.exec(s))) return { date: new Date(t0.getTime() + 864e5), rest: cut(m) };
+  // 11/12 or 11/12/26 or 11-12-2026
+  if ((m = /\b(?:on\s+)?(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/.exec(s))) {
+    var mo = +m[1] - 1, d = +m[2];
+    if (mo >= 0 && mo < 12 && d >= 1 && d <= 31) return { date: monthDay(mo, d, m[3] ? +m[3] : 0, today), rest: cut(m) };
+  }
+  // Nov 12, November 12th, 12 Nov
+  re = new RegExp("\\b(?:on\\s+)?" + MON_RE + "\\.?\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?\\b", "i");
+  if ((m = re.exec(s))) return { date: monthDay(MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()), +m[2], m[3] ? +m[3] : 0, today), rest: cut(m) };
+  re = new RegExp("\\b(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?" + MON_RE + "\\b", "i");
+  if ((m = re.exec(s))) return { date: monthDay(MONTHS.indexOf(m[2].slice(0, 3).toLowerCase()), +m[1], 0, today), rest: cut(m) };
+  // the 9th / on the 9th / on 9th
+  re = /\b(?:on\s+)?(?:the\s+)?(\d{1,2})(st|nd|rd|th)\b/i;
+  if ((m = re.exec(s))) { var dd = +m[1]; if (dd >= 1 && dd <= 31) return { date: nextDom(dd, today), rest: cut(m) }; }
+  re = /\bon\s+the\s+(\d{1,2})\b/i;
+  if ((m = re.exec(s))) return { date: nextDom(+m[1], today), rest: cut(m) };
+  // weekday: (next) monday
+  re = /\b(?:on\s+)?(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)\b/i;
+  if ((m = re.exec(s))) {
+    var wd = DAYS.indexOf(m[2].slice(0, 3).toLowerCase()), diff = (wd - t0.getDay() + 7) % 7;
+    if (diff === 0) diff = 7;
+    return { date: new Date(t0.getTime() + diff * 864e5), rest: cut(m) };
+  }
+  return { date: null, text: null, rest: s };
+}
+
+/* ---------- request parsing ---------- */
+var NUMWORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+function parseRequest(text, lots, today) {
+  lots = lots || DATA.lots;
+  var raw = String(text || "").trim();
+  var s = raw.replace(/[,;!?]/g, " ").replace(/\s+/g, " ");
+  var dt = extractDate(s, today);
+  s = dt.rest;
+  // lot number
+  var lot = null, m = /\blots?\s*(?:#|no\.?|number)?\s*(\d{1,4})[a-z]?\b/i.exec(s);
+  if (!m) m = /#\s*(\d{1,4})\b/.exec(s);
+  if (!m) m = /\b(\d{1,4})[a-z]?\b/i.exec(s);
+  if (m) { lot = parseInt(m[1], 10); s = (s.slice(0, m.index) + " " + s.slice(m.index + m[0].length)).trim(); }
+  else {
+    var mw = /\blot\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i.exec(s);
+    if (mw) { lot = NUMWORDS[mw[1].toLowerCase()]; s = s.replace(mw[0], " "); }
+  }
+  var words = s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(function (w) { return w && !STOP[w]; });
+  // score subdivisions
+  var subs = subdivisions(lots), scored = [];
+  subs.forEach(function (sub) {
+    var baseToks = subDisplay(sub).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(function (w) { return w && !STOP[w]; });
+    var phase = subPhase(sub).toLowerCase();
+    var score = 0, hit = 0;
+    baseToks.forEach(function (bt) {
+      var best = 0; words.forEach(function (w) { best = Math.max(best, tokMatch(w, bt)); });
+      if (best) hit++; score += best;
+    });
+    if (!hit) return;
+    var cover = score / baseToks.length;
+    var ph = 0; if (phase) words.forEach(function (w) { ph = Math.max(ph, tokMatch(w, phase)); });
+    scored.push({ sub: sub, score: cover + (ph ? 0.25 * ph : 0), phaseHit: ph > 0 });
+  });
+  scored.sort(function (a, b) { return b.score - a.score; });
+  var top = scored.length ? scored[0].score : 0;
+  var subCands = scored.filter(function (x) { return x.score >= top - 0.2 && x.score >= 0.5; }).map(function (x) { return x.sub; });
+  // if a phase word was matched, keep only phase hits among the top base
+  var phaseHits = scored.filter(function (x) { return x.phaseHit && subCands.indexOf(x.sub) >= 0; });
+  if (phaseHits.length) subCands = phaseHits.map(function (x) { return x.sub; });
+  var matches = [];
+  if (lot != null) {
+    var pool = subCands.length ? lots.filter(function (l) { return subCands.indexOf(l.s) >= 0; }) : lots;
+    matches = pool.filter(function (l) { return l.n === lot; });
+  }
+  return {
+    input: raw, lot: lot, subCandidates: subCands, matches: matches,
+    date: dt.date, dateText: dt.text || null,
+    status: matches.length === 1 ? "ok" : matches.length > 1 ? "choose" : (lot == null ? "nolot" : (subCands.length ? "nolotinsub" : "nosub"))
+  };
+}
+
+/* ---------- work order model ---------- */
+function fmtDate(d) {
+  if (!d) return "";
+  return String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") + "-" + String(d.getFullYear()).slice(-2);
+}
+function sanitizeName(s) { return String(s).replace(/[\\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim(); }
+function sheetName(s) { s = String(s).replace(/[\[\]:*?\/\\]/g, "-"); return s.length > 31 ? s.slice(0, 31) : s; }
+function defaultRep(cat, tpl) { if (tpl && tpl.rep) return tpl.rep; return cat === "attic" ? "Asher" : "Sky"; }
+function buildOrder(lot, opts) {
+  opts = opts || {};
+  var pi = planInfo(lot.p);
+  var sub = subDisplay(lot.s);
+  var o = {
+    lot: lot, plan: pi.name, planKnown: pi.known, sub: sub, phase: subPhase(lot.s),
+    jobSite: sub + " - Lot " + (isNaN(lot.n) ? lot.l : lot.n), address: lot.a,
+    city: opts.city != null ? opts.city : cityFor(lot.s), cityNote: cityNote(lot.s),
+    date: opts.date || null, dateText: opts.dateText || "",
+    sheets: {}
+  };
+  ["attic", "walls"].forEach(function (cat) {
+    var list = pi[cat] || [];
+    var vi = opts.variant && opts.variant[cat] != null ? opts.variant[cat] : 0;
+    var t = list[vi] || null;
+    o.sheets[cat] = t ? {
+      cat: cat, kind: t.kind, variant: t.variant, variants: list.map(function (x) { return x.variant || "Standard"; }), variantIndex: vi,
+      title: pi.name + " - " + t.kind + (t.variant ? " " + t.variant : ""), rep: defaultRep(cat, t), note: t.note || "", mod: t.mod,
+      items: t.items.map(function (it) { return { r: it.r, p: it.p, d: it.d, f: it.f, b: it.b }; }), notes: ""
+    } : null;
+  });
+  return o;
+}
+function fileNameFor(o, cat) {
+  var sh = o.sheets[cat];
+  var kind = cat === "attic" ? "Attic" : (sh ? sh.kind : "Walls") + (sh && sh.variant ? " " + sh.variant : "");
+  return sanitizeName("Chafin - " + o.sub + " Lot " + (isNaN(o.lot.n) ? o.lot.l : o.lot.n) + " - " + o.plan + " - " + kind) + ".xlsx";
+}
+
+/* ---------- zip (store) + crc32 ---------- */
+var CRC_T = (function () { var t = new Uint32Array(256); for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { var c = 0xFFFFFFFF; for (var i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function utf8(s) { return new TextEncoder().encode(s); }
+function zipStore(files) { // files: [{name, data(Uint8Array|string)}]
+  var parts = [], central = [], off = 0;
+  var now = new Date(), dtime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1),
+    ddate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  files.forEach(function (f) {
+    var name = utf8(f.name), data = typeof f.data === "string" ? utf8(f.data) : f.data, crc = crc32(data);
+    var h = new Uint8Array(30 + name.length), v = new DataView(h.buffer);
+    v.setUint32(0, 0x04034b50, true); v.setUint16(4, 20, true); v.setUint16(6, 0x0800, true); v.setUint16(8, 0, true);
+    v.setUint16(10, dtime, true); v.setUint16(12, ddate, true); v.setUint32(14, crc, true);
+    v.setUint32(18, data.length, true); v.setUint32(22, data.length, true); v.setUint16(26, name.length, true); v.setUint16(28, 0, true);
+    h.set(name, 30);
+    var c = new Uint8Array(46 + name.length), w = new DataView(c.buffer);
+    w.setUint32(0, 0x02014b50, true); w.setUint16(4, 20, true); w.setUint16(6, 20, true); w.setUint16(8, 0x0800, true); w.setUint16(10, 0, true);
+    w.setUint16(12, dtime, true); w.setUint16(14, ddate, true); w.setUint32(16, crc, true); w.setUint32(20, data.length, true); w.setUint32(24, data.length, true);
+    w.setUint16(28, name.length, true); w.setUint32(42, off, true); c.set(name, 46);
+    parts.push(h, data); central.push(c); off += h.length + data.length;
+  });
+  var csize = central.reduce(function (a, c) { return a + c.length; }, 0);
+  var e = new Uint8Array(22), ev = new DataView(e.buffer);
+  ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, files.length, true); ev.setUint16(10, files.length, true);
+  ev.setUint32(12, csize, true); ev.setUint32(16, off, true);
+  var all = parts.concat(central, [e]), total = all.reduce(function (a, p) { return a + p.length; }, 0), out = new Uint8Array(total), p = 0;
+  all.forEach(function (x) { out.set(x, p); p += x.length; });
+  return out;
+}
+
+/* ---------- xlsx writer ---------- */
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function colL(c) { return String.fromCharCode(65 + c); }
+function excelSerial(d) { return Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(1899, 11, 30)) / 864e5); }
+
+function buildSheetXml(o, sh, S) {
+  var R = 36, C = 11; // A..K
+  var cells = {}; // "r,c" -> {v, t:'s'|'n', st:{}}
+  var merges = [], regions = [];
+  function region(r1, c1, r2, c2, v, st) {
+    regions.push({ r1: r1, c1: c1, r2: r2, c2: c2, v: v, st: st || {} });
+    if (r1 !== r2 || c1 !== c2) merges.push(colL(c1) + r1 + ":" + colL(c2) + r2);
+  }
+  var B14 = { font: "b14" };
+  region(1, 0, 1, 10, "WORK ORDER", { font: "b14", h: "center" });
+  region(2, 0, 2, 1, "REP:", B14); region(2, 2, 2, 7, sh.rep || "", B14);
+  region(2, 8, 2, 8, "DATE:", B14);
+  var dv = o.date ? { n: excelSerial(o.date) } : (o.dateText || "");
+  region(2, 9, 2, 10, dv, { font: "b14", h: "left", fmt: o.date ? "date" : null });
+  region(3, 0, 3, 1, "CUSTOMER:", { font: "b14", h: "left" }); region(3, 2, 3, 10, "Chafin", { font: "b14", h: "left" });
+  region(4, 0, 4, 1, "JOB SITE:", { font: "b14", h: "left" }); region(4, 2, 4, 10, o.jobSite, { font: "b14", h: "left" });
+  region(5, 0, 5, 1, "", B14); region(5, 2, 5, 10, o.address || "", { font: "b14", h: "left" });
+  region(6, 0, 6, 1, "", B14); region(6, 2, 6, 10, o.city || "", { font: "b14", h: "left" });
+  region(7, 0, 7, 1, "", B14); region(7, 2, 7, 10, o.plan + " Plan" + (sh.note ? " - " + sh.note : ""), { font: "b14", h: "left" });
+  region(8, 0, 8, 1, "PRODUCT ", { font: "b14", h: "center" }); region(8, 2, 8, 6, "DESCRIPTION", { font: "b14", h: "center" });
+  region(8, 7, 8, 8, "FOOTAGE", { font: "b14", h: "center" }); region(8, 9, 8, 10, "BAGS", { font: "b14", h: "center" });
+  var byRow = {}; sh.items.forEach(function (it) { byRow[it.r] = it; });
+  for (var r = 9; r <= 29; r++) {
+    var it = byRow[r] || {};
+    function num(v) { if (v === "" || v == null) return ""; var n = Number(v); return isFinite(n) && String(v).trim() !== "" ? { n: n } : String(v); }
+    region(r, 0, r, 1, it.p || "", { font: "b12", h: "center", wrap: true });
+    region(r, 2, r, 6, it.d || "", { font: "b14", h: "center" });
+    region(r, 7, r, 8, num(it.f), { font: "b14", h: "center" });
+    region(r, 9, r, 10, num(it.b), { font: "b14", h: "center", fmt: "int" });
+  }
+  region(30, 0, 30, 10, "NOTES", { font: "b10", h: "center" });
+  var nl = String(sh.notes || "").split(/\n/);
+  for (r = 31; r <= 36; r++) region(r, 0, r, 10, nl[r - 31] || "", { font: "b12", h: "left" });
+  var MED_BOTTOM = { 1: 1, 2: 1, 3: 1, 7: 1, 8: 1, 29: 1, 36: 1 };
+  regions.forEach(function (g) {
+    for (var rr = g.r1; rr <= g.r2; rr++) for (var cc = g.c1; cc <= g.c2; cc++) {
+      var b = {};
+      if (cc === g.c1) b.l = cc === 0 ? "medium" : "thin";
+      if (cc === g.c2) b.r = cc === 10 ? "medium" : "thin";
+      if (cc === 0) b.l = "medium"; if (cc === 10) b.r = "medium";
+      if (rr === g.r2) b.b = MED_BOTTOM[rr] ? "medium" : "thin";
+      if (rr === g.r1) b.t = (MED_BOTTOM[rr - 1] || rr === 1) ? "medium" : "thin";
+      // no inner vertical lines on rows 2-7 except the label/value split and DATE
+      if (rr >= 4 && rr <= 7 && g.c1 === 0 && cc === g.c2) b.r = null;
+      if (rr >= 4 && rr <= 7 && g.c1 === 2 && cc === g.c1) b.l = null;
+      if (rr >= 4 && rr <= 6) b.b = rr === 4 ? "thin" : "thin";
+      if (rr >= 5 && rr <= 7 && g.c1 === 0) b.b = rr === 7 ? "medium" : null;
+      var st = { font: g.st.font, h: g.st.h, fmt: g.st.fmt, wrap: g.st.wrap, b: b };
+      cells[rr + "," + cc] = { v: (rr === g.r1 && cc === g.c1) ? g.v : "", st: st };
+    }
+  });
+  var rowsXml = [];
+  var HT = { 1: 19.5, 2: 19.5, 3: 19.5, 4: 19.5, 5: 19.5, 6: 19.5, 7: 19.5, 8: 19.5, 30: 15, 36: 19.5 };
+  for (r = 1; r <= R; r++) {
+    var cx = [];
+    for (var c = 0; c < C; c++) {
+      var cell = cells[r + "," + c]; if (!cell) continue;
+      var sid = S.xf(cell.st), ref = colL(c) + r, v = cell.v;
+      if (v && typeof v === "object" && "n" in v) cx.push('<c r="' + ref + '" s="' + sid + '"><v>' + v.n + "</v></c>");
+      else if (v !== "" && v != null) cx.push('<c r="' + ref + '" s="' + sid + '" t="s"><v>' + S.str(String(v)) + "</v></c>");
+      else cx.push('<c r="' + ref + '" s="' + sid + '"/>');
+    }
+    rowsXml.push('<row r="' + r + '" spans="1:11"' + (' ht="' + (HT[r] || 18.75) + '" customHeight="1"') + ">" + cx.join("") + "</row>");
+  }
+  var cols = '<cols><col min="1" max="1" width="9.140625" customWidth="1"/><col min="2" max="2" width="9.42578125" customWidth="1"/>' +
+    '<col min="3" max="6" width="9.140625" customWidth="1"/><col min="7" max="7" width="9.85546875" customWidth="1"/>' +
+    '<col min="8" max="11" width="9.140625" customWidth="1"/></cols>';
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:K36"/><sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews>' +
+    '<sheetFormatPr defaultRowHeight="18.75"/>' + cols + "<sheetData>" + rowsXml.join("") + "</sheetData>" +
+    '<mergeCells count="' + merges.length + '">' + merges.map(function (m) { return '<mergeCell ref="' + m + '"/>'; }).join("") + "</mergeCells>" +
+    '<pageMargins left="0.25" right="0.25" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>' +
+    '<pageSetup orientation="portrait" fitToWidth="1" fitToHeight="1"/>' +
+    '<headerFooter><oddHeader>&amp;C&amp;"-,Bold"&amp;14KEITH PORTER INSULATION &amp;&amp; FIREPLACE</oddHeader></headerFooter></worksheet>';
+}
+
+function styleRegistry() {
+  var FONTS = { b10: 1, b12: 2, b14: 3 }, borders = ['<border><left/><right/><top/><bottom/><diagonal/></border>'], bmap = {};
+  var xfs = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'], xmap = {};
+  var strs = [], smap = {};
+  function border(b) {
+    var k = [b.l, b.r, b.t, b.b].join("|"); if (bmap[k] != null) return bmap[k];
+    function side(tag, v) { return v ? "<" + tag + ' style="' + v + '"><color indexed="64"/></' + tag + ">" : "<" + tag + "/>"; }
+    borders.push("<border>" + side("left", b.l) + side("right", b.r) + side("top", b.t) + side("bottom", b.b) + "<diagonal/></border>");
+    return (bmap[k] = borders.length - 1);
+  }
+  return {
+    xf: function (st) {
+      var f = FONTS[st.font] || 3, bid = border(st.b || {}), nf = st.fmt === "date" ? 164 : st.fmt === "int" ? 1 : 0;
+      var k = [f, bid, nf, st.h || "", st.wrap ? 1 : 0].join("|"); if (xmap[k] != null) return xmap[k];
+      var al = (st.h || st.wrap) ? '<alignment' + (st.h ? ' horizontal="' + st.h + '"' : "") + ' vertical="center"' + (st.wrap ? ' wrapText="1" shrinkToFit="0"' : "") + "/>" : "";
+      xfs.push('<xf numFmtId="' + nf + '" fontId="' + f + '" fillId="0" borderId="' + bid + '" xfId="0" applyFont="1" applyBorder="1"' +
+        (nf ? ' applyNumberFormat="1"' : "") + (al ? ' applyAlignment="1">' + al + "</xf>" : "/>"));
+      return (xmap[k] = xfs.length - 1);
+    },
+    str: function (s) { if (smap[s] == null) { strs.push(s); smap[s] = strs.length - 1; } return smap[s]; },
+    stylesXml: function () {
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+        '<numFmts count="1"><numFmt numFmtId="164" formatCode="mm\\-dd\\-yy"/></numFmts>' +
+        '<fonts count="4"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font>' +
+        '<font><b/><sz val="10"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="12"/><name val="Calibri"/><family val="2"/></font>' +
+        '<font><b/><sz val="14"/><name val="Calibri"/><family val="2"/></font></fonts>' +
+        '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
+        '<borders count="' + borders.length + '">' + borders.join("") + "</borders>" +
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+        '<cellXfs count="' + xfs.length + '">' + xfs.join("") + "</cellXfs>" +
+        '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+    },
+    sstXml: function () {
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' + strs.length + '" uniqueCount="' + strs.length + '">' +
+        strs.map(function (s) { return '<si><t xml:space="preserve">' + esc(s) + "</t></si>"; }).join("") + "</sst>";
+    }
+  };
+}
+
+function buildXlsx(o, cats) { // cats: ["attic"] or ["walls"] or both
+  var S = styleRegistry(), sheets = [];
+  cats.forEach(function (cat) { var sh = o.sheets[cat]; if (sh) sheets.push({ name: sheetName(sh.title), xml: buildSheetXml(o, sh, S) }); });
+  if (!sheets.length) return null;
+  var iso = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+  var files = [
+    { name: "[Content_Types].xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      sheets.map(function (s, i) { return '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'; }).join("") +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>' +
+      '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
+      '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>' },
+    { name: "_rels/.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' +
+      '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>' },
+    { name: "docProps/core.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+      "<dc:title>" + esc("Chafin Work Order - " + o.jobSite) + "</dc:title><dc:creator>KP Takeoff</dc:creator>" +
+      '<dcterms:created xsi:type="dcterms:W3CDTF">' + iso + '</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">' + iso + "</dcterms:modified></cp:coreProperties>" },
+    { name: "docProps/app.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Microsoft Excel</Application></Properties>' },
+    { name: "xl/workbook.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<bookViews><workbookView activeTab="0"/></bookViews><sheets>' + sheets.map(function (s, i) { return '<sheet name="' + esc(s.name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>'; }).join("") + "</sheets></workbook>" },
+    { name: "xl/_rels/workbook.xml.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      sheets.map(function (s, i) { return '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>'; }).join("") +
+      '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '<Relationship Id="rId' + (sheets.length + 2) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>' }
+  ];
+  sheets.forEach(function (s, i) { files.push({ name: "xl/worksheets/sheet" + (i + 1) + ".xml", data: s.xml }); });
+  files.push({ name: "xl/styles.xml", data: S.stylesXml() });
+  files.push({ name: "xl/sharedStrings.xml", data: S.sstXml() });
+  return zipStore(files);
+}
+
+/* ---------- zip reader + xlsx/csv import ---------- */
+function inflateRaw(u8) {
+  if (typeof DecompressionStream === "undefined") return Promise.reject(new Error("This browser can't unzip files (needs iOS 16.4+)."));
+  var ds = new DecompressionStream("deflate-raw");
+  var stream = new Blob([u8]).stream().pipeThrough(ds);
+  return new Response(stream).arrayBuffer().then(function (b) { return new Uint8Array(b); });
+}
+function unzip(u8) {
+  var v = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), eocd = -1;
+  for (var i = u8.length - 22; i >= Math.max(0, u8.length - 70000); i--) if (v.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) return Promise.reject(new Error("Not a zip/xlsx file"));
+  var n = v.getUint16(eocd + 10, true), p = v.getUint32(eocd + 16, true), entries = [];
+  for (var k = 0; k < n; k++) {
+    var method = v.getUint16(p + 10, true), csz = v.getUint32(p + 20, true), nlen = v.getUint16(p + 28, true),
+      xlen = v.getUint16(p + 30, true), clen = v.getUint16(p + 32, true), loff = v.getUint32(p + 42, true);
+    var name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nlen));
+    entries.push({ name: name, method: method, csz: csz, loff: loff }); p += 46 + nlen + xlen + clen;
+  }
+  var out = {};
+  return Promise.all(entries.map(function (e) {
+    var lnl = v.getUint16(e.loff + 26, true), lxl = v.getUint16(e.loff + 28, true), start = e.loff + 30 + lnl + lxl;
+    var data = u8.subarray(start, start + e.csz);
+    return (e.method === 0 ? Promise.resolve(data) : inflateRaw(data)).then(function (d) { out[e.name] = d; });
+  })).then(function () { return out; });
+}
+function xmlText(u8) { return new TextDecoder().decode(u8); }
+function decodeXml(s) { return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, function (m, d) { return String.fromCharCode(+d); }).replace(/&amp;/g, "&"); }
+function colIdx(ref) { var m = /^([A-Z]+)/.exec(ref), c = 0; for (var i = 0; i < m[1].length; i++) c = c * 26 + (m[1].charCodeAt(i) - 64); return c - 1; }
+function xlsxRows(files) {
+  var sst = [];
+  if (files["xl/sharedStrings.xml"]) {
+    var sx = xmlText(files["xl/sharedStrings.xml"]), re = /<si>([\s\S]*?)<\/si>/g, m;
+    while ((m = re.exec(sx))) { var t = "", r2 = /<t[^>]*>([\s\S]*?)<\/t>/g, q; while ((q = r2.exec(m[1]))) t += q[1]; sst.push(decodeXml(t)); }
+  }
+  var names = Object.keys(files).filter(function (n) { return /^xl\/worksheets\/sheet\d+\.xml$/.test(n); })
+    .sort(function (a, b) { return parseInt(a.match(/\d+/)[0]) - parseInt(b.match(/\d+/)[0]); });
+  var all = [];
+  names.forEach(function (n) {
+    var x = xmlText(files[n]), rre = /<row[^>]*>([\s\S]*?)<\/row>/g, rm;
+    while ((rm = rre.exec(x))) {
+      var row = [], cre = /<c\s+([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g, cm;
+      while ((cm = cre.exec(rm[1]))) {
+        var attrs = cm[1], ref = (/r="([A-Z]+\d+)"/.exec(attrs) || [])[1], t = (/t="(\w+)"/.exec(attrs) || [])[1], inner = cm[2] || "";
+        var vm = /<v>([\s\S]*?)<\/v>/.exec(inner), val = vm ? decodeXml(vm[1]) : "";
+        if (t === "s") val = sst[+val] || ""; else if (t === "inlineStr") { var im = /<t[^>]*>([\s\S]*?)<\/t>/.exec(inner); val = im ? decodeXml(im[1]) : ""; }
+        if (ref) row[colIdx(ref)] = val; else row.push(val);
+      }
+      for (var i = 0; i < row.length; i++) if (row[i] == null) row[i] = "";
+      all.push(row);
+    }
+  });
+  return all;
+}
+function csvRows(text) {
+  var rows = [], row = [], f = "", q = false;
+  for (var i = 0; i < text.length; i++) {
+    var ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+    else if (ch === '"') q = true; else if (ch === ",") { row.push(f); f = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(f); rows.push(row); row = []; f = ""; }
+    else f += ch;
+  }
+  if (f || row.length) { row.push(f); rows.push(row); }
+  return rows;
+}
+/* Turn generic rows (from CSV/XLSX export of the Construction Report) into lots. */
+function rowsToLots(rows) {
+  var hi = -1, H = {};
+  for (var i = 0; i < Math.min(rows.length, 40); i++) {
+    var low = rows[i].map(function (c) { return String(c).toLowerCase().replace(/[^a-z#]/g, ""); });
+    var si = low.indexOf("subdivision"), li = -1, pi = -1, ai = -1;
+    low.forEach(function (c, k) { if (li < 0 && /^lot/.test(c)) li = k; if (pi < 0 && /floorplan|^plan/.test(c)) pi = k; if (ai < 0 && /^address/.test(c)) ai = k; });
+    if (li >= 0 && ai >= 0) { hi = i; H = { s: si, l: li, p: pi, a: ai }; break; }
+  }
+  if (hi < 0) throw new Error("Couldn't find the Lot# and Address column headers.");
+  var lots = [], cur = "";
+  for (i = hi + 1; i < rows.length; i++) {
+    var r = rows[i].map(function (c) { return String(c == null ? "" : c).trim(); });
+    if (!r.some(Boolean)) continue;
+    var low0 = r.join(" ").toLowerCase();
+    if (/subdivision/.test(low0) && /address/.test(low0)) continue; // repeated header
+    var sub = H.s >= 0 ? r[H.s] : "", lotc = r[H.l] || "", plan = H.p >= 0 ? r[H.p] : "", addr = r[H.a] || "";
+    // a row with only one non-empty cell (and no lot digits) is a subdivision heading
+    var nonEmpty = r.filter(Boolean);
+    if (nonEmpty.length === 1 && !/\d/.test(nonEmpty[0])) { cur = nonEmpty[0]; continue; }
+    if (sub && !/chafin/i.test(sub)) cur = sub;
+    var m = /^(\d+[A-Za-z]?)\s+(.+)$/.exec(lotc);
+    if (m && !plan) { lotc = m[1]; plan = m[2]; }
+    else if (m && plan && plan === "") { lotc = m[1]; }
+    if (!/\d/.test(lotc) || !cur) continue;
+    lots.push(normLot({ s: cur, l: lotc.split(/\s+/)[0], p: plan, a: addr }));
+  }
+  if (!lots.length) throw new Error("Found the headers but no lot rows.");
+  return lots;
+}
+
+return {
+  DATA: DATA, KNOWN_CITIES: KNOWN_CITIES, parseRequest: parseRequest, extractDate: extractDate, buildOrder: buildOrder,
+  buildXlsx: buildXlsx, fileNameFor: fileNameFor, planInfo: planInfo, subDisplay: subDisplay, subPhase: subPhase,
+  subdivisions: subdivisions, cityFor: cityFor, fmtDate: fmtDate, unzip: unzip, xlsxRows: xlsxRows, csvRows: csvRows,
+  rowsToLots: rowsToLots, normLot: normLot, crc32: crc32, zipStore: zipStore, canonPlan: canonPlan
+};
+})();
+
+</script>
+<script>
+(function () {
+"use strict";
+var K = KPWO, $ = function (id) { return document.getElementById(id); };
+var WO = { lots: K.DATA.lots.slice(), logSource: null, order: null, recent: [] };
+var DBN = "kp-chafin-v1";
+function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+
+/* ---- IndexedDB (separate DB so the takeoff DB is never touched) ---- */
+function db() {
+  return new Promise(function (res, rej) {
+    if (!window.indexedDB) return rej(new Error("no idb"));
+    var r = indexedDB.open(DBN, 1);
+    r.onupgradeneeded = function () { var d = r.result; if (!d.objectStoreNames.contains("kv")) d.createObjectStore("kv"); if (!d.objectStoreNames.contains("orders")) d.createObjectStore("orders", { keyPath: "id" }); };
+    r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); };
+  });
+}
+function idb(store, mode, fn) {
+  return db().then(function (d) { return new Promise(function (res, rej) {
+    var tx = d.transaction(store, mode), os = tx.objectStore(store), out = fn(os), val;
+    if (out && "onsuccess" in out) out.onsuccess = function () { val = out.result; };
+    tx.oncomplete = function () { d.close(); res(val); }; tx.onerror = function () { d.close(); rej(tx.error); };
+  }); });
+}
+
+/* ---- lot log ---- */
+function setLots(lots, source) {
+  WO.lots = lots; WO.logSource = source;
+  var subs = K.subdivisions(lots);
+  $("woLogInfo").textContent = (source ? "Using your upload: " + source.name + " (" + new Date(source.at).toLocaleDateString() + ")" : "Using the built-in log (Construction Report, Oct 12 2026)") +
+    " · " + lots.length + " lots in " + subs.length + " subdivisions.";
+  $("woLogReset").classList.toggle("hidden", !source);
+  var miss = {}; lots.forEach(function (l) { var pi = K.planInfo(l.p); if (!pi.known) miss[pi.name] = (miss[pi.name] || 0) + 1; else if (!pi.walls.length) miss[pi.name + " (walls/batts)"] = (miss[pi.name + " (walls/batts)"] || 0) + 1; });
+  var mk = Object.keys(miss).sort(function (a, b) { return miss[b] - miss[a]; });
+  $("woMissing").textContent = mk.length ? "No plan sheet yet for: " + mk.map(function (k) { return k + " (" + miss[k] + " lot" + (miss[k] > 1 ? "s" : "") + ")"; }).join(", ") + "." : "Every plan in the log has a sheet.";
+  fillSubs();
+}
+function subLabel(s) { var p = K.subPhase(s); return K.subDisplay(s) + (p ? " / " + p : ""); }
+function fillSubs() {
+  var sel = $("woSub"), cur = sel.value;
+  sel.innerHTML = '<option value="">Choose…</option>' + K.subdivisions(WO.lots).map(function (s) { return '<option value="' + h(s) + '">' + h(subLabel(s)) + "</option>"; }).join("");
+  if (cur) sel.value = cur; fillLots();
+}
+function fillLots() {
+  var s = $("woSub").value, sel = $("woLot");
+  var lots = WO.lots.filter(function (l) { return l.s === s; }).sort(function (a, b) { return a.n - b.n; });
+  sel.innerHTML = '<option value="">' + (s ? "Choose lot…" : "Pick subdivision first") + "</option>" +
+    lots.map(function (l) { return '<option value="' + h(l.l) + '">Lot ' + h(l.n) + " · " + h(l.p) + "</option>"; }).join("");
+}
+
+/* ---- find ---- */
+function msg(html, cls) { $("woMsg").innerHTML = html ? '<div class="callout ' + (cls || "") + '">' + html + "</div>" : ""; }
+function find() {
+  var r = K.parseRequest($("woAsk").value, WO.lots, new Date());
+  WO.lastParse = r;
+  var opts = { date: r.date, dateText: r.dateText };
+  if (r.status === "ok") { msg(""); openOrder(r.matches[0], opts); return; }
+  hideOrder();
+  if (r.status === "choose") {
+    var box = el("div", "callout", "<strong>Which one?</strong>Lot " + h(r.lot) + " is in more than one place:");
+    r.matches.forEach(function (l) {
+      var b = el("button", "btn btn-secondary btn-block", h(subLabel(l.s)) + " · Lot " + h(l.n) + " · " + h(l.p));
+      b.style.marginTop = "8px"; b.type = "button"; b.onclick = function () { msg(""); openOrder(l, opts); }; box.appendChild(b);
+    });
+    $("woMsg").innerHTML = ""; $("woMsg").appendChild(box); return;
+  }
+  if (r.status === "nolot") { msg("<strong>Need a lot number</strong>Try “Summerlin lot 59” or pick it below.", "warn"); if (r.subCandidates.length === 1) { $("woSub").value = r.subCandidates[0]; fillLots(); } return; }
+  if (r.status === "nosub") { msg("<strong>Couldn't find lot " + h(r.lot) + "</strong>No subdivision in the lot log has that lot. Check the number or pick below.", "warn"); return; }
+  // nolotinsub: lot not in log for that subdivision -> offer manual plan
+  var subs = r.subCandidates, have = WO.lots.filter(function (l) { return subs.indexOf(l.s) >= 0; }).map(function (l) { return l.n; }).sort(function (a, b) { return a - b; });
+  var div = el("div", "callout warn", "<strong>Lot " + h(r.lot) + " isn't in the lot log for " + h(K.subDisplay(subs[0])) + "</strong>Lots on file: " + h(have.join(", ")) + ". If it's a new lot, pick the plan and I'll build it anyway:");
+  var f = el("div", "field"); f.style.marginTop = "10px";
+  var ps = el("select"); ps.innerHTML = '<option value="">Plan…</option>' + Object.keys(K.DATA.plans).sort().map(function (p) { return "<option>" + h(p) + "</option>"; }).join("");
+  var ad = el("input"); ad.placeholder = "Street address (optional)"; ad.style.marginTop = "8px";
+  var go = el("button", "btn btn-primary btn-block", "Build from this plan"); go.type = "button"; go.style.marginTop = "8px";
+  go.onclick = function () {
+    if (!ps.value) { ps.focus(); return; }
+    openOrder(K.normLot({ s: subs[0], l: String(r.lot), p: ps.value, a: ad.value }), opts);
+  };
+  f.appendChild(ps); f.appendChild(ad); f.appendChild(go); div.appendChild(f);
+  $("woMsg").innerHTML = ""; $("woMsg").appendChild(div);
+}
+
+/* ---- order editor ---- */
+function hideOrder() { $("woOrder").classList.add("hidden"); WO.order = null; }
+function isoDate(d) { return d ? d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") : ""; }
+function openOrder(lot, opts) {
+  WO.order = K.buildOrder(lot, opts || {});
+  renderOrder();
+  $("woOrder").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function renderOrder() {
+  var o = WO.order, box = $("woOrder");
+  if (!o) { hideOrder(); return; }
+  box.classList.remove("hidden"); box.innerHTML = "";
+  var s = el("div", "section");
+  s.innerHTML = "<h2>" + h(o.sub) + " · Lot " + h(isNaN(o.lot.n) ? o.lot.l : o.lot.n) + "</h2>" +
+    '<div class="props"><span class="k">Subdivision</span><span class="v">' + h(subLabel(o.lot.s)) + "</span>" +
+    '<span class="k">Lot</span><span class="v">' + h(o.lot.l) + "</span>" +
+    '<span class="k">Plan</span><span class="v">' + h(o.plan) + (o.plan !== o.lot.p ? " <span style='font-weight:400'>(log: " + h(o.lot.p) + ")</span>" : "") + "</span>" +
+    '<span class="k">Address</span><span class="v">' + h(o.address || "—") + "</span></div>";
+  function fld(label, val, on, type) {
+    var f = el("div", "field"), i = el("input"); f.appendChild(el("label", null, h(label)));
+    if (type) i.type = type; i.value = val || ""; i.oninput = function () { on(i.value); }; f.appendChild(i); return { f: f, i: i };
+  }
+  s.appendChild(fld("Job site", o.jobSite, function (v) { o.jobSite = v; }).f);
+  s.appendChild(fld("Street address", o.address, function (v) { o.address = v; }).f);
+  var cf = fld("City", o.city, function (v) { o.city = v; });
+  cf.i.setAttribute("list", "woCities"); s.appendChild(cf.f);
+  var dl = el("datalist"); dl.id = "woCities"; dl.innerHTML = K.KNOWN_CITIES.map(function (c) { return '<option value="' + h(c) + '">'; }).join(""); s.appendChild(dl);
+  if (o.cityNote) s.appendChild(el("p", "status", "⚠️ " + h(o.cityNote))); else if (!o.city) s.appendChild(el("p", "status", "No city on file for this subdivision — type it in if you want it on the sheet."));
+  // date
+  var df = el("div", "field"); df.appendChild(el("label", null, "Date"));
+  var seg = el("div", "seg"), di = el("input"); di.type = "date"; di.value = isoDate(o.date);
+  ["Date", "ASAP", "Ready", "Blank"].forEach(function (t) {
+    var b = el("button", null, t); b.type = "button";
+    var active = t === "Date" ? !!o.date : t === "Blank" ? (!o.date && !o.dateText) : o.dateText === t;
+    if (active) b.classList.add("active");
+    b.onclick = function () {
+      if (t === "Date") { o.dateText = ""; if (!o.date) { o.date = new Date(); } }
+      else { o.date = null; o.dateText = t === "Blank" ? "" : t; }
+      renderOrder();
+    };
+    seg.appendChild(b);
+  });
+  df.appendChild(seg);
+  if (o.date) { di.onchange = function () { var p = di.value.split("-"); o.date = p.length === 3 ? new Date(+p[0], +p[1] - 1, +p[2]) : null; }; df.appendChild(di); }
+  s.appendChild(df);
+  box.appendChild(s);
+  [["attic", "Attic", "Josh"], ["walls", "Walls / Batts", "Sky"]].forEach(function (c) { box.appendChild(sheetCard(o, c[0], c[1], c[2])); });
+  // actions
+  var a = el("div", "section"), any = o.sheets.attic || o.sheets.walls;
+  a.innerHTML = "<h2>Send it</h2><p class='cap'>Each one is its own Excel file. Your share sheet opens so you can pick Messages, Mail, or Files.</p>";
+  if (o.sheets.attic) a.appendChild(btn("Share Attic to Josh", "btn-primary", function () { exportFiles(["attic"]); }));
+  if (o.sheets.walls) a.appendChild(btn("Share " + o.sheets.walls.kind + " to Sky", "btn-primary", function () { exportFiles(["walls"]); }));
+  if (o.sheets.attic && o.sheets.walls) a.appendChild(btn("Share both files", "btn-secondary", function () { exportFiles(["attic", "walls"]); }));
+  if (!any) a.appendChild(el("div", "callout danger", "<strong>No plan sheet yet for " + h(o.plan) + "</strong>Send me the " + h(o.plan) + " sheets and I'll add them."));
+  a.appendChild(el("p", "status", "")); a.lastChild.id = "woExportMsg";
+  box.appendChild(a);
+}
+function btn(label, cls, fn) { var b = el("button", "btn btn-block " + cls, h(label)); b.type = "button"; b.style.marginTop = "8px"; b.onclick = fn; return b; }
+function sheetCard(o, cat, label, who) {
+  var sh = o.sheets[cat], s = el("div", "section");
+  if (!sh) {
+    s.innerHTML = "<h2>" + h(label) + "</h2>";
+    s.appendChild(el("div", "callout warn", "<strong>No " + (cat === "attic" ? "Attic" : "Walls/Batts") + " sheet yet for " + h(o.plan) + "</strong>This file won't be made. Send me the sheet and I'll add it."));
+    return s;
+  }
+  s.innerHTML = "<h2>" + h(sh.title) + "</h2><p class='cap'>Goes to " + who + " · from your sheet saved " + h(sh.mod) + (sh.note ? " · " + h(sh.note) : "") + "</p>";
+  if (sh.variants.length > 1) {
+    var vf = el("div", "field"); vf.appendChild(el("label", null, "Version"));
+    var vs = el("select"); vs.innerHTML = sh.variants.map(function (v, i) { return '<option value="' + i + '">' + h(v) + "</option>"; }).join(""); vs.value = String(sh.variantIndex);
+    vs.onchange = function () {
+      var keep = { date: o.date, dateText: o.dateText, city: o.city, variant: {} };
+      ["attic", "walls"].forEach(function (k) { keep.variant[k] = o.sheets[k] ? o.sheets[k].variantIndex : 0; });
+      keep.variant[cat] = +vs.value;
+      var n = K.buildOrder(o.lot, keep); n.jobSite = o.jobSite; n.address = o.address;
+      var other = cat === "attic" ? "walls" : "attic"; n.sheets[other] = o.sheets[other];
+      WO.order = n; renderOrder();
+    };
+    vf.appendChild(vs); s.appendChild(vf);
+  }
+  var rf = el("div", "field"), ri = el("input"); rf.appendChild(el("label", null, "Rep")); ri.value = sh.rep; ri.oninput = function () { sh.rep = ri.value; }; rf.appendChild(ri); s.appendChild(rf);
+  var tw = el("div", "table-wrap"), t = el("table");
+  t.innerHTML = "<thead><tr><th>Product</th><th>Description</th><th>Footage</th><th>Bags</th></tr></thead>";
+  var tb = el("tbody");
+  sh.items.forEach(function (it) {
+    var tr = el("tr");
+    tr.appendChild(el("td", null, h(it.p)));
+    tr.appendChild(el("td", null, h(it.d)));
+    ["f", "b"].forEach(function (k) {
+      var td = el("td"), i = el("input"); i.inputMode = "decimal"; i.value = it[k] === "" || it[k] == null ? "" : it[k];
+      i.style.cssText = "width:62px;min-height:38px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--bg)";
+      i.oninput = function () { var v = i.value.trim(); it[k] = v === "" ? "" : (isFinite(Number(v)) ? Number(v) : v); };
+      td.appendChild(i); tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); tw.appendChild(t); s.appendChild(tw);
+  var nf = el("div", "field"), nt = el("textarea"); nf.appendChild(el("label", null, "Notes (up to 6 lines)")); nt.rows = 2; nt.value = sh.notes || ""; nt.oninput = function () { sh.notes = nt.value; }; nf.appendChild(nt); s.appendChild(nf);
+  return s;
+}
+
+/* ---- export ---- */
+function exportFiles(cats) {
+  var o = WO.order; if (!o) return;
+  var files = [];
+  cats.forEach(function (cat) {
+    if (!o.sheets[cat]) return;
+    var bytes = K.buildXlsx(o, [cat]);
+    files.push(new File([bytes], K.fileNameFor(o, cat), { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  });
+  if (!files.length) return;
+  saveRecent(o, cats);
+  var m = $("woExportMsg");
+  var data = { files: files, title: files.length > 1 ? "Chafin work orders" : files[0].name };
+  if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) {
+    navigator.share(data).then(function () { m.textContent = "Shared " + files.map(function (f) { return f.name; }).join(" and ") + "."; })
+      .catch(function (e) { if (e && e.name === "AbortError") m.textContent = "Share canceled."; else { download(files); m.textContent = "Share didn't open, so I downloaded the file instead."; } });
+  } else { download(files); m.textContent = "Downloaded " + files.map(function (f) { return f.name; }).join(" and ") + "."; }
+}
+function download(files) {
+  files.forEach(function (f, i) {
+    setTimeout(function () {
+      var u = URL.createObjectURL(f), a = document.createElement("a"); a.href = u; a.download = f.name; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(u); a.remove(); }, 4000);
+    }, i * 600);
+  });
+}
+
+/* ---- recent ---- */
+function serial(o) { var c = JSON.parse(JSON.stringify(o)); c.date = o.date ? isoDate(o.date) : null; return c; }
+function revive(c) { var o = JSON.parse(JSON.stringify(c)); if (c.date) { var p = c.date.split("-"); o.date = new Date(+p[0], +p[1] - 1, +p[2]); } else o.date = null; return o; }
+function saveRecent(o, cats) {
+  var rec = { id: o.lot.s + "|" + o.lot.l, at: new Date().toISOString(), cats: cats, order: serial(o) };
+  WO.recent = [rec].concat(WO.recent.filter(function (r) { return r.id !== rec.id; })).slice(0, 50);
+  renderRecent();
+  idb("orders", "readwrite", function (os) { os.put(rec); }).catch(function () {});
+}
+function loadRecent() {
+  idb("orders", "readonly", function (os) { return os.getAll(); }).then(function (all) {
+    WO.recent = (all || []).sort(function (a, b) { return b.at.localeCompare(a.at); }); renderRecent();
+  }).catch(function () { renderRecent(); });
+}
+function renderRecent() {
+  ["woRecent", "woRecentArchive"].forEach(function (id) {
+    var box = $(id); if (!box) return; box.innerHTML = "";
+    if (!WO.recent.length) { box.innerHTML = '<p class="status">None yet.</p>'; return; }
+    WO.recent.slice(0, 20).forEach(function (r) {
+      var o = r.order, c = el("div", "archive-card");
+      c.innerHTML = '<div class="meta">' + h(new Date(r.at).toLocaleString()) + " · " + h(o.date || o.dateText || "no date") + '</div><div class="title">' + h(o.jobSite) + " · " + h(o.plan) + "</div>";
+      var acts = el("div", "archive-actions"), b = el("button", "btn btn-secondary btn-sm", "Open"); b.type = "button";
+      b.onclick = function () { var nb = document.querySelector('.nav-btn[data-tab="workorder"]'); if (nb && id !== "woRecent") nb.click(); WO.order = revive(o); renderOrder(); $("woOrder").scrollIntoView({ behavior: "smooth" }); };
+      var d = el("button", "btn btn-danger btn-sm", "Delete"); d.type = "button";
+      d.onclick = function () { if (!confirm("Remove this work order from the list?")) return; WO.recent = WO.recent.filter(function (x) { return x.id !== r.id; }); renderRecent(); idb("orders", "readwrite", function (os) { os.delete(r.id); }).catch(function () {}); };
+      acts.appendChild(b); acts.appendChild(d); c.appendChild(acts); box.appendChild(c);
+    });
+  });
+}
+
+/* ---- lot log import ---- */
+function importLog(file) {
+  var m = $("woLogMsg"); m.textContent = "Reading " + file.name + "…";
+  if (/\.pdf$/i.test(file.name)) { m.textContent = "PDFs can't be read on the phone. Send the PDF to me and I'll update the app, or export it to Excel/CSV and load that."; return; }
+  file.arrayBuffer().then(function (buf) {
+    var u8 = new Uint8Array(buf);
+    if (u8[0] === 0x50 && u8[1] === 0x4b) return K.unzip(u8).then(function (f) { return K.xlsxRows(f); });
+    return K.csvRows(new TextDecoder().decode(u8));
+  }).then(function (rows) {
+    var lots = K.rowsToLots(rows), src = { name: file.name, at: new Date().toISOString() };
+    setLots(lots, src);
+    idb("kv", "readwrite", function (os) { os.put({ lots: lots, source: src }, "lotlog"); }).catch(function () {});
+    m.textContent = "Loaded " + lots.length + " lots from " + file.name + ".";
+  }).catch(function (e) { m.textContent = "Couldn't read that file: " + (e && e.message ? e.message : e) + " Send it to me and I'll load it."; });
+}
+
+function init() {
+  setLots(WO.lots, null);
+  idb("kv", "readonly", function (os) { return os.get("lotlog"); }).then(function (v) { if (v && v.lots && v.lots.length) setLots(v.lots, v.source); }).catch(function () {});
+  loadRecent();
+  $("woFind").onclick = find;
+  $("woAsk").addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); find(); } });
+  $("woSub").onchange = fillLots;
+  $("woLot").onchange = function () {
+    var s = $("woSub").value, l = $("woLot").value, lot = WO.lots.filter(function (x) { return x.s === s && x.l === l; })[0];
+    if (lot) { msg(""); var r = WO.lastParse; openOrder(lot, r ? { date: r.date, dateText: r.dateText } : {}); }
+  };
+  $("woLogFile").onchange = function () { var f = this.files && this.files[0]; if (f) importLog(f); this.value = ""; };
+  $("woLogReset").onclick = function () {
+    if (!confirm("Go back to the built-in lot log?")) return;
+    idb("kv", "readwrite", function (os) { os.delete("lotlog"); }).catch(function () {});
+    setLots(K.DATA.lots.slice(), null); $("woLogMsg").textContent = "Back to the built-in lot log.";
+  };
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
+})();
+
 </script>
 </body>
 </html>
