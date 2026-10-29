@@ -1607,7 +1607,7 @@ function twoOrder() {
   ["walls", "attic"].forEach(cat => {
     const ls = twoLines(cat); if (!ls.length) { o.sheets[cat] = null; return; }
     const rows = ls.map(L => ({ p: TWO_LABELS[fgSection(L.assembly)] || L.area || "", d: L.description || L.product,
-      f: (L.footage === 0 && L.unit === "—") ? "" : n(L.footage), b: L.bags || "" }));
+      f: wholeQty(L), b: L.bags || "" }));
     const fit = rows.slice(0, 21), extra = rows.slice(21);
     o.overflow[cat] = extra.length;
     const notes = [(S.woNotes || "").trim()].concat(extra.length ? ["More: " + extra.map(x => x.p + " " + x.d + " " + fmt(n(x.f))).join("; ")] : []).filter(Boolean).join("\n");
@@ -2193,16 +2193,38 @@ function workAreaOf(L) {
   if (L.area === "Fireplace") return "Fireplace";
   return L.area || sec || "";
 }
+// Whole-number footage for every Excel/CSV output (no decimals anywhere).
+function wholeQty(L) { return (L.footage === 0 && L.unit === "—") ? "" : Math.round(n(L.footage)); }
+// Material text for the work-order style CSV: the description, with the product added when the description doesn't name it.
+function woMaterial(L) {
+  const d = String(L.description || "").trim(), p = String(L.product || "").trim();
+  if (!d) return p;
+  if (!p || /^R\d/.test(d) || d.toLowerCase().indexOf(p.toLowerCase()) >= 0 || workAreaOf(L).toLowerCase().indexOf(p.toLowerCase()) >= 0) return d;
+  return p + " — " + d;
+}
+function csvDate(iso) { const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? m[2] + "-" + m[3] + "-" + m[1].slice(2) : String(iso || ""); }
+// CSV export in the Chafin work order sheet layout: header block, then Work area | Material | Footage (no bags).
 function buildExcelCsv() {
   const esc = s => {
     s = String(s == null ? "" : s);
     if (s.includes(",") || s.includes('"') || s.includes("\n")) return '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
-  const rows = ["Work area,Product,Description,Footage,Bags"];
-  allLines().forEach(L => {
-    rows.push([workAreaOf(L), L.product, L.description, (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), L.bags].map(esc).join(","));
-  });
+  const row = a => a.map(esc).join(",");
+  const first = (S.custFirst || "").trim(), last = (S.custLast || "").trim();
+  const customer = [first, last].filter(Boolean).join(" ") || (S.custCompany || "").trim() || (S.builder || "").trim();
+  const cityLine = [(S.city || "").trim(), [(S.siteState || "").trim(), (S.siteZip || "").trim()].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  const pkgLine = optionsOn() ? optionTitle(S.optionView | 0) : packageLabel().replace(/ · FP .*$/, "");
+  const rows = [
+    row(["WORK ORDER", "", ""]),
+    row(["REP:", ownerName(), "DATE: " + csvDate(S.dateMeasured)]),
+    row(["CUSTOMER:", customer, ""]),
+    row(["JOB SITE:", (S.address || "").trim(), ""]),
+    row(["", cityLine, ""]),
+    row(["", pkgLine, ""]),
+    row(["WORK AREA", "MATERIAL", "FOOTAGE"]),
+  ];
+  allLines().forEach(L => rows.push(row([workAreaOf(L), woMaterial(L), wholeQty(L)])));
   return rows.join("\n");
 }
 
@@ -2831,7 +2853,7 @@ function takeoffXlsx(lines, title) {
   const rows = ['<row r="1">' + cell("A1", title, 1) + "</row>",
     '<row r="2">' + ["Work area", "Product", "Description", "Footage", "Bags"].map((h, i) => cell("ABCDE"[i] + "2", h, 1)).join("") + "</row>"];
   lines.forEach((L, i) => {
-    const r = i + 3, foot = (L.footage === 0 && L.unit === "—") ? "" : Number(L.footage);
+    const r = i + 3, foot = wholeQty(L);
     rows.push('<row r="' + r + '">' + cell("A" + r, workAreaOf(L)) + cell("B" + r, L.product || "") + cell("C" + r, L.description || "") + (foot === "" ? "" : cell("D" + r, foot)) + (L.bags ? cell("E" + r, L.bags) : "") + "</row>");
   });
   const x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
@@ -2896,7 +2918,7 @@ function renderOutput() {
     let html = "<table><thead><tr><th>Work area</th><th>Product</th><th>Description</th><th>Footage</th><th>Bags</th></tr></thead><tbody>";
     lines.forEach(L => {
       html += "<tr><td>" + escHtml(workAreaOf(L)) + "</td><td>" + escHtml(L.product) + "</td><td>" + escHtml(L.description) + "</td><td class='num'>" +
-        ((L.footage === 0 && L.unit === "—") ? "" : escHtml(fmt(L.footage))) + "</td><td class='num'>" + escHtml(L.bags) + "</td></tr>";
+        escHtml(String(wholeQty(L))) + "</td><td class='num'>" + escHtml(L.bags) + "</td></tr>";
     });
     html += "</tbody></table>";
     wrap.innerHTML = html;
@@ -3437,7 +3459,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29o";
+const APP_BUILD = "2026-10-29p";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
