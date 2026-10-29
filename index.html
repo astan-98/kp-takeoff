@@ -257,7 +257,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
     </div>
 
     <div class="section" id="sec-assemblies">
-      <h2>What's on this house</h2>
+      <h2>What's on this house?</h2>
       <p class="cap">Gates skip unused assemblies. Foam roof packages skip dead air / vaults / knees; gables only on foam roofline. Flat asked once.</p>
       <div id="gates"></div>
       <div class="divider"></div>
@@ -1117,25 +1117,25 @@ function renderGates() {
     box.appendChild(row);
   }
   if (F.canAskDeadVaultKnees) {
-    addToggle("Dead air?", "hasDeadAir", true);
-    addToggle("Vaults?", "hasVaults", true);
-    addToggle("Knee walls?", "hasKnees", true);
-    addToggle("Baffles?", "hasBaffles", true);
+    addToggle("Dead air", "hasDeadAir", true);
+    addToggle("Vaults", "hasVaults", true);
+    addToggle("Knee walls", "hasKnees", true);
+    addToggle("Baffles", "hasBaffles", true);
   } else if (F.primaryExcludesDVK) {
     const c = el("div", "callout", "<strong>Foam roofline</strong>Dead air, vaults, knees excluded.");
     box.appendChild(c);
   }
-  addToggle("Rim / band?", "hasRim", F.canAskRim);
-  addToggle("Walls?", "hasWalls", F.canAskWalls);
-  addToggle("Interior walls?", "hasInteriorWalls", F.canAskWalls);
-  addToggle("Basement walls?", "hasBasementWalls", F.canAskWalls);
-  addToggle("Gables?", "hasGables", F.canAskGables);
-  addToggle("Cantilevers?", "hasCants", F.canAskCants);
-  addToggle("Garage?", "hasGarage", F.canAskGarage);
-  addToggle("Porch?", "hasPorch", F.canAskPorch);
-  addToggle("Subfloor / crawl?", "hasSubfloor", F.canAskSubfloor);
-  addToggle("Crawl walls to foam?", "hasCrawlWalls", F.canAskCrawlEncap);
-  addToggle("Dense-pack floors?", "hasDense", F.canAskDense);
+  addToggle("Rim / band", "hasRim", F.canAskRim);
+  addToggle("Walls", "hasWalls", F.canAskWalls);
+  addToggle("Interior walls", "hasInteriorWalls", F.canAskWalls);
+  addToggle("Basement walls", "hasBasementWalls", F.canAskWalls);
+  addToggle("Gables", "hasGables", F.canAskGables);
+  addToggle("Cantilevers", "hasCants", F.canAskCants);
+  addToggle("Garage", "hasGarage", F.canAskGarage);
+  addToggle("Porch", "hasPorch", F.canAskPorch);
+  addToggle("Subfloor / crawl", "hasSubfloor", F.canAskSubfloor);
+  addToggle("Crawl walls to foam", "hasCrawlWalls", F.canAskCrawlEncap);
+  addToggle("Dense-pack floors", "hasDense", F.canAskDense);
   addToggle("Poured floor (skip poly)", "pouredFloor", F.canAskCrawlEncap);
 }
 
