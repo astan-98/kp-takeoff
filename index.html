@@ -1646,7 +1646,7 @@ function twoOrder() {
     date: d.length === 3 ? new Date(+d[0], +d[1] - 1, +d[2]) : null, dateText: "", sheets: {}, overflow: {},
   };
   // Order: walls/batts lines first, then attic/roof lines; 21 rows per sheet, extra lines continue on more sheets (tabs) — nothing dropped.
-  const ls = twoLines(), ordered = ls.filter(L => twoCatOf(L) === "walls").concat(ls.filter(L => twoCatOf(L) === "attic"));
+  const ls = twoLines(), ordered = ls.filter(L => twoCatOf(L) === "attic").concat(ls.filter(L => twoCatOf(L) === "walls")); // attic lines first, like KP work orders
   const rows = ordered.map(L => ({ p: TWO_LABELS[fgSection(L.assembly)] || L.area || "", d: L.description || L.product, f: wholeQty(L), b: L.bags || "" }));
   const PER = 21, NOTE_ROWS = 6;
   o.pages = []; o.lineCount = rows.length; o.fpPages = []; o.fpCount = 0;
@@ -2373,7 +2373,7 @@ function buildExcelCsv() {
     row(["", pkgLine, ""]),
     row(["WORK AREA", "MATERIAL", "FOOTAGE"]),
   ];
-  allLines().forEach(L => rows.push(row([workAreaOf(L), woMaterial(L), wholeQty(L)])));
+  { const al = allLines(); al.filter(L => twoCatOf(L) === "attic").concat(al.filter(L => twoCatOf(L) !== "attic")).forEach(L => rows.push(row([workAreaOf(L), woMaterial(L), wholeQty(L)]))); }
   return rows.join("\n");
 }
 
@@ -3621,7 +3621,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29s";
+const APP_BUILD = "2026-10-29t";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -3633,11 +3633,31 @@ const PTR_THRESHOLD = 70, PTR_MAX = 120;
 // iOS Home Screen apps can leave the fixed bottom toolbar stranded mid-screen after the keyboard closes
 // or the page height changes. Nudging the scroll position makes Safari re-anchor it to the bottom.
 (function keepNavPinned() {
+  // iOS Safari / Home Screen: after the keyboard, photo picker, camera or share sheet closes, the visual viewport can stay
+  // offset from the layout viewport and a position:fixed bar drifts up the screen. Re-pin the bar to the visible bottom.
+  const nav = document.querySelector(".bottom-nav"), vv = window.visualViewport;
+  const typing = () => { const a = document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== "file"); };
+  let raf = 0;
+  const pin = () => {
+    raf = 0; if (!nav) return;
+    let off = 0;
+    if (vv && !typing() && Math.abs(vv.scale - 1) < 0.01) off = Math.round(window.innerHeight - (vv.height + vv.offsetTop));
+    nav.style.transform = off ? "translate3d(0," + (-off) + "px,0)" : "translateZ(0)";
+  };
+  const schedulePin = () => { if (!raf) raf = requestAnimationFrame(pin); };
   let t = null;
-  const nudge = () => { clearTimeout(t); t = setTimeout(() => { const y = window.scrollY; window.scrollTo(window.scrollX, y + 1); window.scrollTo(window.scrollX, y); }, 60); };
+  const nudge = () => { clearTimeout(t); t = setTimeout(() => { const y = window.scrollY; window.scrollTo(window.scrollX, y + 1); window.scrollTo(window.scrollX, y); schedulePin(); }, 60); };
   document.addEventListener("focusout", nudge, true);
-  if (window.visualViewport) window.visualViewport.addEventListener("resize", nudge);
+  document.addEventListener("focusin", schedulePin, true);
+  document.addEventListener("change", e => { if (e.target && e.target.type === "file") nudge(); }, true);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) nudge(); });
+  window.addEventListener("pageshow", nudge);
+  window.addEventListener("focus", nudge);
   window.addEventListener("orientationchange", nudge);
+  window.addEventListener("scroll", schedulePin, { passive: true });
+  window.addEventListener("resize", schedulePin);
+  if (vv) { vv.addEventListener("resize", () => { schedulePin(); nudge(); }); vv.addEventListener("scroll", schedulePin); }
+  document.addEventListener("touchend", () => setTimeout(schedulePin, 350), { passive: true });
 })();
 let ptrState = null, ptrBusy = false;
 function ptrScrollTop() { return Math.max(window.scrollY || 0, (document.scrollingElement || document.documentElement).scrollTop || 0); }
