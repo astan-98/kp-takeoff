@@ -712,6 +712,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 
 // Build edition: "asher" (full app) or "lance" (coworker copy). build.py swaps this line for the Lance build — keep it on one line.
 const APP_EDITION = "asher";
+// 29ax: build-level owner lock. Only Asher's (KP) and Lance's copies may switch whose job it is (Asher / Sky / Lance).
+// Every other edition (Blake's Choice copy, any future rep copy) inherits false: no selector, no owner filter, and drafts,
+// archived jobs and restored backups are forced back to that copy's own owner on load.
+const ALLOW_OWNER_SWITCH = APP_EDITION === "asher" || APP_EDITION === "lance";
 // 29av: Keith Porter logo (original art, downscaled 258×360 JPEG) — embedded once in the splash <img>, reused for the header + Sky work order sheet
 const KP_LOGO = ((document.getElementById("kpSplashLogo") || {}).src || "");
 const OWNER_LABELS = { asher: "Asher", sky: "Sky", lance: "Lance" };
@@ -1570,8 +1574,9 @@ function fpModelsForContext(fpMode, retroKind) {
 
 function fpSpecPass() {
   if (!S.includeFp) return null;
-  const plat = n(S.fpHearthPlatform) || n(S.fpSpecPlatform);
-  const needH = n(S.fpSpecRoH) + plat;
+  // 29ax: the rough opening is measured from the TOP of the hearth platform to the header, so the platform is never part of it —
+  // compare the entered RO straight to the spec (was spec + platform height, which failed correctly framed openings).
+  const needH = n(S.fpSpecRoH);
   const needW = n(S.fpSpecRoW);
   const needD = n(S.fpSpecRoD);
   const mH = n(S.fpMeasRoH), mW = n(S.fpMeasRoW), mD = n(S.fpMeasRoD);
@@ -2585,7 +2590,7 @@ function appendFpLines(lines, noteTag) {
   const pass = fpSpecPass();
   if (pass) {
     push(lines, { area: "Fireplace", assembly: "RO validation", product: pass.ok ? "PASS" : "FAIL",
-      description: "Measured " + pass.mH + "×" + pass.mW + "×" + pass.mD + " vs need " + pass.needH + "×" + pass.needW + "×" + pass.needD + " (spec+platform)",
+      description: "Measured " + pass.mH + "×" + pass.mW + "×" + pass.mD + " vs need " + pass.needH + "×" + pass.needW + "×" + pass.needD + " (spec; RO from top of platform)",
       footage: 1, unit: "ea", notes: noteTag });
   }
 }
@@ -3509,7 +3514,7 @@ function renderFireplace() {
   body.appendChild(saveSpec);
   if (S.fpSpecNote) body.appendChild(el("p", "status", S.fpSpecNote));
 
-  body.appendChild(el("p", "cap", "Measured RO (validate vs spec + platform)"));
+  body.appendChild(el("p", "cap", "Measured RO — from the top of the hearth platform to the header (validated against the spec; platform not added)"));
   const g3 = el("div", "grid3");
   g3.appendChild(fieldInput("Measured H", S.fpMeasRoH, v => { S.fpMeasRoH = v; schedule(); }, "number"));
   g3.appendChild(fieldInput("Measured W", S.fpMeasRoW, v => { S.fpMeasRoW = v; schedule(); }, "number"));
@@ -3519,7 +3524,7 @@ function renderFireplace() {
   if (pass) {
     body.appendChild(el("div", "callout " + (pass.ok ? "ok" : "danger"),
       "<strong class='" + (pass.ok ? "pass" : "fail") + "'>" + (pass.ok ? "PASS" : "FAIL") + "</strong>Need " +
-      pass.needH + "×" + pass.needW + "×" + pass.needD + " (spec+platform). Measured " + pass.mH + "×" + pass.mW + "×" + pass.mD + "."));
+      pass.needH + "×" + pass.needW + "×" + pass.needD + " (spec; RO measured from top of platform). Measured " + pass.mH + "×" + pass.mW + "×" + pass.mD + "."));
   }
 }
 
@@ -3681,7 +3686,7 @@ function escHtml(s) {
 function archiveFiltered(list) {
   const q = (S.filterText || "").trim().toLowerCase();
   return (list || []).filter(j => {
-    if (S.filterOwner !== "all" && j.owner !== S.filterOwner) return false;
+    if (ALLOW_OWNER_SWITCH && S.filterOwner !== "all" && j.owner !== S.filterOwner) return false;
     if (S.filterBuilder && !(j.builder || "").toLowerCase().includes(S.filterBuilder.toLowerCase())) return false;
     if (S.filterCity && !(j.city || "").toLowerCase().includes(S.filterCity.toLowerCase())) return false;
     if (S.filterPkg && !relabelPkg(j.packageLabel).toLowerCase().includes(S.filterPkg.toLowerCase()) && !(j.packageLabel || "").toLowerCase().includes(S.filterPkg.toLowerCase())) return false;
@@ -4146,7 +4151,7 @@ function render() {
   $("touchupPatchSf").value = S.touchupPatchSf;
   $("marginCustom").value = S.marginCustom;
 
-  bindSeg("seg-owner", () => S.owner, v => { S.owner = v; S.outputView = v === "sky" ? "excel" : "fg"; render(); });
+  bindSeg("seg-owner", () => S.owner, v => { if (!ALLOW_OWNER_SWITCH) { S.owner = HOME_OWNER; return; } S.owner = v; S.outputView = v === "sky" ? "excel" : "fg"; render(); });
   bindSeg("seg-mode", () => S.jobMode, v => { if (v === "retro" && S.jobMode !== "retro") S.hasBaffles = false; S.jobMode = v; render(); }); // 29an: retro baffles default off
   bindSeg("seg-retroScope", () => S.retroScope, v => { S.retroScope = v; render(); });
   bindSeg("seg-outputView", () => S.outputView, v => { S.outputView = v; render(); });
@@ -4245,6 +4250,7 @@ function saveDraft() {
 const CUST_DEFAULTS = { siteState: "GA", siteZip: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
   billSame: true, billAddress: "", billCity: "", billState: "", billZip: "" };
 function resetCustomer() { Object.keys(CUST_DEFAULTS).forEach(k => { S[k] = CUST_DEFAULTS[k]; }); }
+const HOME_OWNER = S.owner; // 29ax: this copy's own owner (edition default)
 function migrateState(d) {
   d = d || {};
   // customer fields (build h): jobs saved before them start blank, never inherit the previous job's customer
@@ -4265,6 +4271,7 @@ function migrateState(d) {
   if (!("woDateManual" in d)) S.woDateManual = !!S.woDate; else S.woDateManual = !!S.woDateManual;
   applyWoDateDefault();
   if (!OWNER_LABELS[S.owner]) S.owner = APP_EDITION === "lance" ? "lance" : "asher";
+  if (!ALLOW_OWNER_SWITCH) S.owner = HOME_OWNER; // 29ax: locked copies never take another owner from a draft / archived job / backup
   if (d.caulkFoam) S.airSealed = true;
   // 29as: Total Bat toggle → its own package. Standard + Total Bat on (29ao) loads as the Total Bat package.
   if (d.totalBat === true) {
@@ -4622,7 +4629,7 @@ function syncSaveDock() {
   document.body.classList.toggle("has-save-dock", on);
 }
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29aw";
+const APP_BUILD = "2026-10-29ax";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -5085,6 +5092,13 @@ function wireBackup() {
   renderBackupInfo();
 }
 
+// 29ax: locked copy — strip the whose-job buttons and the archive owner filter; owner stays HOME_OWNER
+function lockOwner() {
+  S.owner = HOME_OWNER; S.filterOwner = "all";
+  const seg = $("seg-owner"); if (seg) { seg.innerHTML = ""; const f = seg.closest(".field"); if (f) f.classList.add("hidden"); }
+  if ($("ownerHint")) $("ownerHint").classList.add("hidden");
+  const fo = $("filterOwner"); if (fo) { fo.innerHTML = '<option value="all">All</option>'; fo.value = "all"; fo.disabled = true; const f = fo.closest(".field"); if (f) f.classList.add("hidden"); }
+}
 function init() {
   // 29av: logo in the header; launch splash only if the app opened fast (skip when load took > ~1.5 s), never blocks taps
   if ($("hdrLogo")) $("hdrLogo").src = KP_LOGO;
@@ -5100,6 +5114,7 @@ function init() {
   wireAccess();
   wireArchiveBatch();
   if (APP_EDITION === "lance") document.querySelectorAll(".edition-lance").forEach(e => e.classList.remove("hidden"));
+  if (!ALLOW_OWNER_SWITCH) lockOwner();
   twoLoadContacts().then(() => renderTwo());
   idbGetAllPrices().then(stored => { S.priceLibrary = mergePriceLibrary(stored); render(); })
     .catch(() => { S.priceLibrary = mergePriceLibrary([]); render(); });
