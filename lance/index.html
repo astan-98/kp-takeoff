@@ -560,6 +560,11 @@ const MARGIN_FLOOR = 30;
 const MARGIN_BASE = 40;
 
 // Asher's unit prices at 40% margin (Oct 29 2026). Saved phone prices always win; blanks fall back to these.
+// roofline foam depth price keys; placeholder values are flagged in the price library until Asher changes them
+const ROOF_FOAM_DEPTH_KEYS = ["5.5", "8", "10"];
+const ROOF_FOAM_PLACEHOLDERS = { 'Open-cell foam (roofline) 8"': "2.17", 'Open-cell foam (roofline) 10"': "2.71" };
+const ROOF_FOAM_BASE = "Open-cell foam (roofline)";
+function roofFoamBaseKey(k) { return /^Open-cell foam \(roofline\) /.test(k) ? ROOF_FOAM_BASE : k; }
 const DEFAULT_PRICE_KEYS = [
   { materialKey: "Blown fiberglass", unit: "SF", price: "" },
   { materialKey: "Blown fiberglass R-19", unit: "SF", price: "0.55375" },
@@ -579,7 +584,10 @@ const DEFAULT_PRICE_KEYS = [
   { materialKey: "R-49 fiberglass batts", unit: "SF", price: "" },
   { materialKey: "ComfortBat R15", unit: "SF", price: "2.17" },
   { materialKey: 'AcousticalBat 3"', unit: "SF", price: "1.5875" },
-  { materialKey: "Open-cell foam (roofline)", unit: "SF", price: "1.49" },
+  { materialKey: "Open-cell foam (roofline)", unit: "SF", price: "1.49" }, // other roofline depths (5", 6", 7", 9", 11", 12") use this
+  { materialKey: 'Open-cell foam (roofline) 5.5"', unit: "SF", price: "1.49" },
+  { materialKey: 'Open-cell foam (roofline) 8"', unit: "SF", price: "2.17" },  // PLACEHOLDER — Asher to set
+  { materialKey: 'Open-cell foam (roofline) 10"', unit: "SF", price: "2.71" }, // PLACEHOLDER — Asher to set
   { materialKey: "Open-cell foam (walls)", unit: "SF", price: "1.13" },
   { materialKey: 'Closed-cell foam 1"', unit: "SF", price: "1.49" },
   { materialKey: 'Closed-cell foam 2"', unit: "SF", price: "2.48" },
@@ -1427,7 +1435,7 @@ function fgVars(L, key) {
 }
 function fgRuleFor(L) {
   const sec = fgSection(L.assembly);
-  const key = L.dollars != null ? L.product : priceKeyFor(L);
+  const key = L.dollars != null ? L.product : roofFoamBaseKey(priceKeyFor(L));
   const esc = t => t.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&");
   const keyOk = r => r.key === key || (r.key.indexOf("{r}") >= 0 && new RegExp("^" + r.key.split("{r}").map(esc).join("\\d+") + "$").test(key));
   return FG_RULES.find(r => keyOk(r) && r.sec !== "*" && r.sec.indexOf(sec) >= 0) || FG_RULES.find(r => keyOk(r) && r.sec === "*") || null;
@@ -1504,7 +1512,7 @@ function fgBuildRows() {
     if (r.flag) flags.add(r.flag);
     let price = "";
     if (L.dollars != null) price = round2(n(L.dollars));
-    else if (fgPricesOn()) { const u = priceMap.get(priceKeyFor(L)); if (u > 0) price = Math.round(u * (L.fixed ? 1 : scale) * 10000) / 10000; }
+    else if (fgPricesOn()) { const pk = priceKeyFor(L); let u = priceMap.get(pk); if (u === undefined) u = priceMap.get(roofFoamBaseKey(pk)); if (u > 0) price = Math.round(u * (L.fixed ? 1 : scale) * 10000) / 10000; }
     const qty = n(L.footage);
     rows.push([company, first, last, (S.custEmail || "").trim(), (S.custPhone || "").trim(), bill[0], bill[1], bill[2], bill[3],
       project, site, city, st, zip, (S.subdivision || "").trim(), "", projType, E.name, E.type, "Base Estimate", "No", "",
@@ -2258,7 +2266,12 @@ function marginPct() {
 function priceKeyFor(L) {
   if (L.priceKey) return L.priceKey;
   const pr = String(L.product || ""), d = String(L.description || ""), a = String(L.assembly || "");
-  if (pr === "Open-cell spray foam" || pr === "Spray foam") return /3\.5"/.test(d) ? "Open-cell foam (walls)" : "Open-cell foam (roofline)";
+  if (pr === "Open-cell spray foam" || pr === "Spray foam") {
+    if (/3\.5"/.test(d)) return "Open-cell foam (walls)";
+    const dm = d.match(/^(\d+(?:\.\d+)?)"/);
+    if (dm && /roof foam$/i.test(a) && ROOF_FOAM_DEPTH_KEYS.indexOf(dm[1]) >= 0) return ROOF_FOAM_BASE + " " + dm[1] + '"';
+    return ROOF_FOAM_BASE;
+  }
   if (pr === "Closed-cell spray foam") { const m = d.match(/(\d(?:\.\d)?)"/); return 'Closed-cell foam ' + (m ? m[1] : "2") + '"'; }
   if (pr === "Rock wool") return /ComfortBat/i.test(d) ? "ComfortBat R15" : 'AcousticalBat 3"';
   if (pr === "Cellulose" || pr === "Spider") {
@@ -2285,6 +2298,7 @@ function ballpark(linesArg) {
     if (L.dollars != null) { fixed += n(L.dollars); fixedItems.push(L.product + " " + fmtMoney(n(L.dollars))); pricedLines++; return; }
     const pk = priceKeyFor(L);
     let unit40 = priceMap.get(pk);
+    if (unit40 === undefined && roofFoamBaseKey(pk) !== pk) unit40 = priceMap.get(ROOF_FOAM_BASE);
     if (unit40 === undefined && / \(retro\)$/.test(pk)) { const b = priceMap.get(pk.replace(/ \(retro\)$/, "")); if (b !== undefined) unit40 = b + 0.05; }
     if (unit40 === undefined) unit40 = priceMap.get(L.product);
     if (unit40 === undefined && L.product) {
@@ -3146,6 +3160,9 @@ function renderPricing() {
     row.innerHTML = '<div class="row-title">' + escHtml(p.materialKey) + " (/" + escHtml(p.unit) + ")</div>";
     const inpWrap = fieldInput("$/unit @ 40%", p.unitPrice40, v => { p.unitPrice40 = v; }, "number");
     row.appendChild(inpWrap);
+    if (ROOF_FOAM_PLACEHOLDERS[p.materialKey] && String(p.unitPrice40).trim() === ROOF_FOAM_PLACEHOLDERS[p.materialKey])
+      row.appendChild(el("p", "cap", "⚠ Placeholder price — set the real number."));
+    if (p.materialKey === ROOF_FOAM_BASE) row.appendChild(el("p", "cap", 'Roofline foam at depths without their own price (5", 6", 7", 9", 11", 12").'));
     const save = el("button", "btn btn-primary btn-sm"); save.type = "button"; save.textContent = "Save";
     save.onclick = () => {
       idbPutPrice(p).then(() => { $("priceLibNote").textContent = "Saved " + p.materialKey; }).catch(() => { $("priceLibNote").textContent = "Price save failed."; });
@@ -3614,7 +3631,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29aa";
+const APP_BUILD = "2026-10-29ab";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
