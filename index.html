@@ -290,17 +290,17 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <div id="assemblyEditors"></div>
     </div>
 
+    <div class="section" id="sec-wrapup">
+      <h2>Air sealing</h2>
+      <p class="cap">Air sealing = caulk &amp; foam package (base plate / openings / penetrations). One line item.</p>
+      <div class="toggle-row"><span>Air sealed (caulk &amp; foam)?</span><button type="button" class="switch" id="airSealed"></button></div>
+    </div>
+
     <div class="section" id="sec-fp">
       <h2>Fireplace</h2>
       <p class="cap">Sealed-face wood = tear-out or NC only. Spec library saved in IndexedDB.</p>
       <div class="toggle-row"><span>Include fireplace on this job?</span><button type="button" class="switch" id="includeFp"></button></div>
       <div id="fpBody" class="hidden"></div>
-    </div>
-
-    <div class="section" id="sec-wrapup">
-      <h2>Air sealing</h2>
-      <p class="cap">Air sealing = caulk &amp; foam package (base plate / openings / penetrations). One line item.</p>
-      <div class="toggle-row"><span>Air sealed (caulk &amp; foam)?</span><button type="button" class="switch" id="airSealed"></button></div>
       <div class="grid2" style="margin-top:10px">
         <button type="button" class="btn btn-primary" id="btnSaveArchive3">Save to archive</button>
         <button type="button" class="btn btn-secondary" id="btnGoOutput">View Excel takeoff</button>
@@ -2006,6 +2006,10 @@ function wireInputs() {
     const e = $(id); if (!e) return;
     const key = map[id];
     const handler = () => {
+      if (id === "pkg" && S.pkg !== e.value) {
+        const nm = defaultWallMode(e.value);
+        (S.walls || []).forEach(w => { if (!/int/i.test(w.kind || "")) w.materialMode = nm; });
+      }
       S[key] = e.value;
       if (id === "gasType" || id === "pkg" || id === "atticRetro" || id === "crawlRetro" || id === "housePitch" || id === "blowR" || id.indexOf("filter") === 0)
         render();
