@@ -28,7 +28,7 @@ html { -webkit-text-size-adjust: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg); color: var(--text); min-height: 100dvh;
-  padding-top: var(--safe-t); padding-bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+  padding-bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
   line-height: 1.4; -webkit-tap-highlight-color: transparent;
 }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -37,7 +37,8 @@ button { cursor: pointer; border: none; background: none; }
   position: sticky; top: 0; z-index: 40;
   background: color-mix(in srgb, var(--bg) 86%, transparent);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  padding: 12px 16px 8px; border-bottom: 1px solid var(--border);
+  padding: calc(12px + var(--safe-t)) calc(16px + env(safe-area-inset-right, 0px)) 8px calc(16px + env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--border);
 }
 .app-header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
 .app-header .sub { font-size: .78rem; color: var(--text2); margin-top: 2px; }
@@ -77,9 +78,18 @@ button { cursor: pointer; border: none; background: none; }
   border: 1px solid var(--border); background: var(--bg); outline: none;
 }
 .field textarea { min-height: 80px; resize: vertical; }
+.field { min-width: 0; }
+.field input[type="date"] {
+  display: block; width: 100%; min-width: 0; max-width: 100%;
+  -webkit-appearance: none; appearance: none; line-height: 1.2;
+}
+.field input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+.field input[type="date"]::-webkit-datetime-edit { padding: 0; }
+.field select { min-width: 0; max-width: 100%; }
 .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
+.grid3 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); gap: 8px; }
+.grid2 > *, .grid3 > * { min-width: 0; }
 @media (max-width: 420px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
 .seg {
   display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
@@ -239,20 +249,6 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
       </div>
       <div id="gasIdk" class="callout warn hidden"><strong>Confirm gas type</strong>Flagged for builder — no propane conversion kit auto-added.</div>
       <div class="field"><label>Keywords / notes</label><input id="keywords" placeholder="searchable notes"></div>
-      <div class="toggle-row"><span>Air sealed?</span><button type="button" class="switch" id="airSealed"></button></div>
-      <div class="toggle-row"><span>Caulked and foamed?</span><button type="button" class="switch" id="caulkFoam"></button></div>
-      <div class="toggle-row"><span>Also compute alternate package (same flat)</span><button type="button" class="switch" id="alsoAlt"></button></div>
-      <div id="altPkgField" class="field hidden"><label>Alternate package</label>
-        <select id="altPkg">
-          <option value="hybrid_foam_batts">Hybrid foam + batts</option>
-          <option value="standard">Standard (blow + batts)</option>
-          <option value="foam_cellulose">Foam roofline + cellulose</option>
-          <option value="foam_spider">Foam roofline + spider</option>
-          <option value="total_foam">Total foam</option>
-          <option value="crawl_encap">Crawl encapsulation</option>
-          <option value="custom">Custom mix</option>
-        </select>
-      </div>
       <div class="grid2" style="margin-top:10px">
         <button type="button" class="btn btn-primary" id="btnSaveArchive">Save to archive</button>
         <button type="button" class="btn btn-secondary" id="btnNewJob">New job</button>
@@ -261,8 +257,8 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
     </div>
 
     <div class="section" id="sec-assemblies">
-      <h2>What's on this house + footprint</h2>
-      <p class="cap">Gates skip unused assemblies. Foam roof packages skip dead air / vaults / knees. Flat asked once.</p>
+      <h2>What's on this house</h2>
+      <p class="cap">Gates skip unused assemblies. Foam roof packages skip dead air / vaults / knees; gables only on foam roofline. Flat asked once.</p>
       <div id="gates"></div>
       <div class="divider"></div>
       <div class="field"><label>Flat footprint SF (once)</label><input id="flatSf" type="number" inputmode="decimal" min="0" step="any"></div>
@@ -281,6 +277,16 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
       <p class="cap">Sealed-face wood = tear-out or NC only. Spec library saved in IndexedDB.</p>
       <div class="toggle-row"><span>Include fireplace on this job?</span><button type="button" class="switch" id="includeFp"></button></div>
       <div id="fpBody" class="hidden"></div>
+    </div>
+
+    <div class="section" id="sec-wrapup">
+      <h2>Air sealing</h2>
+      <p class="cap">Air sealing = caulk &amp; foam package (base plate / openings / penetrations). One line item.</p>
+      <div class="toggle-row"><span>Air sealed (caulk &amp; foam)?</span><button type="button" class="switch" id="airSealed"></button></div>
+      <div class="grid2" style="margin-top:10px">
+        <button type="button" class="btn btn-primary" id="btnSaveArchive3">Save to archive</button>
+        <button type="button" class="btn btn-secondary" id="btnGoOutput">View Excel takeoff</button>
+      </div>
     </div>
   </section>
 
@@ -402,7 +408,6 @@ const DEFAULT_PRICE_KEYS = [
   { materialKey: "Netting", unit: "SF" },
   { materialKey: "Dehumidifier", unit: "Ea" },
   { materialKey: "Air seal", unit: "Ea" },
-  { materialKey: "Caulk & foam", unit: "Ea" },
   { materialKey: "Labor", unit: "Ea" },
 ];
 
@@ -419,7 +424,7 @@ const FP_CATALOG = [
   { id: "birmingham", label: "Birmingham", brand: "", category: "sealed_wood", insertOk: false, roH: 40, roW: 42, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
   { id: "c40", label: "C40 (sealed-face wood)", brand: "", category: "sealed_wood", insertOk: false, roH: 40, roW: 40, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
   { id: "buf42", label: "BUF 42", brand: "", category: "dv", insertOk: false, roH: 38, roW: 42, roD: 20, hearthLip: 0, platformH: 0, blower: "dv_default" },
-  { id: "vrt35", label: "VRT 35", brand: "", category: "dv", insertOk: false, roH: 35, roW: 35, roD: 18, hearthLip: 0, platformH: 0, blower: "dv_default" },
+  { id: "vrt36", label: "VRT 36", brand: "", category: "dv", insertOk: false, roH: 36, roW: 36, roD: 18, hearthLip: 0, platformH: 0, blower: "dv_default" },
   { id: "vrt42", label: "VRT 42", brand: "", category: "dv", insertOk: false, roH: 38, roW: 42, roD: 20, hearthLip: 0, platformH: 0, blower: "dv_default" },
   { id: "vesper", label: "Vesper outdoor VF", brand: "", category: "outdoor_vf", insertOk: false, roH: 36, roW: 42, roD: 18, hearthLip: 0, platformH: 0, blower: "vf_none" },
   { id: "travis", label: "Travis", brand: "Travis", category: "stove", insertOk: false, roH: 30, roW: 28, roD: 22, hearthLip: 0, platformH: 0, blower: "none" },
@@ -427,7 +432,7 @@ const FP_CATALOG = [
   { id: "probuilder36", label: "ProBuilder 36", brand: "", category: "sealed_wood", insertOk: false, roH: 36, roW: 36, roD: 22, hearthLip: 0, platformH: 0, blower: "closed_optional" },
   { id: "probuilder42", label: "ProBuilder 42", brand: "", category: "sealed_wood", insertOk: false, roH: 40, roW: 42, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
   { id: "quadrafire", label: "Quadra-Fire", brand: "Quadra-Fire", category: "stove", insertOk: false, roH: 30, roW: 28, roD: 22, hearthLip: 0, platformH: 0, blower: "none" },
-  { id: "buck", label: "Buck", brand: "Buck", category: "stove", insertOk: false, roH: 30, roW: 28, roD: 22, hearthLip: 0, platformH: 0, blower: "none" },
+  { id: "buck", label: "Buck Stove", brand: "Buck Stove", category: "stove", insertOk: false, roH: 30, roW: 28, roD: 22, hearthLip: 0, platformH: 0, blower: "none" },
   { id: "lopi", label: "Lopi", brand: "Lopi", category: "stove", insertOk: false, roH: 30, roW: 28, roD: 22, hearthLip: 0, platformH: 0, blower: "none" },
   { id: "expedition2", label: "Expedition 2 insert", brand: "", category: "insert", insertOk: true, roH: 24, roW: 32, roD: 16, hearthLip: 0, platformH: 0, blower: "closed_optional" },
   { id: "heatilator_ins", label: "Heatilator insert", brand: "Heatilator", category: "insert", insertOk: true, roH: 24, roW: 36, roD: 16, hearthLip: 0, platformH: 0, blower: "closed_optional" },
@@ -485,7 +490,13 @@ function todayISO() {
   const d = new Date();
   return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
 }
-function findFpModel(id) { return FP_CATALOG.find(m => m.id === id); }
+const FP_LEGACY_IDS = { vrt35: "vrt36" };
+function findFpModel(id) { id = FP_LEGACY_IDS[id] || id; return FP_CATALOG.find(m => m.id === id); }
+function fpDisplayName(m) {
+  if (!m) return "";
+  if (!m.brand) return m.label;
+  return m.label.toLowerCase().indexOf(m.brand.toLowerCase()) === 0 ? m.label : m.brand + " " + m.label;
+}
 function clampMargin(m) { return !Number.isFinite(m) ? MARGIN_BASE : Math.max(MARGIN_FLOOR, m); }
 function fmtMoney(x) {
   const r = (Math.round(x * 100) / 100).toFixed(2).split(".");
@@ -515,6 +526,37 @@ function wallProduct(mode, kind) {
   if (kind === "ext_2x4" || kind === "concrete") return "R-13 fiberglass batts";
   if (kind === "interior") return "Fiberglass batts";
   return "R-19 fiberglass batts";
+}
+const INTERIOR_MAT_OPTIONS = [
+  ["batt", "Sound batts (R-13)"], ["acoustical", "AcousticalBat / rock wool"],
+  ["cellulose", "Cellulose (netted)"], ["spider", "Spider (netted)"], ["foam", "Open-cell foam"]
+];
+function newInteriorWall() {
+  return { id: uid(), oc: "16", height: "8", customHeight: "", cavities: "", lf: "", materialMode: "batt" };
+}
+function interiorCavities(r) {
+  const c = n(r.cavities);
+  if (c > 0) return c;
+  const lf = n(r.lf);
+  if (lf <= 0) return 0;
+  return Math.ceil((lf * 12) / (r.oc === "24" ? 24 : 16));
+}
+function interiorWallSf(r) { return wallFactor(r) * interiorCavities(r); }
+function interiorWallLine(r, idx, count, noteTag) {
+  const inside = wallInside(r.oc);
+  const hLabel = wallHeightFt(r) + "'";
+  const mode = r.materialMode || "batt";
+  let product, desc;
+  if (mode === "foam") { product = "Open-cell spray foam"; desc = '3.5" OC foam / ' + inside + " / " + hLabel; }
+  else if (mode === "cellulose") { product = "Cellulose"; desc = 'Cellulose 3.5" / ' + inside + " / " + hLabel; }
+  else if (mode === "spider") { product = "Spider"; desc = 'Spider 3.5" / ' + inside + " / " + hLabel; }
+  else if (mode === "acoustical") { product = "Rock wool"; desc = 'AcousticalBat 3" / ' + inside + " / " + hLabel; }
+  else { product = "R-13 fiberglass batts"; desc = "Sound batts R13/" + inside + "/" + hLabel; }
+  const label = "Interior walls" + (count > 1 ? " #" + (idx + 1) : "");
+  const cav = interiorCavities(r);
+  return { area: label, assembly: "Interior walls", product: product, description: desc + (count > 1 ? " (#" + (idx + 1) + ")" : ""),
+    footage: round2(interiorWallSf(r)), unit: "SF",
+    notes: noteTag + cav + " cav × " + round2(wallFactor(r)) + (n(r.cavities) > 0 ? "" : " (from " + fmt(n(r.lf)) + " LF)") };
 }
 function defaultWallMode(pkg, kind) {
   if (pkg === "total_foam") return "foam";
@@ -609,17 +651,15 @@ const S = {
   crawlRetro: "remove_replace",
   blowR: "R-38",
   pkg: "standard",
-  alsoAlt: false,
-  altPkg: "hybrid_foam_batts",
   airSealed: false,
-  caulkFoam: false,
   flatSf: "",
   housePitch: "6",
   houseCustomRise: "",
   hasDeadAir: false, hasVaults: false, hasKnees: false, hasBaffles: false,
-  hasRim: false, hasWalls: true, hasGables: false, hasCants: false,
+  hasRim: false, hasWalls: true, hasInteriorWalls: false, hasGables: false, hasCants: false,
   hasGarage: false, hasPorch: false, hasBasementWalls: false,
   hasSubfloor: false, hasDense: false, hasCrawlWalls: false,
+  interiorWalls: [newInteriorWall()],
   deadAir: [{ id: uid(), name: "", sf: "" }],
   vaults: [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }],
   knees: [{ id: uid(), name: "", height: "8", lf: "", wrap: true }],
@@ -640,9 +680,9 @@ const S = {
   fpMode: "nc", fpRetroKind: "tearout", fpOtherDemo: false, fpModelId: "apex42",
   fpInsertShell: "masonry", fpFuel: "wood",
   fpFrontW: "", fpBackW: "", fpFrontH: "", fpBackH: "", fpDepth: "",
-  fpPipeCount: "", fpTerm: "roof", fpChimPitch: "6", fpChimCustomRise: "",
+  fpPipeFt: "", fpTerm: "roof", fpChimPitch: "6", fpChimCustomRise: "",
   fpRoofType: "shingle", fpCap: "standard",
-  fpChaseBlocking: false, fpElbows: "", fpAccessNotes: "",
+  fpChaseClear: true, fpChaseNote: "", fpElbows: "", fpAccessNotes: "",
   fpHearthPlatform: "", fpWoodGasStarter: false, fpBlowerChoice: "none",
   fpMeasRoH: "", fpMeasRoW: "", fpMeasRoD: "",
   fpSpecRoH: "", fpSpecRoW: "", fpSpecRoD: "", fpSpecLip: "", fpSpecPlatform: "",
@@ -678,7 +718,7 @@ function flags() {
     primaryExcludesDVK, showFoamRoofPath,
     canAskDeadVaultKnees: (isNew || (isAtticRetro && !atticIsFoam)) && !primaryExcludesDVK,
     canAskWalls: isNew,
-    canAskGables: isNew || showFoamRoofPath,
+    canAskGables: showFoamRoofPath,
     canAskCants: isNew,
     canAskGarage: isNew || showFoamRoofPath,
     canAskPorch: showFoamRoofPath,
@@ -755,15 +795,22 @@ function buildLinesForPackage(p, tag) {
     });
   }
   if (!excludeDVK && S.hasVaults) {
-    S.vaults.forEach(r => {
-      const flatV = n(r.flatSf); if (flatV <= 0) return;
+    const vv = S.vaults.filter(r => n(r.flatSf) > 0);
+    const nOpen = vv.filter(r => r.kind === "open").length, nClosed = vv.length - nOpen;
+    let iOpen = 0, iClosed = 0;
+    vv.forEach(r => {
+      const flatV = n(r.flatSf);
       const factor = resolvePitchFactor(r.pitch, r.customRise);
       const pitched = flatV * factor;
       if (r.kind === "open") {
-        push(lines, { area: r.name.trim() || "Open vault", assembly: "Vault open", product: "R-38 fiberglass batts", description: "R38 vault", footage: round2(pitched), unit: "SF", notes: noteTag + "×" + factor.toFixed(3) });
+        iOpen++;
+        const nm = "Open vault" + (nOpen > 1 ? " #" + iOpen : "");
+        push(lines, { area: nm, assembly: "Open vault", product: "R-38 fiberglass batts", description: nm, footage: round2(pitched), unit: "SF", notes: noteTag + "R38 · flat " + fmt(flatV) + " ×" + factor.toFixed(3) });
       } else {
-        push(lines, { area: r.name.trim() || "Decked vault", assembly: "Vault decked", product: "R-30 fiberglass batts", description: "R30 vault + poly vent", footage: round2(pitched), unit: "SF", notes: noteTag });
-        push(lines, { area: r.name.trim() || "Decked vault", assembly: "Poly vent", product: "Poly vent", description: "Pitched÷5", footage: round2(pitched / 5), unit: "ea", notes: noteTag });
+        iClosed++;
+        const nm = "Closed vault" + (nClosed > 1 ? " #" + iClosed : "");
+        push(lines, { area: nm, assembly: "Closed vault", product: "R-30 fiberglass batts", description: nm, footage: round2(pitched), unit: "SF", notes: noteTag + "R30 decked · flat " + fmt(flatV) + " ×" + factor.toFixed(3) });
+        push(lines, { area: nm, assembly: "Poly vent", product: "Poly vent", description: nm + " — poly vents (pitched÷5)", footage: round2(pitched / 5), unit: "ea", notes: noteTag });
       }
     });
   }
@@ -862,6 +909,16 @@ function buildLinesForPackage(p, tag) {
     if (nettingTotal > 0) push(lines, { area: "Interior", assembly: "Netting", product: "Netting", description: "Matches interior SF", footage: round2(nettingTotal), unit: "SF", notes: noteTag });
   }
 
+  if (S.hasInteriorWalls && F.canAskWalls) {
+    const iw = (S.interiorWalls || []).filter(r => interiorWallSf(r) > 0);
+    let iwNet = 0;
+    iw.forEach((r, idx) => {
+      push(lines, interiorWallLine(r, idx, iw.length, noteTag));
+      if (r.materialMode === "cellulose" || r.materialMode === "spider") iwNet += interiorWallSf(r);
+    });
+    if (iwNet > 0) push(lines, { area: "Interior walls", assembly: "Netting", product: "Netting", description: "Matches interior wall SF", footage: round2(iwNet), unit: "SF", notes: noteTag });
+  }
+
   if (S.hasGables && F.canAskGables) {
     S.gables.forEach(r => {
       const L = n(r.length), H = n(r.height); if (L <= 0 || H <= 0) return;
@@ -906,8 +963,7 @@ function buildLinesForPackage(p, tag) {
     if (denseNet > 0) push(lines, { area: "Dense-pack", assembly: "Netting", product: "Netting", description: "Matches dense-pack", footage: round2(denseNet), unit: "SF", notes: noteTag });
   }
 
-  if (S.airSealed) push(lines, { area: site, assembly: "Air seal", product: "Air seal", description: "Yes", footage: 1, unit: "ea", notes: noteTag });
-  if (S.caulkFoam) push(lines, { area: site, assembly: "Caulk & foam", product: "Caulk & foam", description: "Yes — base plate / openings / penetrations", footage: 1, unit: "ea", notes: noteTag });
+  if (S.airSealed) push(lines, { area: site, assembly: "Air seal (caulk & foam)", product: "Air seal", description: "Caulk & foam — base plate / openings / penetrations", footage: 1, unit: "ea", notes: noteTag });
 
   if (S.gasType === "idk") {
     push(lines, { area: site, assembly: "Gas type", product: "CONFIRM WITH BUILDER", description: "Gas type unknown — confirm before quoting propane kit", footage: 0, unit: "—", notes: noteTag + "Do NOT auto-add propane conversion kit" });
@@ -921,7 +977,7 @@ function buildLinesForPackage(p, tag) {
 
 function appendFpLines(lines, noteTag) {
   const model = findFpModel(S.fpModelId);
-  const modelLabel = model ? (model.brand ? model.brand + " " + model.label : model.label) : S.fpModelId;
+  const modelLabel = model ? fpDisplayName(model) : S.fpModelId;
   if (S.fpMode === "retro" && S.fpRetroKind === "tearout") {
     if (S.fpOtherDemo) push(lines, { area: "Fireplace", assembly: "Demo", product: "Other contractor demo", description: "Demo by others — flag only", footage: 1, unit: "ea", notes: noteTag });
     else push(lines, { area: "Fireplace", assembly: "Tear-out", product: "Fireplace removal / disposal", description: "Complete tear-out", footage: 1, unit: "ea", notes: noteTag });
@@ -935,8 +991,8 @@ function appendFpLines(lines, noteTag) {
     desc = "Sealed-face wood (NC/tear-out only — not insert)";
   else desc = (model && model.category) || "Unit";
   push(lines, { area: "Fireplace", assembly: S.fpMode === "nc" ? "NC fireplace" : "Retro " + S.fpRetroKind, product: modelLabel, description: desc, footage: 1, unit: "ea", notes: noteTag });
-  if (n(S.fpPipeCount) > 0) {
-    push(lines, { area: "Fireplace", assembly: "Pipe", product: "Vent pipe", description: fmt(n(S.fpPipeCount)) + " sections · term " + S.fpTerm, footage: round2(n(S.fpPipeCount)), unit: "ea", notes: noteTag });
+  if (n(S.fpPipeFt) > 0) {
+    push(lines, { area: "Fireplace", assembly: "Pipe", product: "Vent pipe", description: fmt(n(S.fpPipeFt)) + " ft of pipe · term " + S.fpTerm, footage: round2(n(S.fpPipeFt)), unit: "LF", notes: noteTag + "Total feet of pipe" });
   }
   if (S.fpTerm === "chimney") {
     const pf = resolvePitchFactor(S.fpChimPitch, S.fpChimCustomRise);
@@ -944,13 +1000,16 @@ function appendFpLines(lines, noteTag) {
   } else {
     push(lines, { area: "Fireplace", assembly: "Termination", product: S.fpTerm === "roof" ? "Roof termination" : "Wall termination", description: S.fpTerm, footage: 1, unit: "ea", notes: noteTag });
   }
-  if (S.fpChaseBlocking) push(lines, { area: "Fireplace", assembly: "Chase", product: "Chase blocking", description: "Blocking required", footage: 1, unit: "ea", notes: noteTag });
+  if (!S.fpChaseClear) {
+    const cn = (S.fpChaseNote || "").trim();
+    push(lines, { area: "Fireplace", assembly: "Chase NOT clear", product: "⚠ CHASE BLOCKED", description: "Chase not clear — may prevent pipe run" + (cn ? ": " + cn : " (note what's blocking)"), footage: 0, unit: "—", notes: noteTag + "Flag — resolve before install" });
+  }
   if (n(S.fpElbows) > 0) push(lines, { area: "Fireplace", assembly: "Elbows", product: "Elbows", description: fmt(n(S.fpElbows)) + " elbows", footage: round2(n(S.fpElbows)), unit: "ea", notes: noteTag });
   if (S.fpAccessNotes.trim()) push(lines, { area: "Fireplace", assembly: "Access", product: "Access notes", description: S.fpAccessNotes.trim(), footage: 1, unit: "ea", notes: noteTag });
   if (n(S.fpHearthPlatform) > 0 || n(S.fpSpecPlatform) > 0) {
     push(lines, { area: "Fireplace", assembly: "Hearth platform", product: "Hearth / platform", description: "Height " + (S.fpHearthPlatform || S.fpSpecPlatform) + '"', footage: 1, unit: "ea", notes: noteTag });
   }
-  if (S.fpWoodGasStarter) push(lines, { area: "Fireplace", assembly: "Gas starter", product: "Wood gas starter", description: "Gas starter for wood unit", footage: 1, unit: "ea", notes: noteTag });
+  if (S.fpWoodGasStarter) push(lines, { area: "Fireplace", assembly: "Gas starter", product: "Gas starter", description: "Gas starter", footage: 1, unit: "ea", notes: noteTag });
   if (S.fpFuel === "vf" || (model && (model.category === "vf" || model.category === "outdoor_vf"))) {
     push(lines, { area: "Fireplace", assembly: "VF gas logs", product: "VF gas logs", description: "Customer pick — note only", footage: 1, unit: "ea", notes: noteTag + "Customer selects logs" });
   }
@@ -959,8 +1018,6 @@ function appendFpLines(lines, noteTag) {
     push(lines, { area: "Fireplace", assembly: "Blower", product: "Blower fan", description: "A42 C open wood — fan included", footage: 1, unit: "ea", notes: noteTag });
   else if (blowerRule === "dv_default" && S.fpBlowerChoice !== "none")
     push(lines, { area: "Fireplace", assembly: "Blower", product: "DV blower", description: "DV blower (default)", footage: 1, unit: "ea", notes: noteTag });
-  else if (blowerRule === "closed_optional" && S.fpBlowerChoice === "include")
-    push(lines, { area: "Fireplace", assembly: "Blower", product: "Optional blower", description: "Closed-face optional fan — included", footage: 1, unit: "ea", notes: noteTag });
   const pass = fpSpecPass();
   if (pass) {
     push(lines, { area: "Fireplace", assembly: "RO validation", product: pass.ok ? "PASS" : "FAIL",
@@ -970,9 +1027,7 @@ function appendFpLines(lines, noteTag) {
 }
 
 function allLines() {
-  const primary = buildLinesForPackage(S.pkg, S.alsoAlt ? "A" : "");
-  const alt = S.alsoAlt ? buildLinesForPackage(S.altPkg, "B") : [];
-  return primary.concat(alt);
+  return buildLinesForPackage(S.pkg, "");
 }
 
 function packageLabel() {
@@ -1072,6 +1127,7 @@ function renderGates() {
   }
   addToggle("Rim / band?", "hasRim", F.canAskRim);
   addToggle("Walls?", "hasWalls", F.canAskWalls);
+  addToggle("Interior walls?", "hasInteriorWalls", F.canAskWalls);
   addToggle("Basement walls?", "hasBasementWalls", F.canAskWalls);
   addToggle("Gables?", "hasGables", F.canAskGables);
   addToggle("Cantilevers?", "hasCants", F.canAskCants);
@@ -1112,8 +1168,7 @@ function renderAssemblyEditors() {
     S.vaults.forEach((r, idx) => {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Vault #' + (idx+1) + '</div>';
-      card.appendChild(fieldInput("Area", r.name, v => { r.name = v; schedule(); }));
-      card.appendChild(fieldSelect("Type", r.kind, [["open","Open R38"],["decked","Decked R30"]], v => { r.kind = v; render(); }));
+      card.appendChild(fieldSelect("Type", r.kind, [["open","Open vault (R38)"],["decked","Closed / decked vault (R30)"]], v => { r.kind = v; render(); }));
       card.appendChild(fieldInput("Flat SF", r.flatSf, v => { r.flatSf = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Pitch", r.pitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { r.pitch = v; render(); }));
       box.appendChild(card);
@@ -1169,6 +1224,31 @@ function renderAssemblyEditors() {
       S.walls.push({ id: uid(), name: "", kind: "ext_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: defaultWallMode(S.pkg, "ext_2x4") });
       render();
     }));
+  }
+  if (S.hasInteriorWalls && F.canAskWalls) {
+    box.appendChild(el("div", "divider"));
+    box.appendChild(el("p", "cap", "Interior walls — enter cavities (or linear feet → cavities = LF×12÷OC). 16 OC = 12×15×h÷144 · 24 OC = 12×24×h÷144"));
+    if (!Array.isArray(S.interiorWalls) || !S.interiorWalls.length) S.interiorWalls = [newInteriorWall()];
+    S.interiorWalls.forEach((r, idx) => {
+      const card = el("div", "row-card");
+      const sf = round2(interiorWallSf(r));
+      card.innerHTML = '<div class="row-title">Interior walls #' + (idx+1) + ' · ' + fmt(interiorCavities(r)) + ' cav → ' + fmt(sf) + ' SF</div>';
+      card.appendChild(fieldSelect("OC", r.oc, [["16","16 OC"],["24","24 OC"]], v => { r.oc = v; render(); }));
+      card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
+      if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
+      const g = el("div", "grid2");
+      g.appendChild(fieldInput("Cavities", r.cavities, v => { r.cavities = v; schedule(); }, "number"));
+      g.appendChild(fieldInput("or Linear feet", r.lf, v => { r.lf = v; schedule(); }, "number"));
+      card.appendChild(g);
+      card.appendChild(fieldSelect("Material", r.materialMode, INTERIOR_MAT_OPTIONS, v => { r.materialMode = v; render(); }));
+      if (S.interiorWalls.length > 1) {
+        const rm = el("button", "btn btn-secondary btn-sm"); rm.type = "button"; rm.textContent = "Remove";
+        rm.onclick = () => { S.interiorWalls.splice(idx, 1); render(); };
+        card.appendChild(rm);
+      }
+      box.appendChild(card);
+    });
+    box.appendChild(addBtn("Add interior wall area", () => { S.interiorWalls.push(newInteriorWall()); render(); }));
   }
   if (S.hasGables && F.canAskGables) {
     S.gables.forEach((r, idx) => {
@@ -1343,7 +1423,7 @@ function renderFireplace() {
     }
   }
 
-  body.appendChild(fieldSelect("Model / catalog", S.fpModelId, models.map(m => [m.id, m.brand ? m.brand + " " + m.label : m.label]), v => {
+  body.appendChild(fieldSelect("Model / catalog", S.fpModelId, models.map(m => [m.id, fpDisplayName(m)]), v => {
     S.fpModelId = v; loadFpSpecs(); render();
   }));
   if (model && model.category === "sealed_wood") {
@@ -1352,7 +1432,7 @@ function renderFireplace() {
 
   body.appendChild(el("div", "divider"));
   body.appendChild(el("p", "cap", "Pipe, termination, chase"));
-  body.appendChild(fieldInput("Pipe count (sections)", S.fpPipeCount, v => { S.fpPipeCount = v; schedule(); }, "number"));
+  body.appendChild(fieldInput("Total feet of pipe (ft)", S.fpPipeFt, v => { S.fpPipeFt = v; schedule(); }, "number"));
   body.appendChild(fieldSelect("Termination", S.fpTerm, [["roof","Roof"],["wall","Wall"],["chimney","Chimney"]], v => { S.fpTerm = v; render(); }));
   if (S.fpTerm === "chimney") {
     body.appendChild(fieldSelect("Chimney / roof pitch", S.fpChimPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.fpChimPitch = v; render(); }));
@@ -1362,13 +1442,17 @@ function renderFireplace() {
       ["standard","Standard"],["concave","Concave"],["step_out","Step-out"],["masonry_hip","Masonry hip"],["flat_shroud","Flat shroud"]
     ], v => { S.fpCap = v; render(); }));
   }
-  const chase = el("div", "toggle-row"); chase.appendChild(el("span", null, "Chase blocking needed?"));
-  const swc = el("button", "switch" + (S.fpChaseBlocking ? " on" : "")); swc.type = "button";
-  swc.onclick = () => { S.fpChaseBlocking = !S.fpChaseBlocking; render(); }; chase.appendChild(swc); body.appendChild(chase);
+  const chase = el("div", "toggle-row"); chase.appendChild(el("span", null, "Is the chase clear?"));
+  const swc = el("button", "switch" + (S.fpChaseClear ? " on" : "")); swc.type = "button";
+  swc.onclick = () => { S.fpChaseClear = !S.fpChaseClear; render(); }; chase.appendChild(swc); body.appendChild(chase);
+  if (!S.fpChaseClear) {
+    body.appendChild(el("div", "callout danger", "<strong>⚠ Chase blocked</strong>Something in the chase may prevent the pipe from running. Note what's blocking it."));
+    body.appendChild(fieldInput("What's blocking the chase?", S.fpChaseNote, v => { S.fpChaseNote = v; schedule(); }));
+  }
   body.appendChild(fieldInput("Elbow count", S.fpElbows, v => { S.fpElbows = v; schedule(); }, "number"));
   body.appendChild(fieldInput("Access notes", S.fpAccessNotes, v => { S.fpAccessNotes = v; schedule(); }));
   body.appendChild(fieldInput("Hearth platform height (in)", S.fpHearthPlatform, v => { S.fpHearthPlatform = v; schedule(); }, "number"));
-  const gasS = el("div", "toggle-row"); gasS.appendChild(el("span", null, "Wood gas starter?"));
+  const gasS = el("div", "toggle-row"); gasS.appendChild(el("span", null, "Gas starter?"));
   const swg = el("button", "switch" + (S.fpWoodGasStarter ? " on" : "")); swg.type = "button";
   swg.onclick = () => { S.fpWoodGasStarter = !S.fpWoodGasStarter; render(); }; gasS.appendChild(swg); body.appendChild(gasS);
 
@@ -1385,11 +1469,6 @@ function renderFireplace() {
     const row = el("div", "toggle-row"); row.appendChild(el("span", null, "DV blower (default on)"));
     const sw = el("button", "switch" + (S.fpBlowerChoice !== "none" ? " on" : "")); sw.type = "button";
     sw.onclick = () => { S.fpBlowerChoice = S.fpBlowerChoice === "none" ? "include" : "none"; render(); };
-    row.appendChild(sw); body.appendChild(row);
-  } else if (blower === "closed_optional") {
-    const row = el("div", "toggle-row"); row.appendChild(el("span", null, "Include optional closed-face blower"));
-    const sw = el("button", "switch" + (S.fpBlowerChoice === "include" ? " on" : "")); sw.type = "button";
-    sw.onclick = () => { S.fpBlowerChoice = S.fpBlowerChoice === "include" ? "optional_skip" : "include"; render(); };
     row.appendChild(sw); body.appendChild(row);
   } else body.appendChild(el("p", "status", "No blower for this model."));
 
@@ -1431,7 +1510,6 @@ function loadFpSpecs() {
   if (m.blower === "dv_default") S.fpBlowerChoice = "include";
   else if (m.blower === "vf_none") S.fpBlowerChoice = "none";
   else if (m.blower === "a42c_only") S.fpBlowerChoice = "include";
-  else if (m.blower === "closed_optional") S.fpBlowerChoice = "optional_skip";
   else S.fpBlowerChoice = "none";
   idbGetAllSpecs().then(specs => {
     const o = specs.find(s => s.modelId === S.fpModelId);
@@ -1456,7 +1534,7 @@ function renderOutput() {
     if (pricedCount === 0) extra = " · Ballpark: add 40% prices in Pricing";
     else { const b = ballpark(); extra = " · Ballpark " + fmtMoney(b.total) + " @ " + marginPct() + "% (not final invoice)"; }
   }
-  hint.innerHTML = lines.length + " rows · Bags blank until bag-yield · Caulk/foam & gas flags · Owner: " +
+  hint.innerHTML = lines.length + " rows · Bags blank until bag-yield · Air seal, gas & chase flags · Owner: " +
     (S.owner === "asher" ? "Asher" : "Sky") + extra;
 
   const wrap = $("outputTable");
@@ -1494,7 +1572,7 @@ function renderArchive() {
     if (S.filterFrom && j.dateMeasured < S.filterFrom) return false;
     if (S.filterTo && j.dateMeasured > S.filterTo) return false;
     if (q) {
-      const blob = [j.builder, j.city, j.address, j.packageLabel, j.owner, j.dateMeasured, j.keywords].join(" ").toLowerCase();
+      const blob = [j.builder, j.city, j.address, j.packageLabel, j.owner, j.dateMeasured, j.keywords, j.chaseBlocked ? "chase blocked " + j.chaseNote : ""].join(" ").toLowerCase();
       if (!blob.includes(q)) return false;
     }
     return true;
@@ -1511,7 +1589,8 @@ function renderArchive() {
     card.innerHTML = '<div class="meta">' + escHtml(j.dateMeasured) + " · " + (j.owner === "asher" ? "Asher" : "Sky") +
       " · " + escHtml(j.builder || "—") + " · " + escHtml(j.city || "—") + '</div>' +
       '<div class="title">' + escHtml(j.address || "(no address)") + '</div>' +
-      '<div class="meta">' + escHtml(j.packageLabel) + '</div>';
+      '<div class="meta">' + escHtml(j.packageLabel) + '</div>' +
+      (j.chaseBlocked ? '<div class="callout danger" style="margin:6px 0 8px;padding:8px"><strong>⚠ Chase blocked</strong>' + escHtml(j.chaseNote || "No note") + '</div>' : '');
     const actions = el("div", "archive-actions");
     const open = el("button", "btn btn-primary btn-sm"); open.type = "button"; open.textContent = "Open";
     open.onclick = () => openArchiveJob(j.id);
@@ -1601,7 +1680,6 @@ function render() {
   $("keywords").value = S.keywords;
   $("gasType").value = S.gasType;
   $("pkg").value = S.pkg;
-  $("altPkg").value = S.altPkg;
   $("atticRetro").value = S.atticRetro;
   $("crawlRetro").value = S.crawlRetro;
   $("blowR").value = S.blowR;
@@ -1621,15 +1699,12 @@ function render() {
   toggleField("atticRetroFields", S.jobMode === "retro" && S.retroScope === "attic");
   toggleField("crawlRetroFields", S.jobMode === "retro" && S.retroScope === "crawl");
   toggleField("blowRField", F.atticIsBlow);
-  toggleField("altPkgField", S.alsoAlt);
   toggleField("pitchBlock", F.showFoamRoofPath);
   toggleField("blowLiveBlock", !F.showFoamRoofPath);
   toggleField("touchupField", F.canAskTouchup);
   toggleField("houseCustomRiseField", S.housePitch === "custom");
 
   setSwitch($("airSealed"), S.airSealed);
-  setSwitch($("caulkFoam"), S.caulkFoam);
-  setSwitch($("alsoAlt"), S.alsoAlt);
 
   // pitch select
   const hp = $("housePitch");
@@ -1666,6 +1741,17 @@ function saveDraft() {
   lsSet(DRAFT_KEY, JSON.stringify(draftPayload()));
 }
 
+function migrateState(d) {
+  d = d || {};
+  if (d.caulkFoam) S.airSealed = true;
+  if (S.fpModelId && FP_LEGACY_IDS[S.fpModelId]) S.fpModelId = FP_LEGACY_IDS[S.fpModelId];
+  if (typeof S.fpChaseClear !== "boolean") S.fpChaseClear = true;
+  if (typeof S.fpChaseNote !== "string") S.fpChaseNote = "";
+  if (!Array.isArray(S.interiorWalls) || !S.interiorWalls.length) S.interiorWalls = [newInteriorWall()];
+  if (S.fpBlowerChoice === "optional_skip") S.fpBlowerChoice = "none";
+  if (Array.isArray(S.vaults)) S.vaults.forEach(v => { if (v.kind !== "open" && v.kind !== "decked") v.kind = "open"; });
+}
+
 function restoreDraft() {
   const raw = lsGet(DRAFT_KEY);
   if (!raw) { S.draftReady = true; return; }
@@ -1674,6 +1760,7 @@ function restoreDraft() {
     Object.keys(d).forEach(k => {
       if (k in S && k !== "archive" && k !== "priceLibrary") S[k] = d[k];
     });
+    migrateState(d);
   } catch (e) {}
   S.draftReady = true;
 }
@@ -1683,7 +1770,8 @@ function refreshArchive() {
     S.idbOk = true;
     S.archive = jobs.sort((a, b) => b.dateMeasured.localeCompare(a.dateMeasured)).map(j => ({
       id: j.id, dateMeasured: j.dateMeasured, owner: j.owner, builder: j.builder,
-      city: j.city, address: j.address, packageLabel: j.packageLabel, keywords: j.keywords || ""
+      city: j.city, address: j.address, packageLabel: j.packageLabel, keywords: j.keywords || "",
+      chaseBlocked: !!j.chaseBlocked, chaseNote: j.chaseNote || ""
     }));
     S._fullJobs = jobs;
     renderArchive();
@@ -1705,7 +1793,8 @@ function savePermanent() {
     gasType: S.gasType,
     keywords: (S.keywords || "").trim(),
     airSealed: S.airSealed,
-    caulkFoam: S.caulkFoam,
+    chaseBlocked: !!(S.includeFp && !S.fpChaseClear),
+    chaseNote: (S.includeFp && !S.fpChaseClear) ? (S.fpChaseNote || "").trim() : "",
     flatSf: S.flatSf,
     excelRows: lines.map(L => ({ product: L.product, description: L.description, footage: (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), bags: L.bags })),
     fgRows: lines.map(L => ({ area: L.area, assembly: L.assembly, material: L.product + " — " + L.description, qty: fmt(L.footage), unit: L.unit, notes: L.notes })),
@@ -1747,8 +1836,8 @@ function applySnapshot(job) {
   S.gasType = job.gasType || "natural";
   S.pkg = job.packageType;
   S.jobMode = job.jobMode;
-  S.airSealed = job.airSealed;
-  S.caulkFoam = job.caulkFoam;
+  S.airSealed = !!(job.airSealed || job.caulkFoam);
+  migrateState(d);
   S.outputView = job.owner === "sky" ? "excel" : "fg";
   S._suppressSave = false;
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === "wizard"));
@@ -1762,10 +1851,11 @@ function newJob() {
   S.dateMeasured = todayISO();
   S.builder = ""; S.city = ""; S.address = ""; S.keywords = "";
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard";
-  S.alsoAlt = false; S.airSealed = false; S.caulkFoam = false;
+  S.airSealed = false;
   S.flatSf = ""; S.housePitch = "6";
   S.hasDeadAir = false; S.hasVaults = false; S.hasKnees = false; S.hasBaffles = false;
-  S.hasRim = false; S.hasWalls = true; S.hasGables = false; S.hasCants = false;
+  S.hasRim = false; S.hasWalls = true; S.hasInteriorWalls = false; S.hasGables = false; S.hasCants = false;
+  S.interiorWalls = [newInteriorWall()];
   S.hasGarage = false; S.hasPorch = false; S.hasBasementWalls = false;
   S.hasSubfloor = false; S.hasDense = false; S.hasCrawlWalls = false;
   S.deadAir = [{ id: uid(), name: "", sf: "" }];
@@ -1778,7 +1868,8 @@ function newJob() {
   S.cants = [{ id: uid(), name: "", sf: "", material: "r30" }];
   S.touchupPatchSf = ""; S.includePorchRoof = false; S.porchGabledOff = false;
   S.includeFp = false; S.fpMode = "nc"; S.fpRetroKind = "tearout"; S.fpOtherDemo = false;
-  S.fpModelId = "apex42"; S.fpPipeCount = ""; S.fpTerm = "roof"; S.fpAccessNotes = "";
+  S.fpModelId = "apex42"; S.fpPipeFt = ""; S.fpTerm = "roof"; S.fpAccessNotes = "";
+  S.fpChaseClear = true; S.fpChaseNote = "";
   S.fpHearthPlatform = ""; S.fpWoodGasStarter = false; S.fpMeasRoH = ""; S.fpMeasRoW = ""; S.fpMeasRoD = "";
   S.fpWall90 = false;
   setStatus("New job started (draft autosaves).");
@@ -1788,7 +1879,7 @@ function newJob() {
 function wireInputs() {
   const map = {
     builder: "builder", city: "city", address: "address", dateMeasured: "dateMeasured",
-    keywords: "keywords", gasType: "gasType", pkg: "pkg", altPkg: "altPkg",
+    keywords: "keywords", gasType: "gasType", pkg: "pkg",
     atticRetro: "atticRetro", crawlRetro: "crawlRetro", blowR: "blowR",
     flatSf: "flatSf", housePitch: "housePitch", houseCustomRise: "houseCustomRise",
     touchupPatchSf: "touchupPatchSf", marginCustom: "marginCustom",
@@ -1809,14 +1900,17 @@ function wireInputs() {
   });
 
   $("airSealed").onclick = () => { S.airSealed = !S.airSealed; render(); };
-  $("caulkFoam").onclick = () => { S.caulkFoam = !S.caulkFoam; render(); };
-  $("alsoAlt").onclick = () => { S.alsoAlt = !S.alsoAlt; render(); };
   $("includeFp").onclick = () => { S.includeFp = !S.includeFp; if (S.includeFp) loadFpSpecs(); render(); };
   $("showBallpark").onclick = () => { S.showBallpark = !S.showBallpark; render(); };
   $("showPriceLib").onclick = () => { S.showPriceLib = !S.showPriceLib; render(); };
 
   $("btnSaveArchive").onclick = savePermanent;
   $("btnSaveArchive2").onclick = savePermanent;
+  $("btnSaveArchive3").onclick = savePermanent;
+  $("btnGoOutput").onclick = () => {
+    const b = document.querySelector('.nav-btn[data-tab="output"]'); if (b) b.click();
+    window.scrollTo(0, 0);
+  };
   $("btnNewJob").onclick = newJob;
   $("btnCopyCsv").onclick = () => {
     const text = buildExcelCsv();
