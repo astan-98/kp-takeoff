@@ -340,6 +340,17 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
   </section>
 
   <section id="tab-archive" class="tabs-panel">
+    <div class="section" id="backupSection">
+      <h2>Backup / restore</h2>
+      <p class="cap">One file with every archived takeoff, your current draft, prices, fireplace specs, and Work Order data. On iPhone pick “Save to Files” → iCloud Drive.</p>
+      <div class="callout hidden" id="backupReminder"></div>
+      <div class="grid2">
+        <button type="button" class="btn btn-primary" id="btnBackup">Back up archive</button>
+        <button type="button" class="btn btn-secondary" id="btnRestore">Restore from backup</button>
+      </div>
+      <input type="file" id="restoreFile" accept=".json,application/json" class="hidden">
+      <p class="status" id="backupStatus"></p>
+    </div>
     <div class="section">
       <h2>Archive / search</h2>
       <p class="cap">Permanent saves. Filter by builder, city, owner, package, date, keywords.</p>
@@ -2179,6 +2190,7 @@ function refreshArchive() {
     }));
     S._fullJobs = jobs;
     renderArchive();
+    renderBackupInfo();
   }).catch(() => { S.idbOk = false; S.archive = []; renderArchive(); });
 }
 
@@ -2186,6 +2198,7 @@ function savePermanent() {
   const lines = allLines();
   const snap = {
     id: S.jobId,
+    savedAt: new Date().toISOString(),
     dateMeasured: S.dateMeasured || todayISO(),
     owner: S.owner,
     builder: (S.builder || "").trim(),
@@ -2356,7 +2369,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29 · pull-to-refresh";
+const APP_BUILD = "2026-10-29b";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -2447,12 +2460,194 @@ function wirePullToRefresh() {
   document.addEventListener("touchcancel", () => { ptrState = null; ptrShow(0, "hide"); }, { passive: true });
 }
 
+/* ---------- Backup / restore (merge, never wipe) ---------- */
+const BACKUP_FORMAT = "kp-takeoff-backup", BACKUP_VERSION = 1, BACKUP_LAST_KEY = "kp-takeoff-last-backup";
+const WO_DB = "kp-chafin-v1";
+function openWoDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error("IndexedDB unavailable")); return; }
+    const r = indexedDB.open(WO_DB, 1);
+    r.onupgradeneeded = () => { const d = r.result; if (!d.objectStoreNames.contains("kv")) d.createObjectStore("kv"); if (!d.objectStoreNames.contains("orders")) d.createObjectStore("orders", { keyPath: "id" }); };
+    r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
+  });
+}
+function dbReadAll(open, store, withKeys) {
+  return open().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readonly"), os = tx.objectStore(store);
+    const vals = os.getAll(), keys = withKeys ? os.getAllKeys() : null;
+    tx.oncomplete = () => { db.close(); resolve(withKeys ? keys.result.map((k, i) => ({ key: k, value: vals.result[i] })) : (vals.result || [])); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  }));
+}
+function dbWrite(open, store, fn) {
+  return open().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readwrite"); fn(tx.objectStore(store));
+    tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = () => { db.close(); reject(tx.error); };
+  }));
+}
+function buildBackup() {
+  const safe = pr => pr.catch(() => []);
+  return Promise.all([
+    safe(dbReadAll(openDb, STORE)), safe(dbReadAll(openDb, PRICE_STORE)), safe(dbReadAll(openDb, SPEC_STORE)),
+    safe(dbReadAll(openWoDb, "orders")), safe(dbReadAll(openWoDb, "kv", true))
+  ]).then(([jobs, prices, specs, orders, kv]) => {
+    saveDraft();
+    let draft = null; try { draft = JSON.parse(lsGet(DRAFT_KEY) || "null"); } catch (e) {}
+    return { format: BACKUP_FORMAT, version: BACKUP_VERSION, createdAt: new Date().toISOString(), app: APP_BUILD,
+      takeoff: { jobs, prices, fpSpecs: specs, draft },
+      workOrders: { orders, kv } };
+  });
+}
+function backupFileName(d) { d = d || new Date(); return "KP-Takeoff-backup-" + d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") + ".json"; }
+function backupStatus(msg) { const e = $("backupStatus"); if (e) e.textContent = msg || ""; }
+function markBackedUp() { lsSet(BACKUP_LAST_KEY, new Date().toISOString()); renderBackupInfo(); }
+function backupDeliver(name, text) {
+  const blob = new Blob([text], { type: "application/json" });
+  let file = null; try { file = new File([blob], name, { type: "application/json" }); } catch (e) {}
+  if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+    return navigator.share({ files: [file], title: name }).then(() => "shared", err => {
+      if (err && err.name === "AbortError") return "cancelled";
+      return backupDownload(name, blob);
+    });
+  }
+  return Promise.resolve(backupDownload(name, blob));
+}
+function backupDownload(name, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000);
+  return "downloaded";
+}
+function runBackup() {
+  backupStatus("Building backup…");
+  buildBackup().then(b => {
+    const name = backupFileName(), text = JSON.stringify(b);
+    return backupDeliver(name, text).then(how => {
+      if (how === "cancelled") { backupStatus("Backup cancelled — nothing saved."); return; }
+      markBackedUp();
+      backupStatus("Backup ready: " + name + " · " + b.takeoff.jobs.length + " takeoffs, " + b.workOrders.orders.length + " work orders" + (how === "downloaded" ? " (downloaded)" : "") + ".");
+    });
+  }).catch(e => backupStatus("Backup failed: " + (e && e.message || e)));
+}
+function validateBackup(b) {
+  if (!b || typeof b !== "object" || b.format !== BACKUP_FORMAT) return "Not a KP Takeoff backup file.";
+  if (!(n(b.version) >= 1) || n(b.version) > BACKUP_VERSION) return "Backup version " + b.version + " isn't supported by this app — pull down to refresh and try again.";
+  if (!b.takeoff || !Array.isArray(b.takeoff.jobs)) return "Backup file is missing its takeoff list.";
+  return "";
+}
+function jobStamp(j) { return String((j && (j.savedAt || j.dateMeasured)) || ""); }
+function restoreBackup(b, opts) {
+  opts = opts || {};
+  const ask = opts.confirm || (m => window.confirm(m));
+  const err = validateBackup(b); if (err) return Promise.reject(new Error(err));
+  const T = b.takeoff, W = b.workOrders || { orders: [], kv: [] };
+  const wOrders = Array.isArray(W.orders) ? W.orders : [], wKv = Array.isArray(W.kv) ? W.kv : [];
+  const summary = "Backup from " + new Date(b.createdAt).toLocaleString() + ":\n• " + T.jobs.length + " archived takeoffs\n• " + wOrders.length + " work orders\n• " +
+    (T.prices || []).length + " price entries\n\nMerge into this phone? Nothing here gets deleted — matching jobs keep whichever copy was saved last.";
+  if (!ask(summary)) return Promise.resolve(null);
+  const safe = pr => pr.catch(() => []);
+  return Promise.all([safe(dbReadAll(openDb, STORE)), safe(dbReadAll(openDb, PRICE_STORE)), safe(dbReadAll(openDb, SPEC_STORE)),
+    safe(dbReadAll(openWoDb, "orders")), safe(dbReadAll(openWoDb, "kv", true))]).then(([jobs, prices, specs, orders, kv]) => {
+    const r = { added: 0, replaced: 0, kept: 0, woAdded: 0, woReplaced: 0, woKept: 0, prices: 0, specs: 0, kv: 0, draft: false };
+    const jobMap = new Map(jobs.map(j => [j.id, j]));
+    const jobPuts = [];
+    T.jobs.forEach(j => {
+      if (!j || j.id == null) return;
+      const cur = jobMap.get(j.id);
+      if (!cur) { jobPuts.push(j); r.added++; }
+      else if (jobStamp(j) > jobStamp(cur)) { jobPuts.push(j); r.replaced++; }
+      else r.kept++;
+    });
+    const priceMap = new Map(prices.map(p => [p.materialKey, p]));
+    const pricePuts = (T.prices || []).filter(p => {
+      if (!p || p.materialKey == null) return false;
+      const cur = priceMap.get(p.materialKey);
+      return !cur || (String(cur.unitPrice40 || "").trim() === "" && String(p.unitPrice40 || "").trim() !== "");
+    });
+    r.prices = pricePuts.length;
+    const specIds = new Set(specs.map(x => x.modelId));
+    const specPuts = (T.fpSpecs || []).filter(x => x && x.modelId != null && !specIds.has(x.modelId)); r.specs = specPuts.length;
+    const oMap = new Map(orders.map(o => [o.id, o]));
+    const orderPuts = [];
+    wOrders.forEach(o => {
+      if (!o || o.id == null) return;
+      const cur = oMap.get(o.id);
+      if (!cur) { orderPuts.push(o); r.woAdded++; }
+      else if (String(o.at || "") > String(cur.at || "")) { orderPuts.push(o); r.woReplaced++; }
+      else r.woKept++;
+    });
+    const kvMap = new Map(kv.map(e => [e.key, e.value]));
+    const kvPuts = wKv.filter(e => {
+      if (!e || e.key == null) return false;
+      if (!kvMap.has(e.key)) return true;
+      if (e.key === "lotlog") { const a = e.value && e.value.source && e.value.source.at, c = kvMap.get(e.key) && kvMap.get(e.key).source && kvMap.get(e.key).source.at; return String(a || "") > String(c || ""); }
+      return false;
+    });
+    r.kv = kvPuts.length;
+    // Draft: only fill an empty draft automatically; otherwise ask, and never replace without a yes.
+    let draftAction = null;
+    if (T.draft && typeof T.draft === "object") {
+      const curRaw = lsGet(DRAFT_KEY), backRaw = JSON.stringify(T.draft);
+      if (curRaw !== backRaw) {
+        let curEmpty = !curRaw;
+        try { const c = JSON.parse(curRaw || "{}"); curEmpty = curEmpty || !((c.address || "").trim() || (c.builder || "").trim() || n(c.flatSf) > 0); } catch (e) { curEmpty = true; }
+        if (curEmpty || ask("Also replace the takeoff you're working on now with the in-progress one from the backup? (Cancel keeps the current one.)")) draftAction = backRaw;
+      }
+    }
+    const writes = [];
+    if (jobPuts.length) writes.push(dbWrite(openDb, STORE, os => jobPuts.forEach(j => os.put(j))));
+    if (pricePuts.length) writes.push(dbWrite(openDb, PRICE_STORE, os => pricePuts.forEach(p => os.put(p))));
+    if (specPuts.length) writes.push(dbWrite(openDb, SPEC_STORE, os => specPuts.forEach(x => os.put(x))));
+    if (orderPuts.length) writes.push(dbWrite(openWoDb, "orders", os => orderPuts.forEach(o => os.put(o))));
+    if (kvPuts.length) writes.push(dbWrite(openWoDb, "kv", os => kvPuts.forEach(e => os.put(e.value, e.key))));
+    return Promise.all(writes).then(() => {
+      if (draftAction) { S._suppressSave = true; lsSet(DRAFT_KEY, draftAction); r.draft = true; }
+      return r;
+    });
+  });
+}
+function restoreSummaryText(r) {
+  return "Restored: " + r.added + " new takeoffs, " + r.replaced + " updated, " + r.kept + " already up to date · work orders " + r.woAdded + " new, " + r.woReplaced + " updated" +
+    (r.prices ? " · " + r.prices + " prices" : "") + (r.draft ? " · in-progress takeoff restored" : "") + ".";
+}
+function runRestore(file) {
+  if (!file) return;
+  backupStatus("Reading " + file.name + "…");
+  file.text().then(txt => {
+    let b; try { b = JSON.parse(txt); } catch (e) { throw new Error("That file isn't valid JSON."); }
+    return restoreBackup(b);
+  }).then(r => {
+    if (!r) { backupStatus("Restore cancelled — nothing changed."); return; }
+    const msg = restoreSummaryText(r);
+    backupStatus(msg + " Reloading…");
+    window.alert(msg + "\n\nThe app will reload to show everything.");
+    const u = new URL(window.location.href); u.searchParams.set("v", String(Date.now())); ptrNavigate(u.toString());
+  }).catch(e => backupStatus("Restore failed: " + (e && e.message || e) + " Nothing was changed."));
+}
+function renderBackupInfo() {
+  const box = $("backupReminder"); if (!box) return;
+  const last = lsGet(BACKUP_LAST_KEY);
+  const days = last ? Math.floor((Date.now() - new Date(last).getTime()) / 86400000) : null;
+  const jobs = (S.archive || []).length;
+  let html = "<strong>Last backup:</strong> " + (last ? new Date(last).toLocaleDateString() + (days > 0 ? " (" + days + " day" + (days === 1 ? "" : "s") + " ago)" : " (today)") : "never");
+  if (jobs > 0 && (days === null || days >= 7)) html += "<br>" + (days === null ? "You haven't backed up yet" : "It's been over a week") + " — tap <em>Back up archive</em> and save it to iCloud Drive.";
+  box.innerHTML = html;
+  box.classList.remove("hidden");
+}
+function wireBackup() {
+  const b = $("btnBackup"), r = $("btnRestore"), f = $("restoreFile");
+  if (b) b.onclick = runBackup;
+  if (r && f) { r.onclick = () => { f.value = ""; f.click(); }; f.onchange = () => runRestore(f.files && f.files[0]); }
+  renderBackupInfo();
+}
+
 function init() {
   restoreDraft();
   if (!$("dateMeasured").value) S.dateMeasured = todayISO();
   wireInputs();
   wirePullToRefresh();
   showVersion();
+  wireBackup();
   idbGetAllPrices().then(stored => { S.priceLibrary = mergePriceLibrary(stored); render(); })
     .catch(() => { S.priceLibrary = mergePriceLibrary([]); render(); });
   refreshArchive();
