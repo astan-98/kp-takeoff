@@ -16,7 +16,7 @@
   /* 29aw: KP palette — brand red for primary/selected, dark red pressed, light red tint for selected/info, near-black text, neutral grays (no blue) */
   --bg: #f6f5f5; --bg2: #ffffff; --bg3: #ecebeb; --text: #252223; --text2: #6b6667;
   --accent: #ad2f32; --accent-press: #8e2528; --accent-soft: #f8e9e9; --accent-ink: #ad2f32; --danger: #9b1c1c; --ok: #30d158;
-  --warn: #ff9f0a; --line: #dcd8d8;
+  --warn: #ff9f0a; --line: #dcd8d8; --nav-off: #6e6a6b;
   --err-bg: #fff3a3; --err-ink: #252223; --err-border: #f5c400; /* 29aw: errors = bright yellow highlight (not red, not orange) */ --border: rgba(0,0,0,.1); --shadow: 0 2px 12px rgba(0,0,0,.08); --radius: 14px;
   --nav-h: 64px; --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
 }
@@ -24,7 +24,7 @@
   :root {
     --bg: #000000; --bg2: #1e1c1c; --bg3: #2e2b2b; --text: #f6f4f4; --text2: #a39d9e;
     --accent: #b8353a; --accent-press: #8e2528; --accent-soft: rgba(173,47,50,.32); --accent-ink: #ff8f8f; --danger: #ff7b72; --ok: #30d158;
-    --warn: #ff9f0a; --line: #3a3636;
+    --warn: #ff9f0a; --line: #3a3636; --nav-off: #b3adae;
     --err-bg: rgba(255,214,0,.18); --err-ink: #ffe066; --err-border: #ffd60a; --border: rgba(255,255,255,.12); --shadow: 0 2px 16px rgba(0,0,0,.45);
   }
 }
@@ -192,9 +192,10 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .nav-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; color: var(--text2); font-size: .68rem; font-weight: 600; min-height: var(--nav-h);
+  gap: 3px; color: var(--nav-off); font-size: 11px; font-weight: 600; min-height: var(--nav-h);
 }
-.nav-btn .ico { font-size: 1.2rem; line-height: 1; }
+.nav-btn .ico { font-size: 1.2rem; line-height: 1; height: 24px; display: flex; align-items: center; justify-content: center; }
+.nav-btn .ico .tab-ico { width: 24px; height: 24px; display: block; }
 .nav-btn.active { color: var(--accent-ink); }
 .hidden { display: none !important; }
 /* 29as: Save to archive pinned above the bottom nav on the Wizard + Excel tabs (safe-area aware; body gets matching padding) */
@@ -357,7 +358,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <div class="toggle-row"><span>Compare packages (2–3 options)?</span><button type="button" class="switch" id="compareOn"></button></div>
         <div id="optionChipsWrap" class="hidden">
           <div class="field"><label>Options to price (pick 2–3)</label><div class="seg" id="optionChips"><button type="button" data-v="standard">Standard</button><button type="button" data-v="total_bat">Total Bat</button><button type="button" data-v="hybrid_foam_batts">Foam Roofline + Batt Walls</button><button type="button" data-v="foam_cellulose">Foam Roofline + Cellulose Walls</button><button type="button" data-v="foam_spider">Foam Roofline + Spider Walls</button><button type="button" data-v="total_foam">Total foam</button><button type="button" data-v="crawl_encap">Crawl encapsulation</button><button type="button" data-v="custom">Custom mix</button></div></div>
-          <p class="cap">Measure once. Every area any option needs is shown; the Excel tab sorts lines into a separate sheet per option (walls use each option's material).</p>
+          <p class="cap">Measure once. Every area any option needs is shown; the Summary tab sorts lines into a separate sheet per option (walls use each option's material).</p>
         </div>
       </div>
       <div id="customMixFields" class="hidden">
@@ -405,7 +406,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <div class="field"><label>Date measured</label><input id="dateMeasured" type="date"></div>
       <div class="field"><label>Keywords / notes</label><input id="keywords" placeholder="searchable notes"></div>
       <div class="grid2" style="margin-top:10px">
-        <button type="button" class="btn btn-primary" id="btnSaveArchive">Save to archive</button>
+        <button type="button" class="btn btn-primary" id="btnSaveArchive">Save to Library</button>
         <button type="button" class="btn btn-secondary" id="btnNewJob">New job</button>
       </div>
       <p class="status" id="statusNote"></p>
@@ -525,7 +526,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <div class="table-wrap" id="outputTable"></div>
       <div class="grid2">
         <button type="button" class="btn btn-primary" id="btnCopyCsv">Copy Excel CSV</button>
-        <button type="button" class="btn btn-secondary" id="btnSaveArchive2">Save to archive</button>
+        <button type="button" class="btn btn-secondary" id="btnSaveArchive2">Save to Library</button>
       </div>
       <div class="divider"></div>
       <h2>Work order → Sky</h2>
@@ -555,17 +556,17 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
   <section id="tab-archive" class="tabs-panel">
     <div class="section" id="backupSection">
       <h2>Backup / restore</h2>
-      <p class="cap">One file with every archived takeoff, your current draft, prices, fireplace specs, and Work Order data. On iPhone pick “Save to Files” → iCloud Drive.</p>
+      <p class="cap">One file with every takeoff in your Library, your current draft, prices, fireplace specs, and Chafin work order data. On iPhone pick “Save to Files” → iCloud Drive.</p>
       <div class="callout hidden" id="backupReminder"></div>
       <div class="grid2">
-        <button type="button" class="btn btn-primary" id="btnBackup">Back up archive</button>
+        <button type="button" class="btn btn-primary" id="btnBackup">Back up Library</button>
         <button type="button" class="btn btn-secondary" id="btnRestore">Restore from backup</button>
       </div>
       <input type="file" id="restoreFile" accept=".json,application/json" class="hidden">
       <p class="status" id="backupStatus"></p>
     </div>
     <div class="section">
-      <h2>Archive / search</h2>
+      <h2>Library / search</h2>
       <p class="cap">Permanent saves. Filter by builder, city, owner, package, date, keywords.</p>
       <div class="field"><label>Free-text search</label><input id="filterText" placeholder="builder, city, address…"></div>
       <div class="grid2">
@@ -598,7 +599,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
     </div>
     <div class="section">
       <h2>Chafin work orders</h2>
-      <p class="cap">Recent work orders made on the Work Order tab.</p>
+      <p class="cap">Recent work orders made on the Chafin tab.</p>
       <div id="woRecentArchive"><p class="status">None yet.</p></div>
     </div>
   </section>
@@ -695,13 +696,14 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
   </section>
 </main>
 
-<div class="save-dock hidden" id="saveDock"><div id="saveDockRow"><button type="button" class="btn btn-primary" id="btnSaveDock">Save to archive</button></div></div>
+<div class="save-dock hidden" id="saveDock"><div id="saveDockRow"><button type="button" class="btn btn-primary" id="btnSaveDock">Save to Library</button></div></div>
 <nav class="bottom-nav">
-  <button type="button" class="nav-btn active" data-tab="wizard"><span class="ico">📋</span>Wizard</button>
-  <button type="button" class="nav-btn" data-tab="output"><span class="ico">📊</span>Excel</button>
-  <button type="button" class="nav-btn" data-tab="archive"><span class="ico">🗂️</span>Archive</button>
-  <button type="button" class="nav-btn" data-tab="workorder"><span class="ico">🏗️</span>Work Order</button>
-  <button type="button" class="nav-btn" data-tab="pricing"><span class="ico">💰</span>Pricing</button>
+  <!-- 29aw: tab labels Measure / Summary / Library / Pricing (internal data-tab keys unchanged); approved Lucide line icons (ISC), currentColor -->
+  <button type="button" class="nav-btn active" data-tab="wizard"><span class="ico"><svg class="tab-ico" data-icon="pencil-ruler" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13" /> <path d="m8 6 2-2" /> <path d="m18 16 2-2" /> <path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17" /> <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /> <path d="m15 5 4 4" /></svg></span>Measure</button>
+  <button type="button" class="nav-btn" data-tab="output"><span class="ico"><svg class="tab-ico" data-icon="table" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18" /> <rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M3 9h18" /> <path d="M3 15h18" /></svg></span>Summary</button>
+  <button type="button" class="nav-btn" data-tab="archive"><span class="ico"><svg class="tab-ico" data-icon="archive" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="5" x="2" y="3" rx="1" /> <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /> <path d="M10 12h4" /></svg></span>Library</button>
+  <button type="button" class="nav-btn" data-tab="workorder"><span class="ico ico-chafin"><svg class="tab-ico" data-icon="home-check" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2" /> <path d="M19 13.488v-1.488h2l-9 -9l-9 9h2v7a2 2 0 0 0 2 2h4.525" /> <path d="M15 19l2 2l4 -4" /></svg></span>Chafin</button>
+  <button type="button" class="nav-btn" data-tab="pricing"><span class="ico"><svg class="tab-ico" data-icon="circle-dollar-sign" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /> <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" /> <path d="M12 18V6" /></svg></span>Pricing</button>
 </nav>
 
 <script>
@@ -2935,7 +2937,7 @@ function renderAssemblyEditors() {
     if (foamCompareOn()) card.appendChild(ccDepthPicker("Closed-cell depth (Option B)", ccDepthJob(), v => { S.ccFoamDepth = v; render(); }));
     else if (foamTypeJob() === "cc") card.appendChild(ccDepthPicker("Closed-cell depth (job)", ccDepthJob(), v => { S.ccFoamDepth = v; render(); }));
     if ((foamCompareOn() || foamTypeJob() === "cc") && !ccDepthJob()) card.appendChild(ccPickWarn("No default depth — pick the job closed-cell depth" + (foamCompareOn() ? " for Option B" : "") + " (or a depth on each area)."));
-    card.appendChild(el("p", "cap", foamCompareOn() ? "Compare: every foam row is priced both ways — A open cell (its OC depth) and B closed cell (depth above). Rows that pick their own foam type, concrete basement walls and crawl walls stay the same in both. Excel tab shows the side-by-side; exports ask which option." :
+    card.appendChild(el("p", "cap", foamCompareOn() ? "Compare: every foam row is priced both ways — A open cell (its OC depth) and B closed cell (depth above). Rows that pick their own foam type, concrete basement walls and crawl walls stay the same in both. Summary tab shows the side-by-side; exports ask which option." :
       "Every foam row uses this unless the row picks its own foam type. Concrete basement walls are always closed cell."));
     if (foamCompareOn()) { try { const d = el("div", "table-wrap"); d.innerHTML = foamCompareTotalsHtml(foamCompare()); card.appendChild(d); } catch (e) {} }
     box.appendChild(card);
@@ -3700,7 +3702,7 @@ function renderArchive() {
   const list = $("archiveList");
   list.innerHTML = "";
   if (!filtered.length) {
-    list.innerHTML = "<p class='status'>No archived jobs match — save from the wizard to build the archive.</p>";
+    list.innerHTML = "<p class='status'>No saved jobs match — save from Measure to build your Library.</p>";
     return;
   }
   filtered.forEach(j => {
@@ -3716,9 +3718,9 @@ function renderArchive() {
     open.onclick = () => openArchiveJob(j.id);
     const del = el("button", "btn btn-danger btn-sm"); del.type = "button"; del.textContent = "Delete";
     del.onclick = () => {
-      if (!confirm("Delete this archived takeoff?")) return;
+      if (!confirm("Delete this takeoff from the Library?")) return;
       const full = (S._fullJobs || []).find(x => x.id === j.id), pids = ((full && full.draft && full.draft.photos) || []).map(x => x && x.id).filter(Boolean);
-      idbDelete(j.id).then(() => { setStatus("Deleted from archive."); refreshArchive(); photoForget(pids, j.id); }).catch(() => setStatus("Delete failed."));
+      idbDelete(j.id).then(() => { setStatus("Deleted from Library."); refreshArchive(); photoForget(pids, j.id); }).catch(() => setStatus("Delete failed."));
     };
     const send = el("button", "btn btn-secondary btn-sm"); send.type = "button"; send.textContent = "Send to " + twoWho("walls").name;
     send.onclick = ev => { ev.stopPropagation(); archSendOne(j.id); };
@@ -3955,7 +3957,7 @@ function batchOpen(ids) {
   };
   const have = S._fullJobs || [];
   if (ids.every(id => have.some(j => j.id === id))) return go(have);
-  return idbGetAll().then(all => { S._fullJobs = all; return go(all); }).catch(() => setStatus("Couldn't read the archive."));
+  return idbGetAll().then(all => { S._fullJobs = all; return go(all); }).catch(() => setStatus("Couldn't read the Library."));
 }
 function batchRender(st) {
   const body = $("batchBody"), foot = $("batchFoot"); if (!body || !foot) return;
@@ -4413,8 +4415,8 @@ function savePermanent() {
     draft: draftPayload()
   };
   const prev = (S._fullJobs || []).find(j => j.id === S.jobId), prevPh = ((prev && prev.draft && prev.draft.photos) || []).map(x => x && x.id).filter(Boolean);
-  idbPut(snap).then(() => { setStatus("Saved permanently to archive."); refreshArchive(); if (prevPh.length) photoForget(prevPh, S.jobId); })
-    .catch(() => { S.idbOk = false; setStatus("Archive save failed (IndexedDB blocked). Draft still autosaved."); });
+  idbPut(snap).then(() => { setStatus("Saved permanently to Library."); refreshArchive(); if (prevPh.length) photoForget(prevPh, S.jobId); })
+    .catch(() => { S.idbOk = false; setStatus("Library save failed (IndexedDB blocked). Draft still autosaved."); });
 }
 
 function openArchiveJob(id) {
@@ -4426,7 +4428,7 @@ function openArchiveJob(id) {
         S._fullJobs = all;
         const j = all.find(x => x.id === id);
         if (j) applySnapshot(j);
-        else setStatus("Could not open job from archive.");
+        else setStatus("Could not open job from Library.");
       });
       return;
     }
@@ -4829,7 +4831,7 @@ function addPhotos(files) {
       saveDraft(); renderPhotos();
     });
   }).catch(() => { failed++; })), Promise.resolve()).then(() => {
-    photoStatus(done + " photo" + (done === 1 ? "" : "s") + " added" + (failed ? " · " + failed + " couldn't be saved" : "") + ". Tap Save to archive to keep them with the job.");
+    photoStatus(done + " photo" + (done === 1 ? "" : "s") + " added" + (failed ? " · " + failed + " couldn't be saved" : "") + ". Tap Save to Library to keep them with the job.");
   });
 }
 function removePhoto(id) {
@@ -4970,7 +4972,7 @@ function restoreBackup(b, opts) {
   const err = validateBackup(b); if (err) return Promise.reject(new Error(err));
   const T = b.takeoff, W = b.workOrders || { orders: [], kv: [] };
   const wOrders = Array.isArray(W.orders) ? W.orders : [], wKv = Array.isArray(W.kv) ? W.kv : [];
-  const summary = "Backup from " + new Date(b.createdAt).toLocaleString() + ":\n• " + T.jobs.length + " archived takeoffs\n• " + wOrders.length + " work orders\n• " +
+  const summary = "Backup from " + new Date(b.createdAt).toLocaleString() + ":\n• " + T.jobs.length + " takeoffs in the Library\n• " + wOrders.length + " work orders\n• " +
     (T.prices || []).length + " price entries\n\nMerge into this phone? Nothing here gets deleted — matching jobs keep whichever copy was saved last.";
   if (!ask(summary)) return Promise.resolve(null);
   const safe = pr => pr.catch(() => []);
@@ -5072,7 +5074,7 @@ function renderBackupInfo() {
   const days = last ? Math.floor((Date.now() - new Date(last).getTime()) / 86400000) : null;
   const jobs = (S.archive || []).length;
   let html = "<strong>Last backup:</strong> " + (last ? new Date(last).toLocaleDateString() + (days > 0 ? " (" + days + " day" + (days === 1 ? "" : "s") + " ago)" : " (today)") : "never");
-  if (jobs > 0 && (days === null || days >= 7)) html += "<br>" + (days === null ? "You haven't backed up yet" : "It's been over a week") + " — tap <em>Back up archive</em> and save it to iCloud Drive.";
+  if (jobs > 0 && (days === null || days >= 7)) html += "<br>" + (days === null ? "You haven't backed up yet" : "It's been over a week") + " — tap <em>Back up Library</em> and save it to iCloud Drive.";
   box.innerHTML = html;
   box.classList.remove("hidden");
 }
