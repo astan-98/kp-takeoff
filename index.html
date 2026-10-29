@@ -323,6 +323,13 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <h2>Air sealing</h2>
       <p class="cap">Air sealing = caulk &amp; foam package (base plate / openings / penetrations). One line item.</p>
       <div class="toggle-row"><span>Air seal?</span><button type="button" class="switch" id="airSealed"></button></div>
+      <div class="field hidden" id="airSealAddonField"><label>Air seal add-on $ (above-average house, added to the $300)</label><input id="airSealAddon" type="number" inputmode="decimal" placeholder="0"></div>
+      <div class="divider"></div>
+      <h2>Extra labor</h2>
+      <div class="grid2">
+        <div class="field"><label>Extra labor $</label><input id="extraLabor" type="number" inputmode="decimal" placeholder="0"></div>
+        <div class="field"><label>Note (optional)</label><input id="extraLaborNote" placeholder="tough access, steep roof…"></div>
+      </div>
     </div>
 
     <div class="section" id="sec-fp">
@@ -504,33 +511,48 @@ const DRAFT_KEY = "kp-takeoff-draft-v1";
 const MARGIN_FLOOR = 30;
 const MARGIN_BASE = 40;
 
+// Asher's unit prices at 40% margin (Oct 29 2026). Saved phone prices always win; blanks fall back to these.
 const DEFAULT_PRICE_KEYS = [
-  { materialKey: "Blown fiberglass", unit: "SF" },
-  { materialKey: "Blown fiberglass R-19", unit: "SF" },
-  { materialKey: "Blown fiberglass R-30", unit: "SF" },
-  { materialKey: "Blown fiberglass R-38", unit: "SF" },
-  { materialKey: "Blown fiberglass R-49", unit: "SF" },
-  { materialKey: "R-49 fiberglass batts", unit: "SF" },
-  { materialKey: "R-38 fiberglass batts", unit: "SF" },
-  { materialKey: "R-30 fiberglass batts", unit: "SF" },
-  { materialKey: "R-19 fiberglass batts", unit: "SF" },
-  { materialKey: "R-13 fiberglass batts", unit: "SF" },
-  { materialKey: "Fiberglass batts", unit: "SF" },
-  { materialKey: "Open-cell spray foam", unit: "SF" },
-  { materialKey: "Closed-cell spray foam", unit: "SF" },
-  { materialKey: "Spray foam", unit: "SF" },
-  { materialKey: "Cellulose", unit: "SF" },
-  { materialKey: "Spider", unit: "SF" },
-  { materialKey: "Rock wool", unit: "SF" },
-  { materialKey: "House wrap", unit: "SF" },
-  { materialKey: "Poly vent", unit: "Ea" },
-  { materialKey: "Cardboard baffles", unit: "Ea" },
-  { materialKey: "6 mil poly", unit: "SF" },
-  { materialKey: "10 mil poly", unit: "SF" },
-  { materialKey: "Netting", unit: "SF" },
-  { materialKey: "Dehumidifier", unit: "Ea" },
-  { materialKey: "Air seal", unit: "Ea" },
-  { materialKey: "Labor", unit: "Ea" },
+  { materialKey: "Blown fiberglass", unit: "SF", price: "" },
+  { materialKey: "Blown fiberglass R-19", unit: "SF", price: "0.55375" },
+  { materialKey: "Blown fiberglass R-30", unit: "SF", price: "0.8715333" },
+  { materialKey: "Blown fiberglass R-38", unit: "SF", price: "1.0958" },
+  { materialKey: "Blown fiberglass R-49", unit: "SF", price: "1.4021167" },
+  { materialKey: "Blown fiberglass R-19 (retro)", unit: "SF", price: "0.60375" },
+  { materialKey: "Blown fiberglass R-30 (retro)", unit: "SF", price: "0.9215333" },
+  { materialKey: "Blown fiberglass R-38 (retro)", unit: "SF", price: "1.1458" },
+  { materialKey: "Blown fiberglass R-49 (retro)", unit: "SF", price: "1.4521167" },
+  { materialKey: "Blown cellulose R30", unit: "SF", price: "" },
+  { materialKey: "Blown cellulose R38", unit: "SF", price: "" },
+  { materialKey: "R-13 fiberglass batts", unit: "SF", price: "0.63" },
+  { materialKey: "R-19 fiberglass batts", unit: "SF", price: "0.709" },
+  { materialKey: "R-30 fiberglass batts", unit: "SF", price: "1.09" },
+  { materialKey: "R-38 fiberglass batts", unit: "SF", price: "1.284" },
+  { materialKey: "R-49 fiberglass batts", unit: "SF", price: "" },
+  { materialKey: "ComfortBat R15", unit: "SF", price: "2.17" },
+  { materialKey: 'AcousticalBat 3"', unit: "SF", price: "1.5875" },
+  { materialKey: "Open-cell foam (roofline)", unit: "SF", price: "1.49" },
+  { materialKey: "Open-cell foam (walls)", unit: "SF", price: "1.13" },
+  { materialKey: 'Closed-cell foam 1"', unit: "SF", price: "1.49" },
+  { materialKey: 'Closed-cell foam 2"', unit: "SF", price: "2.48" },
+  { materialKey: 'Closed-cell foam 3"', unit: "SF", price: "3.48" },
+  { materialKey: 'Cellulose walls 3.5"', unit: "SF", price: "1.07" },
+  { materialKey: 'Cellulose walls 5.5"', unit: "SF", price: "1.53" },
+  { materialKey: 'Spider walls 3.5"', unit: "SF", price: "1.30" },
+  { materialKey: 'Spider walls 5.5"', unit: "SF", price: "1.89" },
+  { materialKey: "Dense-pack floors", unit: "SF", price: "1.19" },
+  { materialKey: "Attic suck-out", unit: "SF", price: "1.25" },
+  { materialKey: "Attic batt removal", unit: "SF", price: "1.25" },
+  { materialKey: "Crawl insulation removal", unit: "SF", price: "1.25" },
+  { materialKey: "6 mil poly", unit: "SF", price: "0.25" },
+  { materialKey: "10 mil poly", unit: "SF", price: "0.74" },
+  { materialKey: "Seam taping (10 mil)", unit: "SF", price: "0.17" },
+  { materialKey: "Dehumidifier", unit: "Ea", price: "2284" },
+  { materialKey: "House wrap", unit: "SF", price: "0.26" },
+  { materialKey: "Netting", unit: "SF", price: "0.26" },
+  { materialKey: "Cardboard baffles", unit: "Ea", price: "1.25" },
+  { materialKey: "Poly vent", unit: "Ea", price: "1.19" },
+  { materialKey: "Air seal", unit: "Ea", price: "300" },
 ];
 
 const FP_CATALOG = [
@@ -1024,8 +1046,13 @@ function idbGetAllPrices() {
 }
 function mergePriceLibrary(stored) {
   const map = new Map();
-  DEFAULT_PRICE_KEYS.forEach(d => map.set(d.materialKey, { materialKey: d.materialKey, unitPrice40: "", unit: d.unit }));
-  (stored || []).forEach(s => map.set(s.materialKey, { materialKey: s.materialKey, unitPrice40: s.unitPrice40 || "", unit: s.unit || "SF" }));
+  DEFAULT_PRICE_KEYS.forEach(d => map.set(d.materialKey, { materialKey: d.materialKey, unitPrice40: d.price || "", unit: d.unit }));
+  (stored || []).forEach(s => {
+    const v = String(s.unitPrice40 == null ? "" : s.unitPrice40).trim();
+    const cur = map.get(s.materialKey);
+    if (v === "" && cur) return; // blank saved price → keep the built-in default
+    map.set(s.materialKey, { materialKey: s.materialKey, unitPrice40: v, unit: s.unit || (cur && cur.unit) || "SF" });
+  });
   return Array.from(map.values()).sort((a, b) => a.materialKey.localeCompare(b.materialKey));
 }
 
@@ -1051,7 +1078,7 @@ const S = {
   pkg: "standard",
   compareOn: false, optionPkgs: ["standard", "hybrid_foam_batts"], optionView: 0,
   customRoofs: ["blow"], customWallList: ["batt"], customBlowSf: "", customBlowR: "R-38", customBattSf: "", customAtticBattR: "R-38",
-  airSealed: false,
+  airSealed: false, airSealAddon: "", extraLabor: "", extraLaborNote: "", ccDepth: "2",
   flatSf: "",
   housePitch: "6",
   houseCustomRise: "",
@@ -1207,12 +1234,14 @@ function buildLinesForPackage(p, tag) {
   const housePitchFactor = resolvePitchFactor(S.housePitch, S.houseCustomRise);
 
   if (F.atticNeedsRemoval) {
-    push(lines, { area: site, assembly: "Attic prep", product: "Labor",
-      description: (S.atticRetro === "suck_foam" || S.atticRetro === "suck_blow") ? "Suck-out existing attic" : "Batt removal (attic)",
-      footage: 1, unit: "ea", notes: noteTag + "Prep" });
+    const suck = S.atticRetro === "suck_foam" || S.atticRetro === "suck_blow";
+    push(lines, { area: "Attic", assembly: "Attic prep", product: suck ? "Attic suck-out" : "Attic batt removal",
+      description: suck ? "Suck-out existing attic" : "Batt removal (attic)",
+      footage: round2(flat), unit: "SF", notes: noteTag + "Attic flat SF" });
   }
   if (F.crawlIsReplace || F.crawlIsEncap) {
-    push(lines, { area: site, assembly: "Crawl prep", product: "Labor", description: "Remove existing crawl insulation", footage: 1, unit: "ea", notes: noteTag + "Prep" });
+    const crawlSf = S.subfloorOverride.trim() !== "" ? n(S.subfloorOverride) : flat;
+    push(lines, { area: "Crawl", assembly: "Crawl prep", product: "Crawl insulation removal", description: "Remove existing crawl insulation", footage: round2(crawlSf), unit: "SF", notes: noteTag + "Crawl SF" });
   }
   if (F.crawlIsTouchup && n(S.touchupPatchSf) > 0) {
     push(lines, { area: site, assembly: "Crawl touch-up", product: "R-19 fiberglass batts", description: "R19 touch-up / patch", footage: round2(n(S.touchupPatchSf)), unit: "SF", notes: noteTag + "Patched zone SF" });
@@ -1255,7 +1284,7 @@ function buildLinesForPackage(p, tag) {
       const calc = derivedCalc;
       {
         const rLabel = F.isNew ? "R-38" : F.atticBlowR;
-        push(lines, { area: "Attic", assembly: "Attic blow", product: "Blown fiberglass", priceKey: "Blown fiberglass " + rLabel, description: rLabel.replace("R-", "R") + "/24",
+        push(lines, { area: "Attic", assembly: "Attic blow", product: "Blown fiberglass", priceKey: "Blown fiberglass " + rLabel + (F.isNew ? "" : " (retro)"), description: rLabel.replace("R-", "R") + "/24",
           footage: round2(blow), unit: "SF", notes: noteTag + calc });
       }
     }
@@ -1362,7 +1391,8 @@ function buildLinesForPackage(p, tag) {
     if (S.hasCrawlWalls) {
       S.crawlWalls.forEach(r => {
         const sf = n(r.length) * n(r.height); if (sf <= 0) return;
-        push(lines, { area: "Crawl wall", assembly: "Crawl wall foam", product: "Closed-cell spray foam", description: '1.5" CC', footage: round2(sf), unit: "SF", notes: noteTag });
+        const dep = ["1", "2", "3"].includes(String(S.ccDepth)) ? String(S.ccDepth) : "2";
+        push(lines, { area: "Crawl wall", assembly: "Crawl wall foam", product: "Closed-cell spray foam", priceKey: 'Closed-cell foam ' + dep + '"', description: dep + '" CC', footage: round2(sf), unit: "SF", notes: noteTag });
       });
     }
     push(lines, { area: "Crawl", assembly: "Dehumidifier", product: "Dehumidifier", description: "Install included", footage: 1, unit: "ea", notes: noteTag });
@@ -1476,7 +1506,11 @@ function buildLinesForPackage(p, tag) {
     });
   }
 
-  if (S.airSealed) push(lines, { area: site, assembly: "Air seal (caulk & foam)", product: "Air seal", description: "Caulk & foam — base plate / openings / penetrations", footage: 1, unit: "ea", notes: noteTag });
+  if (S.airSealed) {
+    push(lines, { area: site, assembly: "Air seal (caulk & foam)", product: "Air seal", description: "Caulk & foam — base plate / openings / penetrations", footage: 1, unit: "ea", notes: noteTag });
+    if (n(S.airSealAddon) > 0) push(lines, { area: site, assembly: "Air seal add-on", product: "Air seal add-on", description: "Above-average house +$" + fmt(round2(n(S.airSealAddon))), footage: 1, unit: "ea", dollars: round2(n(S.airSealAddon)), notes: noteTag + "$ amount @ 40%" });
+  }
+  if (n(S.extraLabor) > 0) push(lines, { area: site, assembly: "Extra labor", product: "Extra labor", description: "$" + fmt(round2(n(S.extraLabor))) + ((S.extraLaborNote || "").trim() ? " — " + S.extraLaborNote.trim() : ""), footage: 1, unit: "ea", dollars: round2(n(S.extraLabor)), notes: noteTag + "$ amount @ 40%" });
 
   if (S.gasType === "idk") {
     push(lines, { area: site, assembly: "Gas type", product: "CONFIRM WITH BUILDER", description: "Gas type unknown — confirm before quoting propane kit", footage: 0, unit: "—", notes: noteTag + "Do NOT auto-add propane conversion kit" });
@@ -1484,6 +1518,11 @@ function buildLinesForPackage(p, tag) {
     push(lines, { area: site, assembly: "Gas type", product: "Propane", description: "Propane noted (kit not auto-added)", footage: 1, unit: "ea", notes: noteTag });
   }
 
+  // 10 mil poly always gets seam taping at the same SF
+  lines.slice().forEach(L => {
+    if (L.product === "10 mil poly" && n(L.footage) > 0)
+      lines.splice(lines.indexOf(L) + 1, 0, Object.assign({ bags: "" }, { area: L.area, assembly: "Seam taping", product: "Seam taping (10 mil)", description: "Tape 10 mil poly seams", footage: L.footage, unit: "SF", notes: noteTag }));
+  });
   if (S.includeFp) appendFpLines(lines, noteTag);
   return mergeLikeLines(lines, noteTag);
 }
@@ -1495,7 +1534,7 @@ function mergeLikeLines(lines, noteTag) {
   const section = a => String(a || "").replace(/^(Gable)\s*\([^)]*\)\s*$/, "$1").trim();
   const out = [], groups = new Map();
   lines.forEach(L => {
-    if (L.area === "Fireplace" || L.unit === "—" || L.bags) { out.push(L); return; }
+    if (L.area === "Fireplace" || L.unit === "—" || L.bags || L.dollars != null) { out.push(L); return; }
     const desc = stripNum(L._mergeDesc != null ? L._mergeDesc : L.description);
     const key = [section(L.assembly), L.product, desc, L.unit].join("|");
     let g = groups.get(key);
@@ -1612,6 +1651,25 @@ function marginPct() {
   return S.marginPick === "custom" ? clampMargin(n(S.marginCustom)) : clampMargin(n(S.marginPick));
 }
 
+// Which price-library entry a generated line uses.
+function priceKeyFor(L) {
+  if (L.priceKey) return L.priceKey;
+  const pr = String(L.product || ""), d = String(L.description || ""), a = String(L.assembly || "");
+  if (pr === "Open-cell spray foam" || pr === "Spray foam") return /3\.5"/.test(d) ? "Open-cell foam (walls)" : "Open-cell foam (roofline)";
+  if (pr === "Closed-cell spray foam") { const m = d.match(/(\d(?:\.\d)?)"/); return 'Closed-cell foam ' + (m ? m[1] : "2") + '"'; }
+  if (pr === "Rock wool") return /ComfortBat/i.test(d) ? "ComfortBat R15" : 'AcousticalBat 3"';
+  if (pr === "Cellulose" || pr === "Spider") {
+    if (a === "Floor dense-pack") return "Dense-pack floors";
+    const depth = /5\.5"/.test(d) ? '5.5"' : /3\.5"/.test(d) ? '3.5"' : "";
+    if (depth && (/^Wall/.test(a) || a === "Interior walls")) return pr + " walls " + depth;
+    if (pr === "Cellulose") { const r = d.match(/R(30|38)/); if (r) return "Blown cellulose R" + r[1]; }
+    return pr;
+  }
+  if (pr === "Blown fiberglass") { const r = d.match(/R-?(19|30|38|49)/); if (r) return "Blown fiberglass R-" + r[1]; }
+  if (pr === "Fiberglass batts") return "R-13 fiberglass batts";
+  return pr;
+}
+function lineIsUnpriced(L) { return L.area === "Fireplace" || (L.footage === 0 && L.unit === "—") || L.assembly === "Gas type"; }
 function ballpark(linesArg) {
   const scale = marginPct() / MARGIN_BASE;
   const priceMap = new Map();
@@ -1619,14 +1677,17 @@ function ballpark(linesArg) {
   let total = 0, pricedLines = 0, unpricedLines = 0;
   const missing = new Set();
   (linesArg || allLines()).forEach(L => {
-    if (L.footage === 0 && L.unit === "—") return;
-    let unit40 = L.priceKey ? priceMap.get(L.priceKey) : undefined;
+    if (lineIsUnpriced(L)) return;
+    if (L.dollars != null) { total += n(L.dollars) * scale; pricedLines++; return; }
+    const pk = priceKeyFor(L);
+    let unit40 = priceMap.get(pk);
+    if (unit40 === undefined && / \(retro\)$/.test(pk)) { const b = priceMap.get(pk.replace(/ \(retro\)$/, "")); if (b !== undefined) unit40 = b + 0.05; }
     if (unit40 === undefined) unit40 = priceMap.get(L.product);
     if (unit40 === undefined && L.product) {
       const key = String(L.product).trim().toLowerCase();
       priceMap.forEach((v, k) => { if (unit40 === undefined && k.trim().toLowerCase() === key) unit40 = v; });
     }
-    if (unit40 === undefined || unit40 <= 0) { unpricedLines++; missing.add(L.product); return; }
+    if (unit40 === undefined || unit40 <= 0) { unpricedLines++; missing.add(pk); return; }
     total += L.footage * unit40 * scale;
     pricedLines++;
   });
@@ -1954,6 +2015,7 @@ function renderAssemblyEditors() {
     box.appendChild(card);
   }
   if (F.canAskCrawlEncap && S.hasCrawlWalls) {
+    box.appendChild(fieldSelect("Closed-cell depth", ["1", "2", "3"].includes(String(S.ccDepth)) ? String(S.ccDepth) : "2", [["1",'1"'],["2",'2"'],["3",'3"']], v => { S.ccDepth = v; render(); }));
     S.crawlWalls.forEach((r, idx) => {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Crawl wall #' + (idx+1) + '</div>';
@@ -2489,6 +2551,10 @@ function render() {
   toggleField("houseCustomRiseField", S.housePitch === "custom");
 
   setSwitch($("airSealed"), S.airSealed);
+  toggleField("airSealAddonField", !!S.airSealed);
+  if (document.activeElement !== $("airSealAddon")) $("airSealAddon").value = S.airSealAddon || "";
+  if (document.activeElement !== $("extraLabor")) $("extraLabor").value = S.extraLabor || "";
+  if (document.activeElement !== $("extraLaborNote")) $("extraLaborNote").value = S.extraLaborNote || "";
 
   // pitch select
   const hp = $("housePitch");
@@ -2677,7 +2743,7 @@ function newJob() {
   S.porchFlat = ""; S.includePorchCeiling = true; S.porchCeilMat = "batt_r19"; S.porchRoofPitch = "6";
   S.hasBetweenFloors = false; S.betweenFloors = [newBetweenFloor()];
   S.crawlNewSf = ""; S.crawlNewR = "R-19"; S.crawlNewOc = "16"; S.crawlNewPoly = false; S.crawlNewPolySf = ""; S.crawlNewPolyMil = "6";
-  S.airSealed = false;
+  S.airSealed = false; S.airSealAddon = ""; S.extraLabor = ""; S.extraLaborNote = ""; S.ccDepth = "2";
   S.flatSf = ""; S.housePitch = "6";
   S.hasDeadAir = false; S.hasVaults = false; S.hasKnees = false; S.hasBaffles = false;
   S.hasRim = false; S.hasWalls = true; S.hasInteriorWalls = false; S.hasGables = false; S.hasCants = false;
@@ -2712,6 +2778,7 @@ function wireInputs() {
     atticRetro: "atticRetro", crawlRetro: "crawlRetro", blowR: "blowR",
     flatSf: "flatSf", housePitch: "housePitch", houseCustomRise: "houseCustomRise",
     touchupPatchSf: "touchupPatchSf", marginCustom: "marginCustom",
+    airSealAddon: "airSealAddon", extraLabor: "extraLabor", extraLaborNote: "extraLaborNote",
     filterText: "filterText", filterBuilder: "filterBuilder", filterCity: "filterCity",
     filterOwner: "filterOwner", filterPkg: "filterPkg", filterFrom: "filterFrom", filterTo: "filterTo"
   };
@@ -2790,7 +2857,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29e";
+const APP_BUILD = "2026-10-29f";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
