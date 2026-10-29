@@ -1951,7 +1951,7 @@ function buildLinesForPackage(p, tag) {
       const oc = String(r.oc || "16");
       const name = "Knee walls";
       const part = { name, txt: (r.shape === "triangle" ? "△ " : "") + fmt(n(r.height)) + "'×" + fmt(n(r.lf)) + " LF" + (r.shape === "triangle" ? "÷2" : "") };
-      addKnee("batt|R-19 fiberglass batts|R19|" + oc, { assembly: "Knee wall", product: "R-19 fiberglass batts", description: "R19/" + wallWidthLabel(oc) + " / " + oc + " OC" }, sf, part);
+      addKnee("batt|R-19 fiberglass batts|R19|" + oc, { assembly: "Knee wall", product: "R-19 fiberglass batts", description: "R19/" + wallWidthLabel(oc) }, sf, part);
       if (r.wrap) addKnee("wrap|House wrap|" + oc, { assembly: "Knee wrap", product: "House wrap", description: "Open knee wrap / " + oc + " OC" }, sf, part);
     });
     kneeGroups.forEach(g => {
@@ -2025,7 +2025,7 @@ function buildLinesForPackage(p, tag) {
       const lf = n(r.lf); if (lf <= 0) return;
       push(lines, { area: "Rim joist", assembly: "Band / rim",
         product: totalFoam ? "Open-cell spray foam" : "R-19 fiberglass batts",
-        description: totalFoam ? '3.5" OC band ×1.2' : "R19/" + battW(r.oc, "16") + " band ×1.2",
+        description: totalFoam ? '3.5" OC band' : "R19/" + battW(r.oc, "16"),
         footage: round2(lf * 1.2), unit: "LF", notes: noteTag + fmt(lf) + " LF × 1.2" });
     });
   }
@@ -3621,7 +3621,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29q";
+const APP_BUILD = "2026-10-29r";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
