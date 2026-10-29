@@ -835,6 +835,11 @@ function wallInside(oc) { return oc === "16" ? 15 : oc === "19" ? 18 : 24; }
 // Width shown in Excel descriptions: 15 / 19 / 24 — 19 OC never merges with 16 or 24.
 function wallWidthLabel(oc) { return oc === "16" ? 15 : oc === "19" ? 19 : 24; }
 const OC_CHOICES = [["16", "16 OC"], ["19", "19 OC"], ["24", "24 OC"]];
+// Batt / roll width picker (build j) for every batt area that isn't a wall: shows in the description (R38/16 · R38/19 · R38/24), splits merges, drives the FG item.
+const BATT_W_CHOICES = [["16", '16"'], ["19", '19"'], ["24", '24"']];
+function battW(v, def) { v = String(v == null ? "" : v); return v === "16" || v === "19" || v === "24" ? v : def; }
+const BATT_W_DEFAULTS = { deadAir: "24", vault: "16", rim: "16", cant: "16", betweenFloors: "16", gable: "16",
+  garageCeilOc: "16", porchCeilOc: "16", crawlSubOc: "16", ufbcOc: "16", touchupOc: "16", customAtticBattOc: "24" };
 function wallHeightFt(row) { return row.height === "custom" ? n(row.customHeight) : n(row.height); }
 function wallFactor(row) {
   const h = wallHeightFt(row);
@@ -1096,7 +1101,7 @@ const S = {
   blowR: "R-38",
   pkg: "standard",
   compareOn: false, optionPkgs: ["standard", "hybrid_foam_batts"], optionView: 0,
-  customRoofs: ["blow"], customWallList: ["batt"], customBlowSf: "", customBlowR: "R-38", customBattSf: "", customAtticBattR: "R-38",
+  customRoofs: ["blow"], customWallList: ["batt"], customBlowSf: "", customBlowR: "R-38", customBattSf: "", customAtticBattR: "R-38", customAtticBattOc: "24",
   airSealed: false, airSealAddon: "", extraLabor: "", extraLaborNote: "", ccDepth: "2",
   flatSf: "",
   housePitch: "6",
@@ -1115,10 +1120,10 @@ const S = {
   walls: [{ id: uid(), name: "", kind: "ext_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: "batt" }],
   gables: [{ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false }],
   cants: [{ id: uid(), name: "", sf: "", material: "r30" }],
-  garageLivingAbove: false, garageCeilingSf: "", garageCeilMat: "r19",
+  garageLivingAbove: false, garageCeilingSf: "", garageCeilMat: "r19", garageCeilOc: "16",
   garageFoamRoof: false, garageRoofFlat: "", garageRoofPitch: "6", garageRoofCustomRise: "", garageBlockAsGable: false,
   includePorchRoof: true, porchGabledOff: false, porchRoofFlat: "", porchRoofPitch: "6", porchRoofCustomRise: "",
-  porchCeilingSf: "", porchCeilMat: "batt_r19", porchJoistOc: "16",
+  porchCeilingSf: "", porchCeilMat: "batt_r19", porchJoistOc: "16", porchCeilOc: "16", touchupOc: "16",
   porchFlat: "", includePorchCeiling: true,
   hasBetweenFloors: false, betweenFloors: [newBetweenFloor()],
   crawlNewSf: "", crawlNewR: "R-19", crawlNewOc: "16", crawlNewPoly: false, crawlNewPolySf: "", crawlNewPolyMil: "6",
@@ -1126,7 +1131,7 @@ const S = {
   foamRoofs: [{ id: uid(), name: "House roof", flatSf: "", pitch: "6", customRise: "" }],
   crawlWalls: [{ id: uid(), name: "Crawl wall", length: "", height: "" }],
   pouredFloor: false, subfloorOverride: "", touchupPatchSf: "",
-  crawlSubR: "R-19", hasUfbc: false, ufbcSf: "", ufbcR: "R-19",
+  crawlSubR: "R-19", crawlSubOc: "16", hasUfbc: false, ufbcSf: "", ufbcR: "R-19", ufbcOc: "16",
   includeFp: false,
   fpMode: "nc", fpRetroKind: "tearout", fpOtherDemo: false, fpModelId: "apex42",
   fpInsertShell: "masonry", fpFuel: "wood",
@@ -1230,6 +1235,7 @@ const BETWEEN_FLOOR_MATS = {
   dense_spider: ["Dense-pack spider", "Spider", "Dense-pack spider", "Dense-pack floors (spider)", true],
 };
 const BETWEEN_FLOOR_MIGRATE = { blow_fg: "r19", cellulose: "dense_cel" };
+const BF_BATT_KEYS = ["r13_sound", "r19", "comfortbat", "acoustical"];
 // [label, product, description, priceKey]
 const CANT_MATS = {
   r30: ["R30 batts", "R-30 fiberglass batts", "R30", "R-30 fiberglass batts"],
@@ -1288,20 +1294,20 @@ const FG_RULES = [
   { id: "wall_r19", label: "R-19 batts — 2x6 / daylight / garage walls", key: "R-19 fiberglass batts", sec: WALL_SECS, items: ["R19/{w}/{h}' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "guess", note: "Kraft-faced; 8'/9' precuts else R19/16 or R19/24 KRAFT. Mixed-height merged lines use the roll." },
   { id: "int_r13", label: "R-13 sound batts — interior walls", key: "R-13 fiberglass batts", sec: INT_SECS, items: ["R13/{w}/{h}' UF" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Unfaced for sound walls." },
   { id: "knee_r19", label: "R-19 batts — knee walls", key: "R-19 fiberglass batts", sec: ["Knee wall"], items: ["R19/{w}/8' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "guess", note: "Kraft 8' precut by OC. Work area 2/4 Knee Walls (alt Bonus Room Knee Walls)." },
-  { id: "gable_batts", label: "Gable batts (non-foam)", key: "R-13 fiberglass batts", sec: ["Gable"], items: ["R13/{W} KRAFT" + OC], conf: "guess", note: "App doesn't track gable OC → 16\" roll." },
+  { id: "gable_batts", label: "Gable batts (non-foam)", key: "R-13 fiberglass batts", sec: ["Gable"], items: ["R13/{W} KRAFT" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Width picker (default 16\"); 24\" → R13/24 UF (no kraft); 19\" → no item, flagged." },
   // —— batts: ceilings / floors ——
-  { id: "attic_batts", label: "Attic floor batts R19/R30/R38 (custom mix)", key: "R-{r} fiberglass batts", sec: ["Attic batts"], items: ["R{r}/24 UF" + OC], conf: "guess", note: "Unfaced 24\" (trusses). R-49 has no FG batt item." },
-  { id: "deadair_r38", label: "Dead air R38 batts", key: "R-38 fiberglass batts", sec: ["Dead air"], items: ["R38/24 UF" + OC], conf: "guess", note: "Unfaced 24\"." },
-  { id: "openvault_r38", label: "Open vault R38 batts", key: "R-38 fiberglass batts", sec: ["Open vault"], items: ["R38/16 KRAFT" + OC], conf: "guess", note: "App doesn't track rafter OC → 16\" kraft." },
-  { id: "closedvault_r30", label: "Closed (decked) vault R30 batts", key: "R-30 fiberglass batts", sec: ["Closed vault"], items: ["R30/16 KRAFT" + OC], conf: "guess", note: "16\" kraft." },
+  { id: "attic_batts", label: "Attic floor batts R19/R30/R38 (custom mix)", key: "R-{r} fiberglass batts", sec: ["Attic batts"], items: ["R{r}/{W} UF" + OC], conf: "guess", note: "Unfaced; width picker default 24\" (trusses). R-49 has no FG batt item." },
+  { id: "deadair_r38", label: "Dead air R38 batts", key: "R-38 fiberglass batts", sec: ["Dead air"], items: ["R38/{W} UF" + OC], conf: "guess", note: "Unfaced; width picker default 24\" (R38/16, /19, /24 UF all exist)." },
+  { id: "openvault_r38", label: "Open vault R38 batts", key: "R-38 fiberglass batts", sec: ["Open vault"], items: ["R38/{W} KRAFT" + OC, "R38/{W} UF" + OC], conf: "guess", note: "Width picker default 16\"; 19\" → R38/19 UF (no kraft 19\")." },
+  { id: "closedvault_r30", label: "Closed (decked) vault R30 batts", key: "R-30 fiberglass batts", sec: ["Closed vault"], items: ["R30/{W} KRAFT" + OC], conf: "guess", note: "Width picker default 16\" (R30/16, /19, /24 KRAFT exist)." },
   { id: "crawl_batts", label: "Crawl subfloor / touch-up / new batts", key: "R-{r} fiberglass batts", sec: ["Crawl subfloor", "Crawl touch-up"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "guess", note: "R19 → R19/15/4' UF (or 23\" at 24 OC); R13/R30 → 16\" UF roll." },
   { id: "ufbc_batts", label: "UFBC (unfinished basement ceiling) batts", key: "R-{r} fiberglass batts", sec: ["UFBC"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "guess", note: "Same as crawl subfloor." },
-  { id: "rim_r19", label: "Rim joist R19 batts (LF × 1.2)", key: "R-19 fiberglass batts", sec: ["Band / rim"], items: ["R19x15x105k"], conf: "guess", note: "Looks like a 15\" kraft R19 item; alt R19/15/4' UF. Qty = LF×1.2 exported as SqFt." },
-  { id: "bf_r13", label: "Between floors R13 sound batts", key: "R-13 fiberglass batts", sec: ["Between floors (sound)"], items: ["R13/16 UF" + OC], conf: "guess", note: "" },
-  { id: "bf_r19", label: "Between floors R19 batts", key: "R-19 fiberglass batts", sec: ["Between floors (sound)"], items: ["R19/16 UF" + OC], conf: "guess", note: "" },
-  { id: "cant_batts", label: "Cantilever batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Cantilever"], items: ["R{r}/16 KRAFT" + OC], conf: "guess", note: "" },
-  { id: "garage_batts", label: "Garage ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Garage ceiling"], items: ["R{r}/16 UF" + OC], conf: "guess", note: "Unfaced 16\" (installed from below)." },
-  { id: "porch_batts", label: "Porch ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Porch ceiling"], items: ["R{r}/16 UF" + OC], conf: "guess", note: "" },
+  { id: "rim_r19", label: "Rim joist R19 batts (LF × 1.2)", key: "R-19 fiberglass batts", sec: ["Band / rim"], items: ["R19x{w}x105k", "R19/{W} KRAFT" + OC], conf: "guess", note: "16\" → R19x15x105k; 19\"/24\" → R19/19 or R19/24 KRAFT. " + "Looks like a 15\" kraft R19 item; alt R19/15/4' UF. Qty = LF×1.2 exported as SqFt." },
+  { id: "bf_r13", label: "Between floors R13 sound batts", key: "R-13 fiberglass batts", sec: ["Between floors (sound)"], items: ["R13/{W} UF" + OC], conf: "guess", note: "19\" → no R13 19\" item, flagged." },
+  { id: "bf_r19", label: "Between floors R19 batts", key: "R-19 fiberglass batts", sec: ["Between floors (sound)"], items: ["R19/{W} UF" + OC], conf: "guess", note: "" },
+  { id: "cant_batts", label: "Cantilever batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Cantilever"], items: ["R{r}/{W} KRAFT" + OC, "R{r}/{W} UF" + OC], conf: "guess", note: "Width picker default 16\"; R38/19 → UF (no kraft)." },
+  { id: "garage_batts", label: "Garage ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Garage ceiling"], items: ["R{r}/{W} UF" + OC], conf: "guess", note: "Unfaced (installed from below); width picker default 16\"." },
+  { id: "porch_batts", label: "Porch ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Porch ceiling"], items: ["R{r}/{W} UF" + OC], conf: "guess", note: "Width picker default 16\"." },
   // —— rock wool ——
   { id: "comfortbat", label: "ComfortBat R15", key: "ComfortBat R15", sec: "*", items: ['Rockwool Comfort Batt (R15) - 3.5"/{w}"'], conf: "sure", note: "15\" or 23\" by OC (between floors → 15\")." },
   { id: "acoustical", label: 'AcousticalBat 3"', key: 'AcousticalBat 3"', sec: "*", items: ['Rockwool AFB - 3"/{W}"'], conf: "sure", note: "AFB = acoustical fire batt; 16\"/24\" by OC." },
@@ -1329,7 +1335,7 @@ const FG_RULES = [
   // —— misc materials ——
   { id: "housewrap", label: "House wrap (knee / gable / porch gable-off)", key: "House wrap", sec: "*", items: ["House Wrap"], conf: "sure", note: "" },
   { id: "baffles", label: "Cardboard baffles", key: "Cardboard baffles", sec: "*", items: ['Baffles - 24"'], uom: "Pieces", conf: "guess", note: "Alt: Baffles - 16\" / 12x48 Vent Chutes." },
-  { id: "polyvent", label: "Poly vents (closed vault)", key: "Poly vent", sec: "*", items: ['16" Poly-Vent'], uom: "Pieces", conf: "guess", note: "Alt: 24\" Poly-Vent." },
+  { id: "polyvent", label: "Poly vents (closed vault)", key: "Poly vent", sec: "*", items: ['{W}" Poly-Vent'], uom: "Pieces", conf: "guess", note: "Follows the vault's batt width: 16\"/24\" Poly-Vent; 19\" → none, flagged." },
   { id: "airseal", label: "Air seal (caulk & foam)", key: "Air seal", sec: "*", items: ["Standard Caulk & Foam Air Package"], uom: "Ea.", conf: "guess", note: "Alt: Right Choice / Premium / Energy Star package, Attic Air Seal Kit." },
   { id: "airseal_add", label: "Air seal add-on $", key: "Air seal add-on", sec: "*", items: ["Standard Caulk & Foam Labor"], uom: "Ea.", conf: "guess", note: "Fixed $ → UnitPrice always filled." },
   { id: "extralabor", label: "Extra labor $", key: "Extra labor", sec: "*", items: ["Labor"], uom: "Ea.", conf: "sure", note: "Fixed $ → UnitPrice always filled." },
@@ -1340,8 +1346,8 @@ function fgSection(a) { return String(a || "").replace(/^(Gable)\s*\([^)]*\)\s*$
 function fgVars(L, key) {
   const d = String(L.description || "");
   let oc = "16";
-  const m1 = d.match(/(16|19|24) OC/); const m2 = d.match(/(?:^|\/)\s*(15|19|23|24)\s*(?:\/|$)/);
-  if (m1) oc = m1[1]; else if (m2) oc = m2[1] === "15" ? "16" : m2[1] === "19" ? "19" : "24";
+  const m1 = d.match(/(16|19|24) OC/) || d.match(/\b(16|19|24)" poly/), m2 = d.match(/\/\s*(15|16|19|23|24)\b/);
+  if (m1) oc = m1[1]; else if (m2) oc = m2[1] === "15" || m2[1] === "16" ? "16" : m2[1] === "19" ? "19" : "24";
   const hm = d.match(/\/\s*(\d+(?:\.\d+)?)'\s*(?:\(|$)/);
   const h = hm && (hm[1] === "8" || hm[1] === "9") ? hm[1] : null;
   const rm = String(key || "").match(/R-?(\d+)/);
@@ -1375,6 +1381,8 @@ function fgResolve(L) {
     if (item) flag = "19 OC → no 19\" FG item for " + (L.description || L.product) + "; used " + item;
   }
   if (!item) return null;
+  if (!flag && !ov.item && /KRAFT/.test(rule.items[0]) && / UF /.test(item + " ") && rule.items.some(t => / UF/.test(t)))
+    flag = "No kraft-faced " + v.W + "\" FG item for " + (L.description || L.product) + "; used " + item;
   let area = (ov.area || "").trim() || rule.area || "";
   if (!area && rule.id === "netting") area = FG_NET_AREA[String(L.area || "").replace(/\s*#\d+$/, "")] || FG_AREA_BY_SECTION[sec] || "";
   if (!area) area = FG_AREA_BY_SECTION[sec] || (/^Wall/.test(sec) ? "Exterior Walls" : "Entire House");
@@ -1625,7 +1633,7 @@ function wallModeOptions() {
   if (picked.length < 2) return all;
   return all.filter(o => picked.includes(o[0])).map(o => [o[0], o[1] + " ✓"]).concat(all.filter(o => !picked.includes(o[0])));
 }
-function newBetweenFloor() { return { id: uid(), sf: "", mat: "r13_sound" }; }
+function newBetweenFloor() { return { id: uid(), sf: "", mat: "r13_sound", oc: "16" }; }
 function kneeSf(r) { const sf = n(r.height) * n(r.lf); return r.shape === "triangle" ? sf / 2 : sf; }
 
 function push(lines, partial) { lines.push(Object.assign({ bags: "" }, partial)); }
@@ -1654,7 +1662,7 @@ function buildLinesForPackage(p, tag) {
     push(lines, { area: "Crawl", assembly: "Crawl prep", product: "Crawl insulation removal", description: "Remove existing crawl insulation", footage: round2(crawlSf), unit: "SF", notes: noteTag + "Crawl SF" });
   }
   if (F.crawlIsTouchup && n(S.touchupPatchSf) > 0) {
-    push(lines, { area: site, assembly: "Crawl touch-up", product: "R-19 fiberglass batts", description: "R19 touch-up / patch", footage: round2(n(S.touchupPatchSf)), unit: "SF", notes: noteTag + "Patched zone SF" });
+    push(lines, { area: site, assembly: "Crawl touch-up", product: "R-19 fiberglass batts", description: "R19/" + battW(S.touchupOc, "16") + " touch-up / patch", footage: round2(n(S.touchupPatchSf)), unit: "SF", notes: noteTag + "Patched zone SF" });
   }
 
   if (F.crawlIsNewBatts) {
@@ -1683,7 +1691,7 @@ function buildLinesForPackage(p, tag) {
     }
     if (PR.batts) {
       const [sf, note] = own(S.customBattSf, "Batts"); const r = S.customAtticBattR || "R-38";
-      if (sf > 0) push(lines, { area: "Attic", assembly: "Attic batts", product: r + " fiberglass batts", description: r.replace("R-", "R") + " attic floor batts",
+      if (sf > 0) push(lines, { area: "Attic", assembly: "Attic batts", product: r + " fiberglass batts", description: r.replace("R-", "R") + "/" + battW(S.customAtticBattOc, "24") + " attic floor batts",
         footage: round2(sf), unit: "SF", notes: noteTag + note });
     }
   }
@@ -1703,7 +1711,7 @@ function buildLinesForPackage(p, tag) {
   if (!excludeDVK && S.hasDeadAir) {
     S.deadAir.forEach(r => {
       if (n(r.sf) <= 0) return;
-      push(lines, { area: "Dead air", assembly: "Dead air", product: "R-38 fiberglass batts", description: "R38 batts", footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
+      push(lines, { area: "Dead air", assembly: "Dead air", product: "R-38 fiberglass batts", description: "R38/" + battW(r.oc, "24"), footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
     });
   }
   if (!excludeDVK && S.hasVaults) {
@@ -1717,12 +1725,12 @@ function buildLinesForPackage(p, tag) {
       if (r.kind === "open") {
         iOpen++;
         const nm = "Open vault" + (nOpen > 1 ? " #" + iOpen : "");
-        push(lines, { area: nm, assembly: "Open vault", product: "R-38 fiberglass batts", description: nm, footage: round2(pitched), unit: "SF", notes: noteTag + "R38 · flat " + fmt(flatV) + " ×" + factor.toFixed(3) });
+        push(lines, { area: nm, assembly: "Open vault", product: "R-38 fiberglass batts", description: "R38/" + battW(r.oc, "16") + " open vault", footage: round2(pitched), unit: "SF", notes: noteTag + "R38 · flat " + fmt(flatV) + " ×" + factor.toFixed(3) });
       } else {
         iClosed++;
         const nm = "Closed vault" + (nClosed > 1 ? " #" + iClosed : "");
-        push(lines, { area: nm, assembly: "Closed vault", product: "R-30 fiberglass batts", description: nm, footage: round2(pitched), unit: "SF", notes: noteTag + "R30 decked · flat " + fmt(flatV) + " ×" + factor.toFixed(3) });
-        push(lines, { area: nm, assembly: "Poly vent", product: "Poly vent", description: nm + " — poly vents (pitched÷5)", footage: round2(pitched / 5), unit: "ea", notes: noteTag });
+        push(lines, { area: nm, assembly: "Closed vault", product: "R-30 fiberglass batts", description: "R30/" + battW(r.oc, "16") + " closed vault", footage: round2(pitched), unit: "SF", notes: noteTag + "R30 decked · flat " + fmt(flatV) + " ×" + factor.toFixed(3) });
+        push(lines, { area: nm, assembly: "Poly vent", product: "Poly vent", description: battW(r.oc, "16") + '" poly vents (pitched÷5)', footage: round2(pitched / 5), unit: "ea", notes: noteTag });
       }
     });
   }
@@ -1740,7 +1748,7 @@ function buildLinesForPackage(p, tag) {
       const name = "Knee walls";
       const part = { name, txt: (r.shape === "triangle" ? "△ " : "") + fmt(n(r.height)) + "'×" + fmt(n(r.lf)) + " LF" + (r.shape === "triangle" ? "÷2" : "") };
       addKnee("batt|R-19 fiberglass batts|R19|" + oc, { assembly: "Knee wall", product: "R-19 fiberglass batts", description: "R19 / " + oc + " OC" }, sf, part);
-      if (r.wrap) addKnee("wrap|House wrap", { assembly: "Knee wrap", product: "House wrap", description: "Open knee wrap" }, sf, part);
+      if (r.wrap) addKnee("wrap|House wrap|" + oc, { assembly: "Knee wrap", product: "House wrap", description: "Open knee wrap / " + oc + " OC" }, sf, part);
     });
     kneeGroups.forEach(g => {
       const area = g.names.size === 1 ? Array.from(g.names)[0] : "Knee walls";
@@ -1773,7 +1781,7 @@ function buildLinesForPackage(p, tag) {
     }
     if (S.includePorchCeiling) {
       const m = PORCH_CEIL_MATS[S.porchCeilMat] || PORCH_CEIL_MATS.batt_r19;
-      if (pf > 0) push(lines, { area: "Porch ceiling", assembly: "Porch ceiling", product: m[1], description: m[2] + " porch ceiling",
+      if (pf > 0) push(lines, { area: "Porch ceiling", assembly: "Porch ceiling", product: m[1], description: m[2] + (/^batt_/.test(S.porchCeilMat) ? "/" + battW(S.porchCeilOc, "16") : "") + " porch ceiling",
         footage: round2(pf), unit: "SF", notes: noteTag + "Flat SF (no pitch)" });
     } else if (S.porchGabledOff) {
       push(lines, { area: "Porch-to-house", assembly: "Porch gable-off", product: "House wrap", description: "Gabled off — no porch ceiling", footage: 1, unit: "ea", notes: noteTag });
@@ -1785,13 +1793,13 @@ function buildLinesForPackage(p, tag) {
   if (S.subfloorOverride.trim() !== "") subfloorSf = n(S.subfloorOverride);
   if (S.hasSubfloor && F.canAskSubfloor && subfloorSf > 0) {
     const cr = S.crawlSubR || "R-19";
-    push(lines, { area: "Crawl", assembly: "Crawl subfloor", product: cr + " fiberglass batts", description: cr.replace("R-", "R") + " crawl subfloor", footage: round2(subfloorSf), unit: "SF", notes: noteTag });
+    push(lines, { area: "Crawl", assembly: "Crawl subfloor", product: cr + " fiberglass batts", description: cr.replace("R-", "R") + "/" + battW(S.crawlSubOc, "16") + " crawl subfloor", footage: round2(subfloorSf), unit: "SF", notes: noteTag });
     push(lines, { area: "Crawl floor", assembly: "Poly", product: "6 mil poly", description: "Matches crawl subfloor SF", footage: round2(subfloorSf), unit: "SF", notes: noteTag });
   }
 
   if (S.hasUfbc && F.canAskUfbc && n(S.ufbcSf) > 0) {
     const ur = S.ufbcR || "R-19";
-    push(lines, { area: "UFBC", assembly: "UFBC", product: ur + " fiberglass batts", description: ur.replace("R-", "R") + " UFBC (basement ceiling)", footage: round2(n(S.ufbcSf)), unit: "SF", notes: noteTag });
+    push(lines, { area: "UFBC", assembly: "UFBC", product: ur + " fiberglass batts", description: ur.replace("R-", "R") + "/" + battW(S.ufbcOc, "16") + " UFBC (basement ceiling)", footage: round2(n(S.ufbcSf)), unit: "SF", notes: noteTag });
   }
 
   if (F.canAskCrawlEncap) {
@@ -1813,7 +1821,7 @@ function buildLinesForPackage(p, tag) {
       const lf = n(r.lf); if (lf <= 0) return;
       push(lines, { area: "Rim joist", assembly: "Band / rim",
         product: totalFoam ? "Open-cell spray foam" : "R-19 fiberglass batts",
-        description: totalFoam ? '3.5" OC band ×1.2' : "R19 band ×1.2",
+        description: totalFoam ? '3.5" OC band ×1.2' : "R19/" + battW(r.oc, "16") + " band ×1.2",
         footage: round2(lf * 1.2), unit: "LF", notes: noteTag + fmt(lf) + " LF × 1.2" });
     });
   }
@@ -1860,7 +1868,7 @@ function buildLinesForPackage(p, tag) {
     (S.betweenFloors || []).forEach(r => {
       const sf = n(r.sf); if (sf <= 0) return;
       const m = BETWEEN_FLOOR_MATS[BETWEEN_FLOOR_MIGRATE[r.mat] || r.mat] || BETWEEN_FLOOR_MATS.r13_sound;
-      push(lines, { area: "Between floors", assembly: "Between floors (sound)", product: m[1], description: m[2] + " between floors", priceKey: m[3], footage: round2(sf), unit: "SF", notes: noteTag });
+      push(lines, { area: "Between floors", assembly: "Between floors (sound)", product: m[1], description: m[2] + (BF_BATT_KEYS.indexOf(BETWEEN_FLOOR_MIGRATE[r.mat] || r.mat) >= 0 ? "/" + battW(r.oc, "16") : "") + " between floors", priceKey: m[3], footage: round2(sf), unit: "SF", notes: noteTag });
       if (m[4]) bfNet += sf;
     });
     if (bfNet > 0) push(lines, { area: "Between floors", assembly: "Netting", product: "Netting", description: "Matches dense-pack between floors", footage: round2(bfNet), unit: "SF", notes: noteTag });
@@ -1872,7 +1880,7 @@ function buildLinesForPackage(p, tag) {
       const sf = r.shape === "triangle" ? (L * H) / 2 : L * H;
       push(lines, { area: "Gable", assembly: "Gable (" + r.shape + ")",
         product: foamRoof ? "Open-cell spray foam" : "Fiberglass batts",
-        description: foamRoof ? '3.5" OC gable' : "Gable batts", footage: round2(sf), unit: "SF", notes: noteTag });
+        description: foamRoof ? '3.5" OC gable' : "R13/" + battW(r.oc, "16") + " gable batts", footage: round2(sf), unit: "SF", notes: noteTag });
       if (r.wrap) push(lines, { area: "Gable", assembly: "Gable wrap", product: "House wrap", description: "W", footage: round2(sf), unit: "SF", notes: noteTag });
     });
   }
@@ -1881,7 +1889,7 @@ function buildLinesForPackage(p, tag) {
     S.cants.forEach(r => {
       if (n(r.sf) <= 0) return;
       const m = totalFoam && !/^cc/.test(r.material) ? CANT_MATS.foam55 : (CANT_MATS[r.material] || CANT_MATS.r30);
-      push(lines, { area: "Cantilever", assembly: "Cantilever", product: m[1], description: m[2], priceKey: m[3],
+      push(lines, { area: "Cantilever", assembly: "Cantilever", product: m[1], description: m[2] + (/^R-\d+ fiberglass batts$/.test(m[1]) ? "/" + battW(r.oc, "16") : ""), priceKey: m[3],
         footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
     });
   }
@@ -1893,7 +1901,7 @@ function buildLinesForPackage(p, tag) {
     }
     if (n(S.garageCeilingSf) > 0) {
       const m = totalFoam ? GARAGE_CEIL_MATS.foam5 : (GARAGE_CEIL_MATS[S.garageCeilMat] || GARAGE_CEIL_MATS.r19);
-      push(lines, { area: "Garage ceiling", assembly: "Garage ceiling", product: m[1], description: m[2], priceKey: m[3],
+      push(lines, { area: "Garage ceiling", assembly: "Garage ceiling", product: m[1], description: m[2] + (/^R-\d+ fiberglass batts$/.test(m[1]) ? "/" + battW(S.garageCeilOc, "16") : ""), priceKey: m[3],
         footage: round2(n(S.garageCeilingSf)), unit: "SF", notes: noteTag });
     }
   }
@@ -2217,18 +2225,35 @@ function renderAssemblyEditors() {
       card.innerHTML = '<div class="row-title">Batts attic</div>';
       card.appendChild(fieldInput(only ? "Attic batts SF (blank = house flat − dead air − vaults)" : "Attic batts SF", S.customBattSf, v => { S.customBattSf = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Batt R-value", S.customAtticBattR || "R-38", [["R-19","R19"],["R-30","R30"],["R-38","R38"],["R-49","R49"]], v => { S.customAtticBattR = v; render(); }));
+      card.appendChild(fieldSelect("Batt width", battW(S.customAtticBattOc, "24"), BATT_W_CHOICES, v => { S.customAtticBattOc = v; render(); }));
       box.appendChild(card);
     }
     if (pr.foamRoof && !only) box.appendChild(el("p", "cap", "Foam roofline — enter its flat SF + pitch in the foam roof lines below (house flat isn't used when you combine attic types)."));
+  }
+  // where the line actually uses batts (so the width picker only shows then); compare mode = any option that uses them
+  const pkList = S.jobMode === "new" ? (optionsOn() ? optionPkgs() : [S.pkg]) : [null];
+  const battUse = {
+    // gables are only asked on foam-roof jobs (always foamed today), so this stays false unless a gable batt line can actually be built
+    gable: pkList.some(k => { const f = k ? flags(k) : F; return f.canAskGables && !((k ? pkgProfile(k).foamRoof : false) || f.atticIsFoam); }),
+    rim: pkList.some(k => !(k && pkgProfile(k).totalFoam)),
+    notTotalFoam: pkList.some(k => !(k && pkgProfile(k).totalFoam)),
+  };
+  battUse.rim = battUse.notTotalFoam;
+  if (F.crawlIsTouchup) {
+    const card = el("div", "row-card");
+    card.innerHTML = '<div class="row-title">Crawl touch-up batts</div>';
+    card.appendChild(fieldSelect("Batt width (R19)", battW(S.touchupOc, "16"), BATT_W_CHOICES, v => { S.touchupOc = v; render(); }));
+    box.appendChild(card);
   }
   if (F.canAskDeadVaultKnees && S.hasDeadAir) {
     S.deadAir.forEach((r, idx) => {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Dead air #' + (idx+1) + '</div>';
       card.appendChild(fieldInput("SF", r.sf, v => { r.sf = v; schedule(); }, "number"));
+      card.appendChild(fieldSelect("Batt width (R38)", battW(r.oc, "24"), BATT_W_CHOICES, v => { r.oc = v; render(); }));
       box.appendChild(card);
     });
-    box.appendChild(addBtn("Add dead air", () => { S.deadAir.push({ id: uid(), name: "", sf: "" }); render(); }));
+    box.appendChild(addBtn("Add dead air", () => { S.deadAir.push({ id: uid(), name: "", sf: "", oc: "24" }); render(); }));
   }
   if (F.canAskDeadVaultKnees && S.hasVaults) {
     S.vaults.forEach((r, idx) => {
@@ -2237,9 +2262,10 @@ function renderAssemblyEditors() {
       card.appendChild(fieldSelect("Type", r.kind, [["open","Open vault (R38)"],["decked","Closed / decked vault (R30)"]], v => { r.kind = v; render(); }));
       card.appendChild(fieldInput("Flat SF", r.flatSf, v => { r.flatSf = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Pitch", r.pitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { r.pitch = v; render(); }));
+      card.appendChild(fieldSelect("Batt width", battW(r.oc, "16"), BATT_W_CHOICES, v => { r.oc = v; render(); }));
       box.appendChild(card);
     });
-    box.appendChild(addBtn("Add vault", () => { S.vaults.push({ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }); render(); }));
+    box.appendChild(addBtn("Add vault", () => { S.vaults.push({ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "", oc: "16" }); render(); }));
   }
   if (F.canAskDeadVaultKnees && S.hasKnees) {
     S.knees.forEach((r, idx) => {
@@ -2269,9 +2295,10 @@ function renderAssemblyEditors() {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Rim #' + (idx+1) + ' · ×1.2 → ' + fmt(n(r.lf)*1.2) + '</div>';
       card.appendChild(fieldInput("LF", r.lf, v => { r.lf = v; schedule(); }, "number"));
+      if (battUse.rim) card.appendChild(fieldSelect("Batt width", battW(r.oc, "16"), BATT_W_CHOICES, v => { r.oc = v; render(); }));
       box.appendChild(card);
     });
-    box.appendChild(addBtn("Add rim", () => { S.rims.push({ id: uid(), name: "", lf: "" }); render(); }));
+    box.appendChild(addBtn("Add rim", () => { S.rims.push({ id: uid(), name: "", lf: "", oc: "16" }); render(); }));
   }
   if (S.hasWalls && F.canAskWalls) {
     const h = el("div", "divider"); box.appendChild(h);
@@ -2327,6 +2354,7 @@ function renderAssemblyEditors() {
       card.innerHTML = '<div class="row-title">Between floors #' + (idx+1) + '</div>';
       card.appendChild(fieldInput("SF", r.sf, v => { r.sf = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Material", r.mat || "r13_sound", Object.keys(BETWEEN_FLOOR_MATS).map(k => [k, BETWEEN_FLOOR_MATS[k][0]]), v => { r.mat = v; render(); }));
+      if (BF_BATT_KEYS.indexOf(r.mat || "r13_sound") >= 0) card.appendChild(fieldSelect("Batt width", battW(r.oc, "16"), BATT_W_CHOICES, v => { r.oc = v; render(); }));
       if (S.betweenFloors.length > 1) card.appendChild(addBtn("Remove", () => { S.betweenFloors.splice(idx, 1); render(); }));
       box.appendChild(card);
     });
@@ -2339,12 +2367,13 @@ function renderAssemblyEditors() {
       card.appendChild(fieldSelect("Shape", r.shape, [["triangle","Triangle"],["rectangle","Rectangle"]], v => { r.shape = v; render(); }));
       card.appendChild(fieldInput("Length", r.length, v => { r.length = v; schedule(); }, "number"));
       card.appendChild(fieldInput("Height", r.height, v => { r.height = v; schedule(); }, "number"));
+      if (battUse.gable) card.appendChild(fieldSelect("Batt width", battW(r.oc, "16"), BATT_W_CHOICES, v => { r.oc = v; render(); }));
       const wrapRow = el("div", "toggle-row"); wrapRow.appendChild(el("span", null, "Wrap W"));
       const sw = el("button", "switch" + (r.wrap ? " on" : "")); sw.type = "button";
       sw.onclick = () => { r.wrap = !r.wrap; render(); }; wrapRow.appendChild(sw); card.appendChild(wrapRow);
       box.appendChild(card);
     });
-    box.appendChild(addBtn("Add gable", () => { S.gables.push({ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false }); render(); }));
+    box.appendChild(addBtn("Add gable", () => { S.gables.push({ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false, oc: "16" }); render(); }));
   }
   if (S.hasCants && F.canAskCants) {
     S.cants.forEach((r, idx) => {
@@ -2352,15 +2381,17 @@ function renderAssemblyEditors() {
       card.innerHTML = '<div class="row-title">Cantilever #' + (idx+1) + '</div>';
       card.appendChild(fieldInput("SF", r.sf, v => { r.sf = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Material", CANT_MATS[r.material] ? r.material : "r30", Object.keys(CANT_MATS).map(k => [k, CANT_MATS[k][0]]), v => { r.material = v; render(); }));
+      if (battUse.notTotalFoam && /^r\d+$/.test(CANT_MATS[r.material] ? r.material : "r30")) card.appendChild(fieldSelect("Batt width", battW(r.oc, "16"), BATT_W_CHOICES, v => { r.oc = v; render(); }));
       box.appendChild(card);
     });
-    box.appendChild(addBtn("Add cantilever", () => { S.cants.push({ id: uid(), name: "", sf: "", material: "r30" }); render(); }));
+    box.appendChild(addBtn("Add cantilever", () => { S.cants.push({ id: uid(), name: "", sf: "", material: "r30", oc: "16" }); render(); }));
   }
   if (S.hasGarage && F.canAskGarage) {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">Garage</div>';
     card.appendChild(fieldInput("Garage ceiling SF", S.garageCeilingSf, v => { S.garageCeilingSf = v; schedule(); }, "number"));
     card.appendChild(fieldSelect("Ceiling mat", GARAGE_CEIL_MATS[S.garageCeilMat] ? S.garageCeilMat : "r19", Object.keys(GARAGE_CEIL_MATS).map(k => [k, GARAGE_CEIL_MATS[k][0]]), v => { S.garageCeilMat = v; render(); }));
+    if (battUse.notTotalFoam && /^r\d+$/.test(GARAGE_CEIL_MATS[S.garageCeilMat] ? S.garageCeilMat : "r19")) card.appendChild(fieldSelect("Batt width", battW(S.garageCeilOc, "16"), BATT_W_CHOICES, v => { S.garageCeilOc = v; render(); }));
     const fr = el("div", "toggle-row"); fr.appendChild(el("span", null, "Foam garage roof"));
     const sw = el("button", "switch" + (S.garageFoamRoof ? " on" : "")); sw.type = "button";
     sw.onclick = () => { S.garageFoamRoof = !S.garageFoamRoof; render(); }; fr.appendChild(sw); card.appendChild(fr);
@@ -2390,6 +2421,7 @@ function renderAssemblyEditors() {
     if (S.includePorchRoof && S.porchRoofPitch === "custom") card.appendChild(fieldInput("Custom rise", S.porchRoofCustomRise, v => { S.porchRoofCustomRise = v; showPorch(); schedule(); }, "number"));
     sw("Porch ceiling?", "includePorchCeiling");
     if (S.includePorchCeiling) card.appendChild(fieldSelect("Ceiling material", S.porchCeilMat, Object.keys(PORCH_CEIL_MATS).map(k => [k, PORCH_CEIL_MATS[k][0]]), v => { S.porchCeilMat = v; render(); }));
+    if (S.includePorchCeiling && /^batt_/.test(S.porchCeilMat)) card.appendChild(fieldSelect("Batt width", battW(S.porchCeilOc, "16"), BATT_W_CHOICES, v => { S.porchCeilOc = v; render(); }));
     else sw("Gabled off with house wrap?", "porchGabledOff");
     showPorch(); card.appendChild(out);
     box.appendChild(card);
@@ -2419,6 +2451,7 @@ function renderAssemblyEditors() {
     card.innerHTML = '<div class="row-title">Crawl</div>';
     card.appendChild(fieldInput("Crawl SF (blank = flat)", S.subfloorOverride, v => { S.subfloorOverride = v; schedule(); }, "number"));
     card.appendChild(fieldSelect("Batt R-value", S.crawlSubR || "R-19", [["R-19","R19"],["R-13","R13"],["R-30","R30"]], v => { S.crawlSubR = v; render(); }));
+    card.appendChild(fieldSelect("Batt width", battW(S.crawlSubOc, "16"), BATT_W_CHOICES, v => { S.crawlSubOc = v; render(); }));
     box.appendChild(card);
   }
   if (S.hasUfbc && F.canAskUfbc) {
@@ -2426,6 +2459,7 @@ function renderAssemblyEditors() {
     card.innerHTML = '<div class="row-title">UFBC (unfinished basement ceiling)</div>';
     card.appendChild(fieldInput("UFBC SF", S.ufbcSf, v => { S.ufbcSf = v; schedule(); }, "number"));
     card.appendChild(fieldSelect("Batt R-value", S.ufbcR || "R-19", [["R-19","R19"],["R-13","R13"],["R-30","R30"]], v => { S.ufbcR = v; render(); }));
+    card.appendChild(fieldSelect("Batt width", battW(S.ufbcOc, "16"), BATT_W_CHOICES, v => { S.ufbcOc = v; render(); }));
     box.appendChild(card);
   }
   if (F.canAskCrawlEncap && S.hasCrawlWalls) {
@@ -3066,6 +3100,11 @@ function migrateState(d) {
   if (Array.isArray(S.cants)) S.cants.forEach(c => { if (!CANT_MATS[c.material]) c.material = "r30"; });
   if (!GARAGE_CEIL_MATS[S.garageCeilMat]) S.garageCeilMat = "r19";
   if (Array.isArray(S.betweenFloors)) S.betweenFloors.forEach(b => { if (BETWEEN_FLOOR_MIGRATE[b.mat]) b.mat = BETWEEN_FLOOR_MIGRATE[b.mat]; if (!BETWEEN_FLOOR_MATS[b.mat]) b.mat = "r13_sound"; });
+  // batt widths (build j): old jobs get the width each area used to imply (dead air & attic batts 24", everything else 16")
+  const W = BATT_W_DEFAULTS;
+  [["deadAir", W.deadAir], ["vaults", W.vault], ["rims", W.rim], ["cants", W.cant], ["betweenFloors", W.betweenFloors], ["gables", W.gable]]
+    .forEach(([k, def]) => { if (Array.isArray(S[k])) S[k].forEach(r => { if (r) r.oc = battW(r.oc, def); }); });
+  ["garageCeilOc", "porchCeilOc", "crawlSubOc", "ufbcOc", "touchupOc", "customAtticBattOc"].forEach(k => { S[k] = battW(S[k], W[k]); });
   if (Array.isArray(S.knees)) S.knees.forEach(k => { if (k.shape !== "triangle") k.shape = "rectangle"; if (k.oc !== "24" && k.oc !== "19") k.oc = "16"; });
 }
 
@@ -3176,7 +3215,7 @@ function newJob() {
   resetCustomer(); S.woRep = ""; S.woDate = ""; S.woNotes = "";
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard";
   S.compareOn = false; S.optionPkgs = ["standard", "hybrid_foam_batts"]; S.optionView = 0;
-  S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38";
+  S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38"; S.customAtticBattOc = "24"; S.garageCeilOc = "16"; S.porchCeilOc = "16"; S.touchupOc = "16";
   S.porchFlat = ""; S.includePorchCeiling = true; S.porchCeilMat = "batt_r19"; S.porchRoofPitch = "6";
   S.hasBetweenFloors = false; S.betweenFloors = [newBetweenFloor()];
   S.crawlNewSf = ""; S.crawlNewR = "R-19"; S.crawlNewOc = "16"; S.crawlNewPoly = false; S.crawlNewPolySf = ""; S.crawlNewPolyMil = "6";
@@ -3187,7 +3226,7 @@ function newJob() {
   S.interiorWalls = [newInteriorWall()];
   S.hasGarage = false; S.hasPorch = false; S.hasBasementWalls = false;
   S.hasSubfloor = false; S.hasDense = false; S.hasCrawlWalls = false;
-  S.crawlSubR = "R-19"; S.hasUfbc = false; S.ufbcSf = ""; S.ufbcR = "R-19"; S.subfloorOverride = "";
+  S.crawlSubR = "R-19"; S.crawlSubOc = "16"; S.hasUfbc = false; S.ufbcSf = ""; S.ufbcR = "R-19"; S.ufbcOc = "16"; S.subfloorOverride = "";
   S.hasMisc = false; S.misc = [newMiscItem()];
   S.deadAir = [{ id: uid(), name: "", sf: "" }];
   S.vaults = [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }];
@@ -3302,7 +3341,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29i";
+const APP_BUILD = "2026-10-29j";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
