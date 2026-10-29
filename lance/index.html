@@ -204,6 +204,13 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   background: color-mix(in srgb, var(--bg2) 92%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   border-top: 1px solid var(--border); transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform;
 }
+/* 29ay: fireplace verification notice — yellow error style, big + bold, icon */
+.fp-verify { display: flex; gap: 12px; align-items: flex-start; background: var(--err-bg); color: var(--err-ink); border: 4px solid var(--err-border);
+  border-radius: 12px; padding: 14px; margin: 10px 0 14px; font-size: 1.02rem; line-height: 1.35; }
+.fp-verify strong { display: block; font-size: 1.12rem; font-weight: 900; letter-spacing: .01em; margin-bottom: 6px; }
+.fp-verify span { font-weight: 700; }
+.fp-verify .fpv-ico { flex: 0 0 auto; margin-top: 2px; }
+.fp-plat-check input { width: 24px; height: 24px; }
 .missing-flag { outline: 3px solid var(--err-border); outline-offset: 2px; box-shadow: 0 0 0 6px var(--err-bg); }
 .miss-modal .batch-row { color: inherit; font: inherit; }
 .save-dock .btn { width: 100%; }
@@ -248,6 +255,41 @@ html, body { overscroll-behavior-y: none; overflow-x: clip; max-width: 100%; }
 .kp-splash-name { color: #fff; font-weight: 700; font-size: 1.05rem; margin-top: 22px; }
 .kp-splash-ver { color: rgba(255,255,255,.8); font-size: .78rem; margin-top: 4px; }
 @keyframes kpSplashOut { to { opacity: 0; visibility: hidden; } }
+/* 29az: Training mode — launcher on the Measure tab + step cards (theme vars only: KP red here, Choice navy via build_choice) */
+.train-launch { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; margin: 0 0 12px; padding: 12px 14px; min-height: 56px;
+  background: var(--bg2); color: var(--text); border: 1.5px solid var(--accent); border-radius: 14px; font: inherit; cursor: pointer; box-shadow: var(--shadow); }
+.train-launch:active { background: var(--accent-soft); }
+.train-launch .train-ico { color: var(--accent-ink); flex: 0 0 auto; }
+.train-launch .tl-txt { flex: 1; min-width: 0; }
+.train-launch .tl-txt b { display: block; font-size: 1rem; }
+.train-launch .tl-txt small { display: block; color: var(--text2); font-size: .8rem; margin-top: 2px; }
+.train-launch .tl-chev { color: var(--accent-ink); font-size: 1.6rem; line-height: 1; }
+.train-bar-ico { width: 60px; color: var(--accent-ink); display: flex; }
+.train-modal .xl-title { font-size: .9rem; }
+.train-card { max-width: 560px; margin: 0 auto; font-size: 1rem; line-height: 1.45; }
+.train-card h3 { font-size: 1.3rem; margin: 4px 0 10px; }
+.train-card p { margin: 0 0 10px; }
+.train-card ul { margin: 0 0 10px; padding-left: 20px; }
+.train-card li { margin: 0 0 6px; }
+.train-demo { position: relative; margin: 12px 0; padding: 26px 12px 12px; border: 2px dashed var(--line); border-radius: 12px; background: var(--bg2); pointer-events: none; }
+.train-demo-tag { position: absolute; top: 6px; left: 12px; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text2); }
+.train-demo .field { margin: 0; }
+.train-demo .fp-verify { margin: 0; }
+.train-tabs { list-style: none; padding: 0 !important; }
+.train-tabs li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.train-tabs svg { flex: 0 0 auto; color: var(--accent-ink); }
+.train-pop { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--bg); }
+.train-pop-title { font-weight: 700; text-align: center; font-size: .85rem; margin-bottom: 8px; }
+.train-pop .grid2 { margin-top: 10px; }
+.train-banner { background: var(--accent-soft); color: var(--text); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px; font-weight: 700; margin: 4px 0 12px; }
+.train-dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin-bottom: 10px; }
+.train-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.train-dots span.done { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.train-dots span.on { background: var(--accent); width: 18px; border-radius: 4px; }
+#trainBack:disabled { opacity: .4; }
+.fp-auto { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--accent); color: var(--text); }
+.fp-auto strong { color: var(--accent-ink); }
+.fp-auto span { font-size: .82rem; color: var(--text2); }
 body.xl-open { overflow: hidden; }
 .xl-modal { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column;
   padding-top: var(--safe-t); padding-bottom: var(--safe-b); }
@@ -282,6 +324,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 
 <main>
   <section id="tab-wizard" class="tabs-panel active">
+    <button type="button" class="train-launch" id="btnTraining"><svg class="train-ico" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 9 12 4 2 9l10 5 10-5Z"/><path d="M6 11.2V16c0 1.1 2.7 3 6 3s6-1.9 6-3v-4.8"/><path d="M22 9v6"/></svg><span class="tl-txt"><b>Training</b><small>New here? Step-by-step walkthrough. Nothing gets saved.</small></span><span class="tl-chev" aria-hidden="true">›</span></button>
     <div class="section" id="sec-job">
       <h2>Job header</h2>
       <p class="cap">Owner · new/retro · package · site info. Draft autosaves.</p>
@@ -540,6 +583,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <p class="status" id="twoStatus"></p>
       <div class="divider"></div>
       <h2>FieldGroove</h2>
+      <div class="train-banner fg-wip-banner" id="fgWipBanner" role="note">FieldGroove import — work in progress. Not available yet, and it won't affect your takeoffs. You'll be notified when it's ready.</div> <!-- 29az: notice only; section behavior unchanged -->
       <p class="cap">Import file for FieldGroove → Opportunities → Import Estimates. One row per line; compare mode = one estimate per option. Fireplace lines left out.</p>
       <div class="toggle-row"><span>Include app unit prices (at this job's margin)</span><button type="button" class="switch" id="fgPrices"></button></div>
       <button type="button" class="btn btn-primary btn-block" id="btnExportFg">Export for FieldGroove (.xlsx)</button>
@@ -682,7 +726,7 @@ const ROOF_FOAM_DEPTH_KEYS = ["5.5", "6", "7", "8", "9", "10", "11", "12"];
 const ROOF_FOAM_PLACEHOLDERS = {};
 const ROOF_FOAM_BASE = "Open-cell foam (roofline)";
 function roofFoamBaseKey(k) { return /^Open-cell foam \(roofline\) /.test(k) ? ROOF_FOAM_BASE : k; }
-// TODO(29au): Closed-cell foam 1.5", 2.5", 3.5", 4", 4.5" and 5" still need Asher's prices — no price rows/values guessed.
+// TODO(29au): Closed-cell foam 2.5", 3.5", 4", 4.5" and 5" still need Asher's prices — no price rows/values guessed. (29az: 1.5" = $2.00 from Asher)
 // Until he sends them (enter in Pricing, or fill the rows below), jobs using those depths show "incomplete" ballparks on purpose.
 const DEFAULT_PRICE_KEYS = [
   { materialKey: "Blown fiberglass", unit: "SF", price: "" },
@@ -715,10 +759,10 @@ const DEFAULT_PRICE_KEYS = [
   { materialKey: 'Open-cell foam (roofline) 12"', unit: "SF", price: "2.59" },
   { materialKey: "Open-cell foam (walls)", unit: "SF", price: "1.13" },
   { materialKey: 'Closed-cell foam 1"', unit: "SF", price: "1.49" },
-  { materialKey: 'Closed-cell foam 1.5"', unit: "SF", price: "" },
+  { materialKey: 'Closed-cell foam 1.5"', unit: "SF", price: "2.00" }, // 29az: Asher's price
   { materialKey: 'Closed-cell foam 2"', unit: "SF", price: "2.48" },
   { materialKey: 'Closed-cell foam 2.5"', unit: "SF", price: "" },
-  { materialKey: 'Closed-cell foam 3"', unit: "SF", price: "3.48" },
+  { materialKey: 'Closed-cell foam 3"', unit: "SF", price: "3.54" }, // 29az: Asher's FieldGroove price (was 3.48)
   { materialKey: 'Closed-cell foam 3.5"', unit: "SF", price: "" }, // 29as: new depth, no price yet
   { materialKey: 'Closed-cell foam 4"', unit: "SF", price: "" },
   { materialKey: 'Closed-cell foam 4.5"', unit: "SF", price: "" }, // 29as: new depth, no price yet
@@ -1438,7 +1482,7 @@ const S = {
   fpPipeFt: "", fpTerm: "roof", fpChimPitch: "6", fpChimCustomRise: "",
   fpRoofType: "shingle", fpCap: "standard",
   fpChaseClear: true, fpChaseNote: "", fpElbows: "", fpAccessNotes: "",
-  fpHearthPlatform: "", fpWoodGasStarter: false, fpBlowerChoice: "none",
+  fpHearthPlatform: "", fpPlatformOn: false, fpPlatformBy: "", fpWoodGasStarter: false, fpBlowerChoice: "none",
   fpMeasRoH: "", fpMeasRoW: "", fpMeasRoD: "",
   fpSpecRoH: "", fpSpecRoW: "", fpSpecRoD: "", fpSpecLip: "", fpSpecPlatform: "",
   fpWall90: false, fpSpecNote: "", fpSpecUser: false,
@@ -1518,16 +1562,26 @@ function fpModelsForContext(fpMode, retroKind) {
   });
 }
 
+// 29ay: hearth platform checkbox + who builds it. The choice says where the RO height was measured from:
+//   unchecked / "built" (already built) → from the platform top → compare straight to the spec (29ax behavior)
+//   "us" (we're building it) / "builder" (builder is building it) → from the subfloor → height needed = spec + platform height
+// Platform height: the entered height; blank → the model's spec platform height; neither → flagged in the empty-fields check.
+const FP_PLATFORM_BY = { us: "We're building it", builder: "Builder is building it", built: "Already built" };
+const FP_PLATFORM_SHORT = { us: "We're building", builder: "Builder building", built: "Already built" };
+function fpPlatformAdds() { return !!(S.fpPlatformOn && (S.fpPlatformBy === "us" || S.fpPlatformBy === "builder")); }
+function fpPlatformHeight() { return n(S.fpHearthPlatform) > 0 ? n(S.fpHearthPlatform) : n(S.fpSpecPlatform); }
+function fpPlatformFromSpec() { return !(n(S.fpHearthPlatform) > 0) && n(S.fpSpecPlatform) > 0; }
+function fpTypeAuto() { return S.jobMode === "new" && S.fpMode === "nc"; } // 29az: NC insulation job → NC fireplace, choice hidden
+function fpApplyNcDefault() { if (S.jobMode === "new" && S.fpMode !== "nc") { S.fpMode = "nc"; return true; } return false; }
 function fpSpecPass() {
   if (!S.includeFp) return null;
-  // 29ax: the rough opening is measured from the TOP of the hearth platform to the header, so the platform is never part of it —
-  // compare the entered RO straight to the spec (was spec + platform height, which failed correctly framed openings).
-  const needH = n(S.fpSpecRoH);
+  const plat = fpPlatformAdds() ? fpPlatformHeight() : 0;
+  const needH = n(S.fpSpecRoH) + plat;
   const needW = n(S.fpSpecRoW);
   const needD = n(S.fpSpecRoD);
   const mH = n(S.fpMeasRoH), mW = n(S.fpMeasRoW), mD = n(S.fpMeasRoD);
   if (!mH && !mW && !mD) return null;
-  return { ok: mH >= needH && mW >= needW && mD >= needD, needH, needW, needD, mH, mW, mD };
+  return { ok: mH >= needH && mW >= needW && mD >= needD, needH, needW, needD, mH, mW, mD, plat, fromSubfloor: fpPlatformAdds() };
 }
 
 const PORCH_CEIL_MATS = {
@@ -1977,7 +2031,9 @@ function twoFpDetails() {
     add("Roof type", S.fpRoofType); add("Chimney cap / shroud", String(S.fpCap || "").replace(/_/g, " "));
   }
   add("Chase clear", S.fpChaseClear ? "Yes" : "NO — BLOCKED" + ((S.fpChaseNote || "").trim() ? ": " + S.fpChaseNote.trim() : ""));
-  add("Access notes", S.fpAccessNotes); add("Hearth platform height (in)", S.fpHearthPlatform); add("Gas starter", yn(S.fpWoodGasStarter));
+  add("Access notes", S.fpAccessNotes);
+  if (S.fpPlatformOn) add("Hearth platform", (FP_PLATFORM_SHORT[S.fpPlatformBy] || "Who builds it not picked") + (fpPlatformHeight() > 0 ? ", " + fmt(fpPlatformHeight()) + '"' : "")); // 29ay
+  add("Gas starter", yn(S.fpWoodGasStarter));
   const bl = (model && model.blower) || "none";
   add("Blower", bl === "vf_none" ? "None (vent-free)" : bl === "none" ? "No blower for this model" : (bl === "dv_default" ? S.fpBlowerChoice !== "none" : S.fpBlowerChoice === "include") ? "Included" : "Not included");
   add("Spec RO H × W × D (in)", (S.fpSpecRoH || S.fpSpecRoW || S.fpSpecRoD) ? [S.fpSpecRoH || "?", S.fpSpecRoW || "?", S.fpSpecRoD || "?"].join(" × ") : "");
@@ -2083,9 +2139,10 @@ function renderTwo() {
   if ($("woDate") && document.activeElement !== $("woDate")) $("woDate").value = S.woDate || "";
   if ($("woNotes") && document.activeElement !== $("woNotes")) $("woNotes").value = S.woNotes || "";
   box.innerHTML = "";
+  if (S.includeFp) box.appendChild(fpVerifyNotice()); // 29ay: fireplace job → verify-the-manual notice above the Sky work order
   if (foamCompareOn()) box.appendChild(el("p", "cap", "Open vs closed cell compare is on — foam lines on this work order read “open cell vs. closed cell” with both depths and the same SF, so " + escHtml(twoWho("walls").name) + " prices them both ways."));
   const b = el("button", "btn btn-primary btn-block", "Work order → " + escHtml(twoWho("walls").name)); b.type = "button"; b.id = "btnTwoWalls";
-  b.disabled = !hasW; b.onclick = () => checkThen(() => twoPreview()); box.appendChild(b); box.appendChild(twoRecipient("walls"));
+  b.disabled = !hasW; b.onclick = () => checkThen(() => fpVerifyThen(() => twoPreview())); box.appendChild(b); box.appendChild(twoRecipient("walls"));
   if (!hasW) box.appendChild(el("p", "status", "No lines on this takeoff yet."));
 }
 
@@ -2521,7 +2578,9 @@ function appendFpLines(lines, noteTag) {
   }
   if (n(S.fpElbows) > 0) push(lines, { area: "Fireplace", assembly: "Elbows", product: "Elbows", description: fmt(n(S.fpElbows)) + " elbows", footage: round2(n(S.fpElbows)), unit: "ea", notes: noteTag });
   if (S.fpAccessNotes.trim()) push(lines, { area: "Fireplace", assembly: "Access", product: "Access notes", description: S.fpAccessNotes.trim(), footage: 1, unit: "ea", notes: noteTag });
-  if (n(S.fpHearthPlatform) > 0 || n(S.fpSpecPlatform) > 0) {
+  // 29ay: the KP hearth/platform line only when the box is checked and we're building it (or the choice is still open);
+  // builder-built / already-built platforms get no KP line; unchecked = no platform.
+  if (S.fpPlatformOn && (S.fpPlatformBy === "us" || !S.fpPlatformBy) && (n(S.fpHearthPlatform) > 0 || n(S.fpSpecPlatform) > 0)) {
     push(lines, { area: "Fireplace", assembly: "Hearth platform", product: "Hearth / platform", description: "Height " + (S.fpHearthPlatform || S.fpSpecPlatform) + '"', footage: 1, unit: "ea", notes: noteTag });
   }
   if (S.fpWoodGasStarter) push(lines, { area: "Fireplace", assembly: "Gas starter", product: "Gas starter", description: "Gas starter", footage: 1, unit: "ea", notes: noteTag });
@@ -2536,7 +2595,7 @@ function appendFpLines(lines, noteTag) {
   const pass = fpSpecPass();
   if (pass) {
     push(lines, { area: "Fireplace", assembly: "RO validation", product: pass.ok ? "PASS" : "FAIL",
-      description: "Measured " + pass.mH + "×" + pass.mW + "×" + pass.mD + " vs need " + pass.needH + "×" + pass.needW + "×" + pass.needD + " (spec; RO from top of platform)",
+      description: "Measured " + pass.mH + "×" + pass.mW + "×" + pass.mD + " vs need " + pass.needH + "×" + pass.needW + "×" + pass.needD + (pass.fromSubfloor ? " (spec + " + pass.plat + '" platform; RO from subfloor)' : " (spec; RO from top of platform)"),
       footage: 1, unit: "ea", notes: noteTag });
   }
 }
@@ -3347,18 +3406,27 @@ function renderFireplace() {
   setSwitch($("includeFp"), S.includeFp);
   if (!S.includeFp) { body.innerHTML = ""; return; }
   body.innerHTML = "";
+  body.appendChild(fpVerifyNotice()); // 29ay
   const models = fpModelsForContext(S.fpMode, S.fpRetroKind);
   if (models.length && !models.some(m => m.id === S.fpModelId)) S.fpModelId = models[0].id;
   const model = findFpModel(S.fpModelId);
 
-  body.appendChild(el("div", "field", "<label>Fireplace job type</label>"));
-  const seg = el("div", "seg");
-  [["nc","New construction"],["retro","Retrofit"]].forEach(([v,l]) => {
-    const b = el("button", S.fpMode === v ? "active" : ""); b.type = "button"; b.textContent = l;
-    b.onclick = () => { S.fpMode = v; loadFpSpecs(); render(); };
-    seg.appendChild(b);
-  });
-  body.appendChild(seg);
+  // 29az: new construction insulation job → the fireplace is new construction, no new-vs-retro choice.
+  // Retro insulation jobs keep the choice (a retro job can still include a brand-new chase).
+  // An older new-construction job saved with a Retrofit fireplace shows as saved (with the choice) — never flipped silently.
+  if (fpTypeAuto()) {
+    body.appendChild(el("div", "field fp-type-auto", '<label>Fireplace job type</label><div class="fp-auto" id="fpTypeAuto"><strong>New construction</strong><span>Automatic — this is a new construction insulation job.</span></div>'));
+  } else {
+    body.appendChild(el("div", "field", "<label>Fireplace job type</label>"));
+    const seg = el("div", "seg"); seg.id = "fpModeSeg";
+    [["nc","New construction"],["retro","Retrofit"]].forEach(([v,l]) => {
+      const b = el("button", S.fpMode === v ? "active" : ""); b.type = "button"; b.textContent = l;
+      b.onclick = () => { S.fpMode = v; loadFpSpecs(); render(); };
+      seg.appendChild(b);
+    });
+    body.appendChild(seg);
+    if (S.jobMode === "new") body.appendChild(el("p", "cap", "Saved as Retrofit on this job — kept as saved. New construction jobs normally get a new construction fireplace."));
+  }
 
   if (S.fpMode === "retro") {
     body.appendChild(fieldSelect("Retrofit path", S.fpRetroKind, [
@@ -3421,7 +3489,23 @@ function renderFireplace() {
   }
   body.appendChild(fieldInput("Elbow count", S.fpElbows, v => { S.fpElbows = v; schedule(); }, "number"));
   body.appendChild(fieldInput("Access notes", S.fpAccessNotes, v => { S.fpAccessNotes = v; schedule(); }));
-  body.appendChild(fieldInput("Hearth platform height (in)", S.fpHearthPlatform, v => { S.fpHearthPlatform = v; schedule(); }, "number"));
+  // 29ay: hearth platform checkbox → who builds it (required) → height
+  const pr = el("label", "toggle-row fp-plat-check"); pr.appendChild(el("span", null, "There will be a hearth platform"));
+  const cb = document.createElement("input"); cb.type = "checkbox"; cb.id = "fpPlatOn"; cb.checked = !!S.fpPlatformOn;
+  cb.onchange = () => { S.fpPlatformOn = cb.checked; render(); }; pr.appendChild(cb); body.appendChild(pr);
+  if (S.fpPlatformOn) {
+    const pf = el("div", "field fp-plat-by", "<label>Who is building the platform?</label>");
+    const ps = el("div", "seg"); ps.id = "fpPlatBy";
+    Object.keys(FP_PLATFORM_BY).forEach(k => { const b = el("button", S.fpPlatformBy === k ? "active" : ""); b.type = "button"; b.dataset.v = k; b.textContent = FP_PLATFORM_BY[k];
+      b.onclick = () => { S.fpPlatformBy = k; render(); }; ps.appendChild(b); });
+    pf.appendChild(ps); body.appendChild(pf);
+    if (!S.fpPlatformBy) body.appendChild(el("p", "status", "Pick one — it tells the RO check where the height was measured from."));
+    const ph = fieldInput("Hearth platform height (in)", S.fpHearthPlatform, v => { S.fpHearthPlatform = v; schedule(); }, "number");
+    const phi = ph.querySelector("input"); if (phi) phi.id = "fpPlatH"; body.appendChild(ph);
+    if (fpPlatformAdds()) body.appendChild(el("p", "cap fp-plat-cap", "RO measured from subfloor - platform height added" +
+      (fpPlatformFromSpec() ? " (height blank — using the model's spec platform height, " + fmt(n(S.fpSpecPlatform)) + '")' : "")));
+    else if (S.fpPlatformBy === "built") body.appendChild(el("p", "cap fp-plat-cap", "RO measured from the top of the platform — compared directly to the spec"));
+  }
   const gasS = el("div", "toggle-row"); gasS.appendChild(el("span", null, "Gas starter?"));
   const swg = el("button", "switch" + (S.fpWoodGasStarter ? " on" : "")); swg.type = "button";
   swg.onclick = () => { S.fpWoodGasStarter = !S.fpWoodGasStarter; render(); }; gasS.appendChild(swg); body.appendChild(gasS);
@@ -3460,7 +3544,8 @@ function renderFireplace() {
   body.appendChild(saveSpec);
   if (S.fpSpecNote) body.appendChild(el("p", "status", S.fpSpecNote));
 
-  body.appendChild(el("p", "cap", "Measured RO — from the top of the hearth platform to the header (validated against the spec; platform not added)"));
+  body.appendChild(el("p", "cap", fpPlatformAdds() ? "Measured RO — from the subfloor to the header (platform height added to the spec height)"
+    : "Measured RO — from the " + (S.fpPlatformOn ? "top of the hearth platform" : "subfloor (no platform)") + " to the header (compared directly to the spec)"));
   const g3 = el("div", "grid3");
   g3.appendChild(fieldInput("Measured H", S.fpMeasRoH, v => { S.fpMeasRoH = v; schedule(); }, "number"));
   g3.appendChild(fieldInput("Measured W", S.fpMeasRoW, v => { S.fpMeasRoW = v; schedule(); }, "number"));
@@ -3470,8 +3555,10 @@ function renderFireplace() {
   if (pass) {
     body.appendChild(el("div", "callout " + (pass.ok ? "ok" : "danger"),
       "<strong class='" + (pass.ok ? "pass" : "fail") + "'>" + (pass.ok ? "PASS" : "FAIL") + "</strong>Need " +
-      pass.needH + "×" + pass.needW + "×" + pass.needD + " (spec; RO measured from top of platform). Measured " + pass.mH + "×" + pass.mW + "×" + pass.mD + "."));
+      pass.needH + "×" + pass.needW + "×" + pass.needD + (pass.fromSubfloor ? " (spec + " + fmt(pass.plat) + '" platform; RO measured from subfloor)' : S.fpPlatformOn ? " (spec; RO measured from top of platform)" : " (spec; no platform)") +
+      ". Measured " + pass.mH + "×" + pass.mW + "×" + pass.mD + "."));
   }
+  body.appendChild(fpVerifyNotice()); // 29ay: by the fireplace results too
 }
 
 function loadFpSpecs() {
@@ -3719,7 +3806,8 @@ function wireArchiveBatch() {
   on("archAnyDate", () => archSetDay(""));
   on("archSelect", () => { ARCH_SELECT = !ARCH_SELECT; if (!ARCH_SELECT) ARCH_SEL.clear(); renderArchive(); });
   on("archSelAll", () => { archSelectAllShown(); renderArchive(); });
-  on("archSendSel", () => batchOpen(archSelectedShown()));
+  on("archSendSel", () => { const ids = archSelectedShown(); const fp = ids.some(id => { const j = (S._fullJobs || []).find(x => x.id === id); return !!(j && j.draft && j.draft.includeFp); });
+    fpVerifyThen(() => batchOpen(ids), fp); }); // 29ay
 }
 // Run fn with S temporarily holding an archived job (same apply as Open), then put the open job back untouched.
 function withJobState(job, fn) {
@@ -3765,6 +3853,9 @@ function missingFields() {
   if (F.canAskCrawlEncap && S.hasCrawlWalls) (S.crawlWalls || []).forEach((r, i) => { if (blank(r.length)) add("Crawl wall #" + (i + 1), "Length", "Crawl wall #" + (i + 1)); else if (blank(r.height)) add("Crawl wall #" + (i + 1), "Height", "Crawl wall #" + (i + 1)); });
   if (S.hasDense && F.canAskDense) (S.dense || []).forEach((r, i) => { if (blank(r.sf)) add("Dense-pack #" + (i + 1), "Flat SF", "Dense-pack #" + (i + 1)); });
   if (S.hasMisc) (S.misc || []).forEach((r, i) => { if (!String(r.material || "").trim()) add("Misc item #" + (i + 1), "Material", "Misc item #" + (i + 1), "Material (required)"); });
+  // 29ay: hearth platform — who builds it (required once the box is checked); height needed when it's added to the RO and no spec height exists
+  if (S.includeFp && S.fpPlatformOn && !S.fpPlatformBy) add("Hearth platform", "Who is building it", null, null, "fpPlatBy");
+  if (S.includeFp && fpPlatformAdds() && !(fpPlatformHeight() > 0)) add("Hearth platform", "Height", null, null, "fpPlatH");
   // closed-cell lines with no depth picked (29as H) — compare mode checks Option B
   let ls = []; try { ls = foamCompareOn() ? withFoam("cc", allLines) : allLines(); } catch (e) {}
   Array.from(new Set(ls.filter(L => L._ccMissing).map(L => L.area))).forEach(a => out.push({ area: a, field: "Closed-cell depth", cc: true }));
@@ -3802,7 +3893,30 @@ function checkThen(proceed, list, goBack) {
   $("missGo").onclick = () => { missClose(); proceed(); };
   return true;
 }
-function guardedSave() { checkThen(savePermanent); }
+// 29ay: fireplace verification notice — big yellow box (always shown in the Fireplace section + results) and a must-acknowledge
+// modal on Save / Send / Sky sheet when the job has a fireplace, chained after the empty-fields check.
+const FP_VERIFY_HEAD = "DOUBLE-CHECK FRAMING REQUIREMENTS IN THE MANUFACTURER'S INSTALL MANUAL BEFORE ORDERING.";
+const FP_VERIFY_BODY = "App fireplace specs are still being verified, and not every spec has been confirmed yet.";
+const FP_VERIFY_ICON = '<svg class="fpv-ico" viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+function fpVerifyNotice() {
+  const d = el("div", "fp-verify", FP_VERIFY_ICON + '<div><strong>' + escHtml(FP_VERIFY_HEAD) + "</strong><span>" + escHtml(FP_VERIFY_BODY) + "</span></div>");
+  d.setAttribute("role", "alert"); return d;
+}
+function fpVerifyClose() { const m = $("fpVerifyModal"); if (m) m.remove(); if (!$("missModal") && !$("twoPreview") && !$("batchModal")) document.body.classList.remove("xl-open"); }
+function fpVerifyThen(proceed, hasFp) {
+  if (!(hasFp == null ? S.includeFp : hasFp)) { proceed(); return false; }
+  fpVerifyClose();
+  const m = el("div", "xl-modal fpv-modal"); m.id = "fpVerifyModal";
+  m.innerHTML = '<div class="xl-bar"><span style="width:60px"></span><div class="xl-title">Fireplace — check the manual</div><span style="width:60px"></span></div>' +
+    '<div class="batch-body"></div>' +
+    '<div class="xl-foot"><div class="grid2"><button type="button" class="btn btn-secondary" id="fpvBack">Go back</button><button type="button" class="btn btn-primary" id="fpvOk">I\'ll check the manual</button></div></div>';
+  m.querySelector(".batch-body").appendChild(fpVerifyNotice());
+  document.body.appendChild(m); document.body.classList.add("xl-open");
+  $("fpvBack").onclick = () => fpVerifyClose();
+  $("fpvOk").onclick = () => { fpVerifyClose(); proceed(); };
+  return true;
+}
+function guardedSave() { checkThen(() => fpVerifyThen(savePermanent)); }
 // One archived job -> its Sky work order entry (or a skip reason). Photos are attached later (async load + resize).
 function batchBuildJob(job) {
   try {
@@ -3888,7 +4002,8 @@ function archSendOne(id) {
   const job = (S._fullJobs || []).find(x => x.id === id);
   let miss = [];
   try { if (job) miss = withJobState(job, missingFields); } catch (e) {}
-  return checkThen(() => batchOpen([id]), miss, m => { openArchiveJob(id); setTimeout(() => jumpToMissing(m), 50); });
+  let fp = false; try { if (job) fp = withJobState(job, () => !!S.includeFp); } catch (e) {}
+  return checkThen(() => fpVerifyThen(() => batchOpen([id]), fp), miss, m => { openArchiveJob(id); setTimeout(() => jumpToMissing(m), 50); });
 }
 function batchOpen(ids) {
   ids = (ids || []).slice(); if (!ids.length) return Promise.resolve();
@@ -4098,7 +4213,7 @@ function render() {
   $("marginCustom").value = S.marginCustom;
 
   bindSeg("seg-owner", () => S.owner, v => { if (!ALLOW_OWNER_SWITCH) { S.owner = HOME_OWNER; return; } S.owner = v; S.outputView = v === "sky" ? "excel" : "fg"; render(); });
-  bindSeg("seg-mode", () => S.jobMode, v => { if (v === "retro" && S.jobMode !== "retro") S.hasBaffles = false; S.jobMode = v; render(); }); // 29an: retro baffles default off
+  bindSeg("seg-mode", () => S.jobMode, v => { if (v === "retro" && S.jobMode !== "retro") S.hasBaffles = false; const toNew = v === "new" && S.jobMode !== "new"; S.jobMode = v; if (toNew && fpApplyNcDefault() && S.includeFp) loadFpSpecs(); render(); }); // 29an: retro baffles default off; 29az: choosing New construction → NC fireplace
   bindSeg("seg-retroScope", () => S.retroScope, v => { S.retroScope = v; render(); });
   bindSeg("seg-outputView", () => S.outputView, v => { S.outputView = v; render(); });
 
@@ -4217,6 +4332,9 @@ function migrateState(d) {
   if (!("woDateManual" in d)) S.woDateManual = !!S.woDate; else S.woDateManual = !!S.woDateManual;
   applyWoDateDefault();
   if (!OWNER_LABELS[S.owner]) S.owner = APP_EDITION === "lance" ? "lance" : "asher";
+  // 29ay: jobs saved before the platform checkbox — a platform height > 0 means checked + "Already built" (= the 29ax math)
+  if (!("fpPlatformOn" in d)) { S.fpPlatformOn = n(S.fpHearthPlatform) > 0; S.fpPlatformBy = S.fpPlatformOn ? "built" : ""; }
+  if (!FP_PLATFORM_BY[S.fpPlatformBy]) S.fpPlatformBy = "";
   if (!ALLOW_OWNER_SWITCH) S.owner = HOME_OWNER; // 29ax: locked copies never take another owner from a draft / archived job / backup
   if (d.caulkFoam) S.airSealed = true;
   // 29as: Total Bat toggle → its own package. Standard + Total Bat on (29ao) loads as the Total Bat package.
@@ -4456,7 +4574,7 @@ function newJob() {
   S.includeFp = false; S.fpMode = "nc"; S.fpRetroKind = "tearout"; S.fpOtherDemo = false;
   S.fpModelId = "apex42"; S.fpPipeFt = ""; S.fpTerm = "roof"; S.fpAccessNotes = "";
   S.fpChaseClear = true; S.fpChaseNote = "";
-  S.fpHearthPlatform = ""; S.fpWoodGasStarter = false; S.fpMeasRoH = ""; S.fpMeasRoW = ""; S.fpMeasRoD = "";
+  S.fpHearthPlatform = ""; S.fpPlatformOn = false; S.fpPlatformBy = ""; S.fpWoodGasStarter = false; S.fpMeasRoH = ""; S.fpMeasRoW = ""; S.fpMeasRoD = "";
   S.fpWall90 = false;
   setStatus("New job started (draft autosaves).");
   applyPkgDefaults();
@@ -4519,7 +4637,7 @@ function wireInputs() {
   $("billSame").onclick = () => { S.billSame = S.billSame === false; render(); };
   $("showFgMap").onclick = () => { S.showFgMap = !S.showFgMap; render(); };
   $("btnFgMapReset").onclick = () => { if (window.confirm("Reset every FieldGroove mapping override to the default?")) { lsSet(FG_MAP_KEY, "{}"); renderFgMap(); $("fgMapNote").textContent = "Reset to defaults."; } };
-  $("includeFp").onclick = () => { S.includeFp = !S.includeFp; if (S.includeFp) loadFpSpecs(); render(); };
+  $("includeFp").onclick = () => { S.includeFp = !S.includeFp; if (S.includeFp) { fpApplyNcDefault(); loadFpSpecs(); } render(); }; // 29az: adding a fireplace on an NC job → NC fireplace
   $("showBallpark").onclick = () => { S.showBallpark = !S.showBallpark; render(); };
   $("showPriceLib").onclick = () => { S.showPriceLib = !S.showPriceLib; render(); };
 
@@ -4530,6 +4648,7 @@ function wireInputs() {
   syncSaveDock();
   // 29av: "View Excel takeoff" removed from the pinned bar (Excel tab in the nav still opens it)
   $("btnNewJob").onclick = newJob;
+  $("btnTraining").onclick = () => trainOpen(0); // 29az: training walkthrough (read-only)
   ["input", "change"].forEach(ev => $("woDate").addEventListener(ev, () => { S.woDateManual = true; })); // 29av: Asher's edit sticks
   // 29au: same handler as the Customer/builder New job (one code path), then show the Wizard if another tab was open
   $("btnNewJobTop").onclick = () => { $("btnNewJob").click(); const w = document.querySelector('.nav-btn[data-tab="wizard"]'); if (w && !w.classList.contains("active")) w.click(); window.scrollTo(0, 0); };
@@ -4575,7 +4694,128 @@ function syncSaveDock() {
   document.body.classList.toggle("has-save-dock", on);
 }
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29ax";
+// ---- 29az: Training mode — first-timer walkthrough. Step cards with example pictures only:
+// never reads into, changes or saves the open job, drafts, the Library or prices (no S writes, no storage writes).
+// Text is tailored per copy (APP_EDITION / ALLOW_OWNER_SWITCH / which tabs exist); no dollar figures anywhere.
+const TRAIN_FG_BANNER = "FieldGroove import — work in progress. Not available yet, and it won't affect your takeoffs. You'll be notified when it's ready.";
+const TRAIN_ICON = '<svg class="train-ico" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 9 12 4 2 9l10 5 10-5Z"/><path d="M6 11.2V16c0 1.1 2.7 3 6 3s6-1.9 6-3v-4.8"/><path d="M22 9v6"/></svg>';
+let TRAIN_I = 0;
+function trainNotice() { const d = fpVerifyNotice(); d.removeAttribute("role"); return d.outerHTML; } // same notice, minus role=alert inside the example
+function trainSheet() { return APP_EDITION === "choice" ? "the work order sheet" : "Sky's work order sheet"; }
+function trainDemo(html, cap) { return '<div class="train-demo" aria-hidden="true"><div class="train-demo-tag">Example' + (cap ? " — " + cap : "") + '</div>' + html + "</div>"; }
+function trainSeg(opts, on) { return '<div class="seg">' + opts.map((o, i) => '<button type="button" tabindex="-1" class="' + (i === on ? "active" : "") + '">' + escHtml(o) + "</button>").join("") + "</div>"; }
+function trainSwitch(label, on) { return '<div class="toggle-row"><span>' + escHtml(label) + '</span><span class="switch' + (on ? " on" : "") + '"></span></div>'; }
+function trainCheck(label, on) { return '<label class="toggle-row fp-plat-check"><span>' + escHtml(label) + '</span><input type="checkbox" tabindex="-1"' + (on ? " checked" : "") + "></label>"; }
+function trainOwnerStep() {
+  const seg = $("seg-owner");
+  const btns = seg ? Array.from(seg.querySelectorAll("button")).filter(b => !b.classList.contains("hidden")).map(b => b.textContent.trim()) : [];
+  if (APP_EDITION === "choice") return { title: "Whose job? — this copy is Blake's",
+    html: "<p>Every job made on this copy is <b>Blake's job</b>. There's no job selector here, so there's nothing to pick — the app fills it in for you.</p>" +
+      "<p>Each rep's copy is locked to its own owner the same way, and new rep copies start locked automatically.</p>" };
+  if (ALLOW_OWNER_SWITCH) return { title: "Whose job? — the job lock",
+    html: "<p>At the top of <b>Measure</b>, <b>Whose job?</b> picks who the job belongs to. Only Asher's and Lance's copies can switch between Asher's, Lance's and Sky's jobs.</p>" +
+      "<p>Every other rep's copy is locked to its own owner. Blake's Choice copy has no job selector at all, and any new rep copy starts locked automatically.</p>" +
+      trainDemo(trainSeg(btns.length ? btns : ["Asher's job", "Sky's job"], 0), "on this copy") };
+  return { title: "Whose job? — this copy is locked",
+    html: "<p>This copy is locked to <b>" + escHtml(ownerName()) + "'s jobs</b>, so there's no job selector to pick from. Every job you make here is yours.</p>" +
+      "<p>Only Asher's and Lance's copies can switch owners; new rep copies start locked automatically.</p>" };
+}
+function trainSteps() {
+  const tabs = Array.from(document.querySelectorAll(".bottom-nav .nav-btn"));
+  const what = { wizard: "measure the house — every job starts here", output: "the finished takeoff, " + trainSheet() + " and the FieldGroove file",
+    archive: "your saved jobs — search and reopen them", workorder: "builder lot-log work orders", pricing: "unit prices and the ballpark price" };
+  const tabList = '<ul class="train-tabs">' + tabs.map(b => { const ic = b.querySelector("svg"); return "<li>" + (ic ? ic.outerHTML : "") + "<span><b>" + escHtml(b.textContent.trim()) + "</b> — " + escHtml(what[b.dataset.tab] || "") + "</span></li>"; }).join("") + "</ul>";
+  return [
+    { title: "Welcome to training",
+      html: "<p>This walkthrough takes a brand-new user through a job from start to finish, including a fireplace.</p>" +
+        "<p><b>Nothing here touches your jobs.</b> The pictures are examples only and nothing is saved.</p>" +
+        "<p>Tap <b>Next</b> and <b>Back</b> to move, or <b>✕</b> to close anytime. Open it again from the <b>Training</b> button at the top of the Measure tab.</p>" },
+    { title: "The tabs at the bottom", html: "<p>The bar at the bottom of the screen switches between the parts of the app:</p>" + tabList },
+    { title: "Step 1 — Open a new job",
+      html: "<p>Tap <b>＋ New job</b> at the top of the screen. It starts a fresh, empty job dated today.</p>" +
+        "<p>Your work autosaves as a draft while you go. When the job is done you'll tap <b>Save to Library</b> so it's kept.</p>" +
+        trainDemo('<button type="button" tabindex="-1" class="btn btn-primary btn-block">＋ New job</button>') },
+    { title: "Step 2 — Pick New construction",
+      html: "<p>Under <b>New construction or retro?</b> tap <b>New construction</b> for a house being built. Pick <b>Retro</b> for an existing house.</p>" +
+        trainDemo('<div class="field"><label>New construction or retro?</label>' + trainSeg(["New construction", "Retro"], 0) + "</div>") },
+    { title: "Step 3 — There's a fireplace",
+      html: "<p>Scroll down to the <b>Fireplace</b> section and turn on <b>Include fireplace on this job?</b></p>" +
+        trainDemo(trainSwitch("Include fireplace on this job?", true)) },
+    { title: "Fireplace type is automatic",
+      html: "<p>On a <b>New construction</b> job the fireplace is automatically <b>New construction</b>. There's no new-vs-retro choice to make.</p>" +
+        "<p>On a <b>Retro</b> job you still get to choose New construction or Retrofit, because a retro job can include a brand-new chase.</p>" +
+        "<p>An older job that was saved with a Retrofit fireplace keeps what was saved.</p>" +
+        trainDemo('<div class="field"><label>Fireplace job type</label><div class="fp-auto"><strong>New construction</strong><span>Automatic — this is a new construction insulation job.</span></div></div>', "new construction job") +
+        trainDemo('<div class="field"><label>Fireplace job type</label>' + trainSeg(["New construction", "Retrofit"], 0) + "</div>", "retro job") },
+    { title: "Step 4 — Model and rough opening",
+      html: "<p>Pick the fireplace under <b>Model / catalog</b>. Its spec rough opening (RO) fills in.</p>" +
+        "<p>Then type the framed opening you measured into <b>Measured H</b>, <b>W</b> and <b>D</b> (inches). The app checks it against the spec and shows PASS or FAIL.</p>" },
+    { title: "Step 5 — Hearth platform checkbox",
+      html: "<p>If the fireplace sits on a raised hearth platform, check <b>There will be a hearth platform</b>. Leave it unchecked if there isn't one.</p>" +
+        trainDemo(trainCheck("There will be a hearth platform", true)) },
+    { title: "Who's building the platform?",
+      html: "<p>Once it's checked, the app asks <b>Who is building the platform?</b> Pick one — it's required, and it tells the opening check where you measured from.</p>" +
+        "<ul><li><b>We're building it</b></li><li><b>Builder is building it</b></li><li><b>Already built</b></li></ul>" +
+        trainDemo('<div class="field"><label>Who is building the platform?</label>' + trainSeg([FP_PLATFORM_BY.us, FP_PLATFORM_BY.builder, FP_PLATFORM_BY.built], 0) + "</div>") },
+    { title: "How the opening check works",
+      html: "<ul class=\"train-list\"><li><b>Unchecked</b> or <b>Already built</b> — you measure the RO from the top of the platform (or the subfloor if there's none), so it's compared directly to the spec.</li>" +
+        "<li><b>We're building it</b> or <b>Builder is building it</b> — the platform isn't there yet, so you measure from the subfloor. The height needed is the spec height <b>plus</b> the platform height.</li></ul>" +
+        "<p>Width and depth are always compared straight to the spec.</p>" },
+    { title: "Platform height",
+      html: "<p>Type the platform height in <b>Hearth platform height (in)</b>.</p>" +
+        "<p>If you leave it blank, the app uses the model's spec platform height. If there's no spec height either, it's flagged as missing when you save.</p>" +
+        "<p>Only <b>We're building it</b> adds a hearth platform line to the takeoff. The other choices just change the opening check.</p>" },
+    { title: "The big yellow notice",
+      html: "<p>Every fireplace job shows this notice. It's at the top of the <b>Fireplace</b> section, again under the RO results, and on the <b>Summary</b> tab above " + escHtml(trainSheet()) + ".</p>" +
+        trainDemo(trainNotice()) },
+    { title: "The “I'll check the manual” popup",
+      html: "<p>On a fireplace job, when you <b>save</b>, <b>send</b>, or open " + escHtml(trainSheet()) + ", a popup shows the same notice first.</p>" +
+        "<p>Tap <b>I'll check the manual</b> to go on, or <b>Go back</b> to stay where you were. Then check the framing requirements in the manufacturer's install manual before ordering.</p>" +
+        trainDemo('<div class="train-pop"><div class="train-pop-title">Fireplace — check the manual</div>' + trainNotice() +
+          '<div class="grid2"><button type="button" tabindex="-1" class="btn btn-secondary">Go back</button><button type="button" tabindex="-1" class="btn btn-primary">I\'ll check the manual</button></div></div>') },
+    { title: "FieldGroove import",
+      html: '<div class="train-banner" id="trainFgBanner">' + escHtml(TRAIN_FG_BANNER) + "</div>" +
+        "<p>You can skip the <b>FieldGroove</b> part of the Summary tab for now. Measure and save your jobs as usual.</p>" },
+    trainOwnerStep(),
+    { title: "Foam pricing basics",
+      html: "<p>Prices live on the <b>Pricing</b> tab. Turn on <b>Edit price library</b> to see them.</p>" +
+        "<ul class=\"train-list\"><li>Foam is priced <b>per square foot</b>, at a <b>40% margin</b> by default. Pick another margin for a job under <b>Margin for this job</b>.</li>" +
+        "<li>A price you save on your phone is used instead of the built-in one.</li>" +
+        "<li>A foam depth with no price yet makes the ballpark show <b>incomplete</b> until a price is entered.</li></ul>" +
+        "<p>The ballpark is a rough number, not a final invoice.</p>" },
+    { title: "You're ready",
+      html: "<p>That's a whole job: <b>＋ New job</b> → New construction → measure → fireplace and platform → check the yellow notice → <b>Save to Library</b>.</p>" +
+        "<p>If something's missing when you save, the app lists it so you can fill it in. Open training again anytime from the <b>Training</b> button on the Measure tab.</p>" }
+  ];
+}
+function trainClose() { const m = $("trainModal"); if (m) m.remove(); document.removeEventListener("keydown", trainKey);
+  if (!$("missModal") && !$("twoPreview") && !$("batchModal") && !$("fpVerifyModal") && !$("photoModal")) document.body.classList.remove("xl-open"); }
+function trainKey(e) { if (!$("trainModal")) return; if (e.key === "Escape") trainClose(); else if (e.key === "ArrowRight") trainGo(1); else if (e.key === "ArrowLeft") trainGo(-1); }
+function trainGo(d) { const n = trainSteps().length, j = TRAIN_I + d; if (j >= n) { trainClose(); return; } if (j < 0) return; TRAIN_I = j; trainRender(); }
+function trainRender() {
+  const m = $("trainModal"); if (!m) return;
+  const steps = trainSteps(), st = steps[TRAIN_I], last = TRAIN_I === steps.length - 1;
+  m.querySelector(".xl-title").textContent = "Training · " + (TRAIN_I + 1) + " of " + steps.length;
+  const body = m.querySelector(".train-body");
+  body.innerHTML = '<div class="train-card" data-step="' + TRAIN_I + '"><h3 id="trainTitle">' + escHtml(st.title) + "</h3>" + st.html + "</div>";
+  body.scrollTop = 0;
+  m.querySelector(".train-dots").innerHTML = steps.map((_, i) => '<span class="' + (i === TRAIN_I ? "on" : i < TRAIN_I ? "done" : "") + '"></span>').join("");
+  const back = $("trainBack"); back.disabled = TRAIN_I === 0;
+  $("trainNext").textContent = last ? "Finish" : "Next ›";
+}
+function trainOpen(i) {
+  trainClose(); TRAIN_I = Math.max(0, Math.min(i || 0, trainSteps().length - 1));
+  const m = el("div", "xl-modal train-modal"); m.id = "trainModal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-labelledby", "trainTitle");
+  m.innerHTML = '<div class="xl-bar"><span class="train-bar-ico">' + TRAIN_ICON + '</span><div class="xl-title"></div><button type="button" class="btn btn-secondary btn-sm" id="trainX" aria-label="Close training">✕ Close</button></div>' +
+    '<div class="batch-body train-body"></div>' +
+    '<div class="xl-foot"><div class="train-dots" aria-hidden="true"></div><div class="grid2"><button type="button" class="btn btn-secondary" id="trainBack">‹ Back</button><button type="button" class="btn btn-primary" id="trainNext">Next ›</button></div></div>';
+  document.body.appendChild(m); document.body.classList.add("xl-open");
+  $("trainX").onclick = trainClose; $("trainBack").onclick = () => trainGo(-1); $("trainNext").onclick = () => trainGo(1);
+  document.addEventListener("keydown", trainKey);
+  trainRender();
+}
+
+const APP_BUILD = "2026-10-29az";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
