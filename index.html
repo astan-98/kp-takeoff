@@ -156,6 +156,23 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .archive-card .meta { font-size: .78rem; color: var(--text2); margin-bottom: 4px; }
 .archive-card .title { font-weight: 700; margin-bottom: 8px; }
 .archive-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.archive-quick { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 2px 0 6px; }
+.archive-selbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
+.archive-selbar.floating { position: fixed; left: 12px; right: 12px; bottom: calc(var(--nav-h) + var(--safe-b) + 8px); z-index: 45; margin: 0;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 8px 10px; box-shadow: var(--shadow); }
+#archiveList.sel-pad { padding-bottom: 96px; }
+.archive-selbar.floating #archSendSel { flex: 1 1 100%; }
+.sel-badge { display: inline-block; min-width: 22px; padding: 4px 10px; border-radius: 12px; background: var(--accent); color: #fff; font-size: .8rem; font-weight: 700; }
+.archive-card.sel-mode { cursor: pointer; }
+.archive-card.selected { outline: 2px solid var(--accent); }
+.arch-check { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: .85rem; margin-bottom: 6px; }
+.arch-check input { width: 22px; height: 22px; }
+.batch-body { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; padding: 12px; }
+.batch-row { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; font-size: .85rem; }
+.batch-row.skip { opacity: .75; border-color: var(--danger); }
+.batch-row .t { font-weight: 700; }
+.batch-row .m { color: var(--text2); font-size: .78rem; margin-top: 2px; }
+.batch-parts .btn { margin-top: 6px; }
 .bottom-nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
   height: calc(var(--nav-h) + var(--safe-b)); padding-bottom: var(--safe-b);
@@ -495,7 +512,18 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <div class="field"><label>From date</label><input id="filterFrom" type="date"></div>
         <div class="field"><label>To date</label><input id="filterTo" type="date"></div>
       </div>
+      <div class="archive-quick"><span class="cap">Date measured:</span>
+        <button type="button" class="btn btn-secondary btn-sm" id="archToday">Today</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="archYesterday">Yesterday</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="archAnyDate">Any date</button>
+      </div>
       <p class="status" id="archiveCount">0 saved job(s)</p>
+      <div class="archive-selbar" id="archSelBar">
+        <button type="button" class="btn btn-secondary btn-sm" id="archSelect">Select</button>
+        <button type="button" class="btn btn-secondary btn-sm hidden" id="archSelAll">Select all shown</button>
+        <span class="sel-badge hidden" id="archSelCount">0 selected</span>
+        <button type="button" class="btn btn-primary btn-sm hidden" id="archSendSel" disabled>Send 0 to Sky</button>
+      </div>
       <div id="archiveList"></div>
     </div>
     <div class="section">
@@ -3361,9 +3389,10 @@ function escHtml(s) {
   return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
-function renderArchive() {
+// 29ak: the archive filter on its own so Select all shown / batch send use exactly the list on screen
+function archiveFiltered(list) {
   const q = (S.filterText || "").trim().toLowerCase();
-  const filtered = S.archive.filter(j => {
+  return (list || []).filter(j => {
     if (S.filterOwner !== "all" && j.owner !== S.filterOwner) return false;
     if (S.filterBuilder && !(j.builder || "").toLowerCase().includes(S.filterBuilder.toLowerCase())) return false;
     if (S.filterCity && !(j.city || "").toLowerCase().includes(S.filterCity.toLowerCase())) return false;
@@ -3376,7 +3405,12 @@ function renderArchive() {
     }
     return true;
   });
+}
+function renderArchive() {
+  const filtered = archiveFiltered(S.archive);
+  ARCH_SHOWN = filtered.map(j => j.id);
   $("archiveCount").textContent = filtered.length + " saved job(s)";
+  renderArchSelBar();
   const list = $("archiveList");
   list.innerHTML = "";
   if (!filtered.length) {
@@ -3384,8 +3418,9 @@ function renderArchive() {
     return;
   }
   filtered.forEach(j => {
-    const card = el("div", "archive-card");
-    card.innerHTML = '<div class="meta">' + escHtml(j.dateMeasured) + " · " + ownerName(j.owner) +
+    const card = el("div", "archive-card" + (ARCH_SELECT ? " sel-mode" : "") + (ARCH_SELECT && ARCH_SEL.has(j.id) ? " selected" : ""));
+    card.innerHTML = (ARCH_SELECT ? '<label class="arch-check"><input type="checkbox"' + (ARCH_SEL.has(j.id) ? " checked" : "") + '> Select</label>' : "") +
+      '<div class="meta">' + escHtml(j.dateMeasured) + " · " + ownerName(j.owner) +
       " · " + escHtml(j.builder || "—") + " · " + escHtml(j.city || "—") + '</div>' +
       '<div class="title">' + escHtml(j.address || "(no address)") + '</div>' +
       '<div class="meta">' + escHtml(relabelPkg(j.packageLabel)) + (j.photoCount ? " · 📷 " + j.photoCount : "") + '</div>' +
@@ -3399,8 +3434,231 @@ function renderArchive() {
       const full = (S._fullJobs || []).find(x => x.id === j.id), pids = ((full && full.draft && full.draft.photos) || []).map(x => x && x.id).filter(Boolean);
       idbDelete(j.id).then(() => { setStatus("Deleted from archive."); refreshArchive(); photoForget(pids, j.id); }).catch(() => setStatus("Delete failed."));
     };
-    actions.appendChild(open); actions.appendChild(del); card.appendChild(actions); list.appendChild(card);
+    const send = el("button", "btn btn-secondary btn-sm"); send.type = "button"; send.textContent = "Send to " + twoWho("walls").name;
+    send.onclick = ev => { ev.stopPropagation(); batchOpen([j.id]); };
+    if (ARCH_SELECT) {
+      const cb = card.querySelector(".arch-check input");
+      const toggle = on => { if (on) ARCH_SEL.add(j.id); else ARCH_SEL.delete(j.id); card.classList.toggle("selected", on); cb.checked = on; renderArchSelBar(); };
+      cb.onclick = ev => { ev.stopPropagation(); toggle(cb.checked); };
+      card.onclick = ev => { if (ev.target.closest("button,a,input,label")) return; toggle(!ARCH_SEL.has(j.id)); };
+    }
+    actions.appendChild(open); actions.appendChild(send); actions.appendChild(del); card.appendChild(actions); list.appendChild(card);
   });
+}
+
+/* ===== 29ak: Archive → batch work orders → Sky (one share sheet = one email) =====
+   Select jobs on the (already filtered) archive list, then each job's Sky work order is built EXACTLY as the single
+   "Work order → Sky" send builds it (twoOrder / twoFileName / twoFpText run against that job's saved state), plus its photos.
+   Everything (xlsx bytes, resized photos) is prepared before the share button is tapped, so navigator.share runs inside the tap.
+   Nothing is ever sent automatically — the iOS share sheet (Mail → Send) is the send. */
+const BATCH_PHOTO_MAX = 1600, BATCH_PHOTO_Q = 0.7;          // batch photos: long edge 1600 px, JPEG quality 0.7 (kept original if smaller)
+const BATCH_LIMIT_MB = 15;                                  // raw attachments per email; Mail's base64 makes it ~1.37× → ~20 MB on the wire
+const BATCH_LIMIT = BATCH_LIMIT_MB * 1024 * 1024;
+let ARCH_SELECT = false, ARCH_SHOWN = [];
+const ARCH_SEL = new Set();
+function isoDaysAgo(days, now) { const d = now ? new Date(now) : new Date(); d.setDate(d.getDate() - (days | 0));
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function archSetDay(v) { S.filterFrom = v; S.filterTo = v; ["filterFrom", "filterTo"].forEach(k => { const e = $(k); if (e) e.value = v; }); renderArchive(); }
+function archSelectedShown() { return ARCH_SHOWN.filter(id => ARCH_SEL.has(id)); }
+function archSelectAllShown() { const all = ARCH_SHOWN.length && ARCH_SHOWN.every(id => ARCH_SEL.has(id));
+  ARCH_SHOWN.forEach(id => { if (all) ARCH_SEL.delete(id); else ARCH_SEL.add(id); }); return !all; }
+function renderArchSelBar() {
+  const b = $("archSelect"); if (!b) return;
+  const n = archSelectedShown().length, hidden = ARCH_SEL.size - n, who = twoWho("walls").name;
+  b.textContent = ARCH_SELECT ? "Done" : "Select";
+  $("archSelBar").classList.toggle("floating", ARCH_SELECT); const L = $("archiveList"); if (L) L.classList.toggle("sel-pad", ARCH_SELECT);
+  ["archSelAll", "archSelCount", "archSendSel"].forEach(id => $(id).classList.toggle("hidden", !ARCH_SELECT));
+  const allOn = ARCH_SHOWN.length && ARCH_SHOWN.every(id => ARCH_SEL.has(id));
+  $("archSelAll").textContent = allOn ? "Clear shown" : "Select all shown";
+  $("archSelCount").textContent = n + " selected" + (hidden > 0 ? " (+" + hidden + " hidden by filters, not sent)" : "");
+  const s = $("archSendSel"); s.textContent = "Send " + n + " to " + who; s.disabled = !n;
+}
+function wireArchiveBatch() {
+  const on = (id, fn) => { const e = $(id); if (e) e.onclick = fn; };
+  on("archToday", () => archSetDay(isoDaysAgo(0)));
+  on("archYesterday", () => archSetDay(isoDaysAgo(1)));
+  on("archAnyDate", () => archSetDay(""));
+  on("archSelect", () => { ARCH_SELECT = !ARCH_SELECT; if (!ARCH_SELECT) ARCH_SEL.clear(); renderArchive(); });
+  on("archSelAll", () => { archSelectAllShown(); renderArchive(); });
+  on("archSendSel", () => batchOpen(archSelectedShown()));
+}
+// Run fn with S temporarily holding an archived job (same apply as Open), then put the open job back untouched.
+function withJobState(job, fn) {
+  const keys = Object.keys(S), saved = {}; keys.forEach(k => { saved[k] = S[k]; });
+  const fv = FOAM_VIEW;
+  S._suppressSave = true;
+  try { applyJobToS(JSON.parse(JSON.stringify(job))); S._suppressSave = true; return fn(); }
+  finally { Object.keys(S).forEach(k => { if (!(k in saved)) delete S[k]; }); keys.forEach(k => { S[k] = saved[k]; }); FOAM_VIEW = fv; }
+}
+// One archived job -> its Sky work order entry (or a skip reason). Photos are attached later (async load + resize).
+function batchBuildJob(job) {
+  try {
+    return withJobState(job, () => {
+      const o = twoOrder();
+      const label = (S.address || "").trim() || (S.builder || "").trim() || "(no address)";
+      if (!o.pages.length) return { id: job.id, label, skip: "No work order lines on this takeoff (nothing measured/priced) — open it to finish." };
+      const where = [o.jobSite, (S.city || "").trim()].filter(Boolean).join(", ");
+      const warn = [];
+      if (!(S.address || "").trim()) warn.push("no address — files named by " + ((S.builder || "").trim() ? "builder" : "“Job”"));
+      const base = photoFileBase(o.jobSite);
+      return { id: job.id, label, order: o, line: where + (o.customer ? " (" + o.customer + ")" : ""), single: twoShareText(o, false),
+        xlsx: { name: twoFileName(o), bytes: KPWO.buildXlsx(o, o.pages) },
+        fp: o.fpPages.length ? { name: base + " - fireplace.txt", text: twoFpText(o) } : null,
+        photoRefs: S.photos.map((x, i) => ({ id: x.id, name: base + " - photo " + (i + 1) + ".jpg" })), photos: [], photoMissing: 0, warn };
+    });
+  } catch (e) { return { id: job.id, label: (job.address || job.builder || "(no address)"), skip: "Couldn't build the work order (" + (e && e.message || e) + ")." }; }
+}
+function batchRecompress(buf) {
+  return new Promise(resolve => {
+    let url; try { url = URL.createObjectURL(new Blob([buf], { type: "image/jpeg" })); } catch (e) { resolve(buf); return; }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height, k = Math.min(1, BATCH_PHOTO_MAX / Math.max(w0, h0 || 1));
+        const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w0 * k)); c.height = Math.max(1, Math.round(h0 * k));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        c.toBlob(b => { c.width = c.height = 0; if (!b) { resolve(buf); return; }
+          b.arrayBuffer().then(d => resolve(d.byteLength < buf.byteLength ? d : buf), () => resolve(buf)); }, "image/jpeg", BATCH_PHOTO_Q);
+      } catch (e) { URL.revokeObjectURL(url); resolve(buf); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(buf); };
+    img.src = url;
+  });
+}
+// loader(id) -> Promise<{data: ArrayBuffer}> (IndexedDB photo store by default; tests pass a stub)
+function batchLoadPhotos(entries, loader, onProgress) {
+  loader = loader || idbPhotoGet;
+  let p = Promise.resolve(), done = 0;
+  entries.filter(e => !e.skip).forEach(e => e.photoRefs.forEach(r => {
+    p = p.then(() => loader(r.id).then(rec => rec && rec.data ? batchRecompress(rec.data) : null, () => null)).then(data => {
+      if (data) e.photos.push({ name: r.name, data, size: data.byteLength }); else e.photoMissing++;
+      done++; if (onProgress) onProgress(done);
+    });
+  }));
+  return p.then(() => entries);
+}
+function batchEntrySize(e, withPhotos) {
+  if (e.skip) return 0;
+  return e.xlsx.bytes.length + (e.fp ? new TextEncoder().encode(e.fp.text).length : 0) + (withPhotos ? e.photos.reduce((s, x) => s + x.size, 0) : 0);
+}
+// Greedy split, in list order, never splitting one job across emails. A job alone over the limit gets its own email, flagged.
+function batchSplit(entries, limit, withPhotos) {
+  const groups = []; let cur = null;
+  entries.filter(e => !e.skip).forEach(e => {
+    const sz = batchEntrySize(e, withPhotos);
+    if (!cur || (cur.entries.length && cur.bytes + sz > limit)) { cur = { entries: [], bytes: 0 }; groups.push(cur); }
+    cur.entries.push(e); cur.bytes += sz;
+  });
+  groups.forEach(g => { g.over = g.bytes > limit; });
+  return groups;
+}
+// One job: exactly the single-send text. Several: "Sky, attached are the work orders for:" + one line per job. No sign-off.
+function batchMessage(entries, part, parts) {
+  const who = twoWho("walls").name;
+  if (entries.length === 1) return { title: entries[0].single.title + (parts > 1 ? " (email " + part + " of " + parts + ")" : ""), text: entries[0].single.text };
+  return { title: "Work orders for " + who + " - " + entries.length + " jobs" + (parts > 1 ? " (email " + part + " of " + parts + ")" : ""),
+    text: who + ", attached are the work orders for:\n" + entries.map(e => e.line).join("\n") };
+}
+function batchFiles(entries, withPhotos) {
+  const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out = [];
+  entries.forEach(e => {
+    out.push(new File([e.xlsx.bytes], e.xlsx.name, { type: XT }));
+    if (e.fp) out.push(new File([e.fp.text], e.fp.name, { type: "text/plain" }));
+    if (withPhotos) e.photos.forEach(p => out.push(new File([p.data], p.name, { type: "image/jpeg" })));
+  });
+  return out;
+}
+const fmtMB = b => (b / 1048576).toFixed(b >= 10485760 ? 0 : 1) + " MB";
+function batchClose() { const m = $("batchModal"); if (!m) return; m.remove(); document.body.classList.remove("xl-open"); }
+function batchOpen(ids) {
+  ids = (ids || []).slice(); if (!ids.length) return Promise.resolve();
+  const go = all => {
+    const jobs = ids.map(id => all.find(j => j.id === id)).filter(Boolean);
+    const entries = jobs.map(batchBuildJob);
+    batchClose();
+    const who = twoWho("walls").name, m = el("div", "xl-modal"); m.id = "batchModal";
+    m.innerHTML = '<div class="xl-bar"><button type="button" class="btn btn-secondary btn-sm" id="batchX">Close</button><div class="xl-title">' +
+      (entries.length === 1 ? "Send to " + escHtml(who) : "Send " + entries.length + " work orders to " + escHtml(who)) + '</div><span style="width:60px"></span></div>' +
+      '<div class="batch-body" id="batchBody"><p class="status">Getting photos ready…</p></div><div class="xl-foot" id="batchFoot"></div>';
+    document.body.appendChild(m); document.body.classList.add("xl-open");
+    $("batchX").onclick = batchClose;
+    const nPh = entries.reduce((s, e) => s + (e.skip ? 0 : e.photoRefs.length), 0);
+    return batchLoadPhotos(entries, null, d => { const b = $("batchBody"); if (b && nPh) b.innerHTML = '<p class="status">Resizing photos… ' + d + " of " + nPh + "</p>"; })
+      .then(() => { if ($("batchModal") === m) batchRender({ entries, withPhotos: true, split: false, sent: {} }); });
+  };
+  const have = S._fullJobs || [];
+  if (ids.every(id => have.some(j => j.id === id))) return go(have);
+  return idbGetAll().then(all => { S._fullJobs = all; return go(all); }).catch(() => setStatus("Couldn't read the archive."));
+}
+function batchRender(st) {
+  const body = $("batchBody"), foot = $("batchFoot"); if (!body || !foot) return;
+  const who = twoWho("walls").name, ok = st.entries.filter(e => !e.skip), skipped = st.entries.filter(e => e.skip);
+  const total = ok.reduce((s, e) => s + batchEntrySize(e, st.withPhotos), 0), photos = ok.reduce((s, e) => s + e.photos.length, 0);
+  body.innerHTML = st.entries.map(e => {
+    if (e.skip) return '<div class="batch-row skip"><div class="t">⚠ ' + escHtml(e.label) + '</div><div class="m">Skipped — ' + escHtml(e.skip) + "</div></div>";
+    const parts = ["Work order (" + (e.order.pages.length - e.order.fpPages.length) + " sheet" + (e.order.pages.length - e.order.fpPages.length > 1 ? "s" : "") + ")"];
+    if (e.fp) parts.push("fireplace details");
+    if (st.withPhotos && e.photos.length) parts.push(e.photos.length + " photo" + (e.photos.length > 1 ? "s" : ""));
+    const fc = 1 + (e.fp ? 1 : 0) + (st.withPhotos ? e.photos.length : 0);
+    return '<div class="batch-row"><div class="t">' + escHtml(e.line) + '</div><div class="m">' + fc + " file" + (fc > 1 ? "s" : "") + " · " + escHtml(parts.join(" + ")) + " · " + fmtMB(batchEntrySize(e, st.withPhotos)) + "</div>" +
+      (e.photoMissing ? '<div class="m">⚠ ' + e.photoMissing + " photo" + (e.photoMissing > 1 ? "s" : "") + " couldn't be read — not attached</div>" : "") +
+      (e.warn.length ? '<div class="m">⚠ ' + escHtml(e.warn.join("; ")) + "</div>" : "") + "</div>";
+  }).join("") + (ok.length > 1 ? '<p class="cap">Message:</p><pre class="cap" style="white-space:pre-wrap">' + escHtml(batchMessage(ok).text) + "</pre>" : "");
+  let h = "";
+  if (!ok.length) { foot.innerHTML = '<p class="status">Nothing to send — ' + (skipped.length ? "every selected job was skipped." : "no jobs.") + "</p>"; return; }
+  h += '<p class="status"><strong>' + ok.length + " work order" + (ok.length > 1 ? "s" : "") + (st.withPhotos && photos ? " + " + photos + " photo" + (photos > 1 ? "s" : "") : "") + " · " + fmtMB(total) + "</strong>" +
+    (skipped.length ? " · " + skipped.length + " skipped" : "") + (photos ? " · photos resized to " + BATCH_PHOTO_MAX + " px, JPEG " + Math.round(BATCH_PHOTO_Q * 100) + "%" : "") + "</p>";
+  if (photos) h += '<div class="seg" id="batchPh" style="margin:6px 0"><button type="button" data-v="1"' + (st.withPhotos ? ' class="active"' : "") + '>With photos</button><button type="button" data-v="0"' + (!st.withPhotos ? ' class="active"' : "") + ">Without photos</button></div>";
+  const groups = batchSplit(st.entries, BATCH_LIMIT, st.withPhotos);
+  const btn = (g, i, n) => '<button type="button" class="btn ' + (st.sent[i] ? "btn-secondary" : "btn-primary") + ' btn-block" data-g="' + i + '">' +
+    (n > 1 ? (st.sent[i] ? "✓ " : "") + "Email " + (i + 1) + " of " + n + ": " + g.entries.length + " job" + (g.entries.length > 1 ? "s" : "") : "Open share sheet → " + escHtml(who)) + " · " + fmtMB(g.bytes) + "</button>" +
+    (g.over ? '<p class="status">⚠ This job alone is over ' + BATCH_LIMIT_MB + " MB — Mail will likely offer Mail Drop for it.</p>" : "");
+  if (total <= BATCH_LIMIT || groups.length === 1) h += '<div class="batch-parts">' + btn(groups[0], 0, 1) + "</div>";
+  else if (!st.split) {
+    h += '<div class="callout warn" style="margin:6px 0"><strong>' + fmtMB(total) + " is too big for one email</strong>Over ~" + BATCH_LIMIT_MB + " MB of attachments (≈20 MB once Mail encodes it), iPhone Mail switches to Mail Drop and many work mail servers bounce messages over 20–25 MB.</div>" +
+      '<button type="button" class="btn btn-primary btn-block" id="batchSplitBtn">Split into ' + groups.length + " emails</button>" +
+      (st.withPhotos && photos ? '<button type="button" class="btn btn-secondary btn-block" style="margin-top:6px" id="batchNoPh">Send without photos · ' + fmtMB(ok.reduce((s, e) => s + batchEntrySize(e, false), 0)) + "</button>" : "") +
+      '<button type="button" class="btn btn-secondary btn-block" style="margin-top:6px" id="batchAnyway">Send as one email anyway (Mail Drop)</button>';
+  } else h += '<p class="status">Tap each one — each opens its own share sheet. Pick Mail, then Send.</p><div class="batch-parts">' + groups.map((g, i) => btn(g, i, groups.length)).join("") + "</div>";
+  h += '<p class="status" id="batchMsg" style="text-align:center"></p><div id="batchRecip"></div>' +
+    '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px" id="batchZip">Download as .zip instead</button>';
+  foot.innerHTML = h;
+  $("batchRecip").appendChild(twoRecipient("walls"));
+  const msg = $("batchMsg");
+  if ($("batchPh")) $("batchPh").querySelectorAll("button").forEach(b => { b.onclick = () => { st.withPhotos = b.dataset.v === "1"; st.split = false; st.sent = {}; batchRender(st); }; });
+  if ($("batchSplitBtn")) $("batchSplitBtn").onclick = () => { st.split = true; batchRender(st); };
+  if ($("batchNoPh")) $("batchNoPh").onclick = () => { st.withPhotos = false; st.split = false; st.sent = {}; batchRender(st); };
+  if ($("batchAnyway")) $("batchAnyway").onclick = () => batchShare(ok, st.withPhotos, 1, 1, msg, () => {});
+  foot.querySelectorAll("[data-g]").forEach(b => {
+    const i = +b.dataset.g, single = !(total > BATCH_LIMIT && groups.length > 1);
+    const list = single ? ok : groups[i].entries;
+    b.onclick = () => batchShare(list, st.withPhotos, i + 1, single ? 1 : groups.length, msg, () => { st.sent[i] = true; batchRender(st); const mm = $("batchMsg"); if (mm) mm.textContent = msg.textContent; });
+  });
+  $("batchZip").onclick = () => {
+    const files = [];
+    ok.forEach(e => { files.push({ name: e.xlsx.name, data: e.xlsx.bytes }); if (e.fp) files.push({ name: e.fp.name, data: e.fp.text });
+      if (st.withPhotos) e.photos.forEach(p => files.push({ name: p.name, data: new Uint8Array(p.data) })); });
+    const name = "Work orders for " + who + " - " + todayISO() + ".zip", url = URL.createObjectURL(new Blob([KPWO.zipStore(files)], { type: "application/zip" }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); msg.textContent = "Downloaded " + name + " — attach it to an email to " + who + ".";
+  };
+}
+// Synchronous inside the tap: files were built before. The share sheet is the send — nothing goes out on its own.
+function batchShare(entries, withPhotos, part, parts, msgEl, onShared) {
+  const t = batchMessage(entries, part, parts);
+  let files = []; try { files = batchFiles(entries, withPhotos); } catch (e) {}
+  const can = fs => { try { return !!(fs.length && navigator.canShare && navigator.share && navigator.canShare({ files: fs })); } catch (e) { return false; } };
+  window.__lastBatch = { title: t.title, text: t.text, files: files.map(f => f.name), bytes: files.reduce((s, f) => s + f.size, 0) };
+  const label = parts > 1 ? "Email " + part + " of " + parts : entries.length + " work order" + (entries.length > 1 ? "s" : "");
+  if (can(files)) {
+    return navigator.share({ files, title: t.title, text: t.text }).then(() => { if (msgEl) msgEl.textContent = label + " handed to the share sheet."; onShared(); },
+      e => { if (msgEl) msgEl.textContent = e && e.name === "AbortError" ? "Share canceled." :
+        "The share sheet didn't open (" + ((e && e.name) || "error") + ")" + (parts === 1 && entries.length > 1 ? " — try Without photos or Download as .zip." : " — try Download as .zip."); });
+  }
+  if (msgEl) msgEl.textContent = files.length && withPhotos && can(batchFiles(entries, false))
+    ? "This phone won't share that many files at once — switch to Without photos, or use Download as .zip."
+    : "This browser can't share files — use Download as .zip.";
+  return Promise.resolve();
 }
 
 function renderPricing() {
@@ -3751,8 +4009,8 @@ function openArchiveJob(id) {
   find();
 }
 
-function applySnapshot(job) {
-  S._suppressSave = true;
+// 29ak: job -> S (same fields applySnapshot always set); also used by the batch send to build an archived job's work order
+function applyJobToS(job) {
   const d = job.draft || {};
   Object.keys(d).forEach(k => { if (k in S && k !== "priceLibrary" && k !== "archive" && k !== "_fullJobs") S[k] = d[k]; });
   S.jobId = job.id;
@@ -3767,6 +4025,10 @@ function applySnapshot(job) {
   S.jobMode = job.jobMode;
   S.airSealed = !!(job.airSealed || job.caulkFoam);
   migrateState(d);
+}
+function applySnapshot(job) {
+  S._suppressSave = true;
+  applyJobToS(job);
   photoLoadAll();
   S.outputView = job.owner === "sky" ? "excel" : "fg";
   S._suppressSave = false;
@@ -3916,7 +4178,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29aj";
+const APP_BUILD = "2026-10-29ak";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -4387,6 +4649,7 @@ function init() {
   wireBackup();
   wirePhotos();
   wireAccess();
+  wireArchiveBatch();
   if (APP_EDITION === "lance") document.querySelectorAll(".edition-lance").forEach(e => e.classList.remove("hidden"));
   twoLoadContacts().then(() => renderTwo());
   idbGetAllPrices().then(stored => { S.priceLibrary = mergePriceLibrary(stored); render(); })
