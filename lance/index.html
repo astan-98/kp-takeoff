@@ -1380,7 +1380,7 @@ const FG_RULES = [
   { id: "closedvault_r30", label: "Closed (decked) vault R30 batts", key: "R-30 fiberglass batts", sec: ["Closed vault"], items: ["R30/{W} UF" + OC], kraftItems: ["R30/{W} KRAFT" + OC], conf: "guess", note: "Unfaced (UF) by default; Kraft only when the vault is marked Kraft faced. Width picker default 16\" (R30/16, /19, /24 UF and KRAFT exist)." },
   { id: "crawl_batts", label: "Crawl subfloor / touch-up / new batts", key: "R-{r} fiberglass batts", sec: ["Crawl subfloor", "Crawl touch-up"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "guess", note: "R19 → R19/15/4' UF (or 23\" at 24 OC); R13/R30 → 16\" UF roll." },
   { id: "ufbc_batts", label: "UFBC (unfinished basement ceiling) batts", key: "R-{r} fiberglass batts", sec: ["UFBC"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "guess", note: "Same as crawl subfloor." },
-  { id: "rim_r19", label: "Rim joist R19 batts (LF × 1.2)", key: "R-19 fiberglass batts", sec: ["Band / rim"], items: ["R19x{w}x105k", "R19/{W} KRAFT" + OC], conf: "guess", note: "16\" → R19x15x105k; 19\"/24\" → R19/19 or R19/24 KRAFT. " + "Looks like a 15\" kraft R19 item; alt R19/15/4' UF. Qty = LF×1.2 exported as SqFt." },
+  { id: "rim_r19", label: "Rim joist R19 batts (LF × 1.2)", key: "R-19 fiberglass batts", sec: ["Band / rim"], items: ["R19/{W} UF" + OC], conf: "sure", note: "Bands are R19/16 unfaced (UF) by default; 19\"/24\" width → R19/19 or R19/24 UF. Qty = LF×1.2 exported as SqFt." },
   { id: "bf_r13", label: "Between floors R13 sound batts", key: "R-13 fiberglass batts", sec: ["Between floors (sound)"], items: ["R13/{W} UF" + OC], conf: "guess", note: "19\" → no R13 19\" item, flagged." },
   { id: "bf_r19", label: "Between floors R19 batts", key: "R-19 fiberglass batts", sec: ["Between floors (sound)"], items: ["R19/{W} UF" + OC], conf: "guess", note: "" },
   { id: "cant_batts", label: "Cantilever batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Cantilever"], items: ["R{r}/{W} UF" + OC], kraftItems: ["R{r}/{W} KRAFT" + OC, "R{r}/{W} UF" + OC], conf: "guess", note: "Unfaced (UF) by default; Kraft only when the cantilever is marked Kraft faced. Width picker default 16\"; R38/19 kraft → UF (no kraft)." },
@@ -3628,7 +3628,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29ac";
+const APP_BUILD = "2026-10-29ad";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
