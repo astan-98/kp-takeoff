@@ -154,6 +154,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   background: color-mix(in srgb, var(--bg2) 92%, transparent);
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(5, 1fr);
+  transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform;
 }
 .nav-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -168,7 +169,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .fail { color: var(--danger); font-weight: 800; }
 .csv-box { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; white-space: pre-wrap; word-break: break-all; }
 .fp-spec-t{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px}.fp-spec-t th{text-align:left;font-weight:600;padding:3px 6px 3px 0;vertical-align:top;white-space:nowrap;width:1%}.fp-spec-t td{padding:3px 0;word-break:break-word}.fp-spec .status{margin:6px 0 0}
-html, body { overscroll-behavior-y: none; }
+html, body { overscroll-behavior-y: none; overflow-x: clip; max-width: 100%; }
 .ptr { position: fixed; left: 50%; top: 0; z-index: 300; transform: translate(-50%, -60px); transition: transform .2s ease, opacity .2s ease; opacity: 0;
   margin-top: calc(var(--safe-t) + 6px); background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 999px;
   box-shadow: var(--shadow); padding: 7px 14px; font-size: .8rem; font-weight: 600; display: flex; align-items: center; gap: 8px; pointer-events: none; white-space: nowrap; }
@@ -3412,7 +3413,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29k";
+const APP_BUILD = "2026-10-29l";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -3421,6 +3422,15 @@ function showVersion() {
   v.textContent = "Build " + APP_BUILD + upd + " · pull down to refresh";
 }
 const PTR_THRESHOLD = 70, PTR_MAX = 120;
+// iOS Home Screen apps can leave the fixed bottom toolbar stranded mid-screen after the keyboard closes
+// or the page height changes. Nudging the scroll position makes Safari re-anchor it to the bottom.
+(function keepNavPinned() {
+  let t = null;
+  const nudge = () => { clearTimeout(t); t = setTimeout(() => { const y = window.scrollY; window.scrollTo(window.scrollX, y + 1); window.scrollTo(window.scrollX, y); }, 60); };
+  document.addEventListener("focusout", nudge, true);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", nudge);
+  window.addEventListener("orientationchange", nudge);
+})();
 let ptrState = null, ptrBusy = false;
 function ptrScrollTop() { return Math.max(window.scrollY || 0, (document.scrollingElement || document.documentElement).scrollTop || 0); }
 function ptrBlocked(target) {
