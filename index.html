@@ -194,6 +194,9 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   background: color-mix(in srgb, var(--bg2) 92%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
   border-top: 1px solid var(--border); transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform;
 }
+.missing-flag { outline: 2px solid var(--danger); outline-offset: 2px; }
+.miss-modal .batch-row { color: inherit; font: inherit; }
+.save-dock .btn { width: 100%; }
 body.has-save-dock { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 72px); }
 .divider { height: 1px; background: var(--border); margin: 14px 0; }
 .status { font-size: .82rem; color: var(--text2); margin-top: 8px; }
@@ -449,10 +452,6 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <div id="gasIdk" class="callout warn hidden"><strong>Confirm gas type</strong>Flagged for builder — no propane conversion kit auto-added.</div>
       </div>
       <div id="fpBody" class="hidden"></div>
-      <div class="grid2" style="margin-top:10px">
-        <button type="button" class="btn btn-primary" id="btnSaveArchive3">Save to archive</button>
-        <button type="button" class="btn btn-secondary" id="btnGoOutput">View Excel takeoff</button>
-      </div>
     </div>
   </section>
 
@@ -651,7 +650,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
   </section>
 </main>
 
-<div class="save-dock hidden" id="saveDock"><button type="button" class="btn btn-primary btn-block" id="btnSaveDock">Save to archive</button></div>
+<div class="save-dock hidden" id="saveDock"><div class="grid2" id="saveDockRow"><button type="button" class="btn btn-primary" id="btnSaveDock">Save to archive</button><button type="button" class="btn btn-secondary" id="btnGoOutput">View Excel takeoff</button></div></div>
 <nav class="bottom-nav">
   <button type="button" class="nav-btn active" data-tab="wizard"><span class="ico">📋</span>Wizard</button>
   <button type="button" class="nav-btn" data-tab="output"><span class="ico">📊</span>Excel</button>
@@ -2082,7 +2081,7 @@ function renderTwo() {
   box.innerHTML = "";
   if (foamCompareOn()) box.appendChild(el("p", "cap", "Open vs closed cell compare is on — foam lines on this work order read “open cell vs. closed cell” with both depths and the same SF, so " + escHtml(twoWho("walls").name) + " prices them both ways."));
   const b = el("button", "btn btn-primary btn-block", "Work order → " + escHtml(twoWho("walls").name)); b.type = "button"; b.id = "btnTwoWalls";
-  b.disabled = !hasW; b.onclick = () => twoPreview(); box.appendChild(b); box.appendChild(twoRecipient("walls"));
+  b.disabled = !hasW; b.onclick = () => checkThen(() => twoPreview()); box.appendChild(b); box.appendChild(twoRecipient("walls"));
   if (!hasW) box.appendChild(el("p", "status", "No lines on this takeoff yet."));
 }
 
@@ -3655,7 +3654,7 @@ function renderArchive() {
       idbDelete(j.id).then(() => { setStatus("Deleted from archive."); refreshArchive(); photoForget(pids, j.id); }).catch(() => setStatus("Delete failed."));
     };
     const send = el("button", "btn btn-secondary btn-sm"); send.type = "button"; send.textContent = "Send to " + twoWho("walls").name;
-    send.onclick = ev => { ev.stopPropagation(); batchOpen([j.id]); };
+    send.onclick = ev => { ev.stopPropagation(); archSendOne(j.id); };
     if (ARCH_SELECT) {
       const cb = card.querySelector(".arch-check input");
       const toggle = on => { if (on) ARCH_SEL.add(j.id); else ARCH_SEL.delete(j.id); card.classList.toggle("selected", on); cb.checked = on; renderArchSelBar(); };
@@ -3710,6 +3709,79 @@ function withJobState(job, fn) {
   try { applyJobToS(JSON.parse(JSON.stringify(job))); S._suppressSave = true; return fn(); }
   finally { Object.keys(S).forEach(k => { if (!(k in saved)) delete S[k]; }); keys.forEach(k => { S[k] = saved[k]; }); FOAM_VIEW = fv; }
 }
+/* ===== 29as K: end-of-flow check — turned-on work areas with required inputs left empty =====
+   Each entry: area + field (what the rep sees), and where to jump (input id, or card title + field label). */
+function missingFields() {
+  const F = flags(), out = [];
+  const add = (area, field, card, label, id) => out.push({ area, field, card: card || null, label: label || field, id: id || null });
+  const blank = v => !(n(v) > 0);
+  if ((F.isNew && !F.customAttic) || F.isAtticRetro) if (blank(S.flatSf)) add("House", "Flat footprint SF", null, null, "flatSf");
+  if (F.bafflesOn && blank(S.baffles)) add("Baffles", "Baffle count", null, "Baffle count");
+  if (F.canAskDeadVaultKnees && S.hasVaults) (S.vaults || []).forEach((r, i) => { if (blank(r.flatSf)) add("Vault #" + (i + 1), "Flat SF", "Vault #" + (i + 1)); });
+  if (F.canAskDeadVaultKnees && S.hasKnees) (S.knees || []).forEach((r, i) => { if (blank(r.lf)) add("Knee #" + (i + 1), "LF", "Knee #" + (i + 1)); else if (blank(r.height)) add("Knee #" + (i + 1), "Height ft", "Knee #" + (i + 1)); });
+  if (S.hasRim && F.canAskRim) (S.rims || []).forEach((r, i) => { if (blank(r.lf)) add("Rim / band #" + (i + 1), "LF", "Rim #" + (i + 1)); });
+  if (S.hasWalls && F.canAskWalls) {
+    const isBase = k => k === "daylight" || k === "concrete";
+    const hideBaseRows = F.basementSections || F.noBasementKinds || (F.foundation === "unfinished" && !F.basementWalls);
+    const chk = (r, title) => {
+      if (r.kind === "concrete" && r.measureLf) { if (blank(r.lf)) add(title, "Linear feet", title); else if (blank(r.lfHeight)) add(title, "Wall height ft", title); }
+      else if (blank(r.cavities)) add(title, "Cavities", title);
+    };
+    S.walls.filter(r => !(hideBaseRows && isBase(r.kind))).forEach((r, i) => { if (!isBase(r.kind) || F.basementWalls) chk(r, "Wall #" + (i + 1)); });
+    if (F.basementSections) [["daylight", "Daylight wall"], ["concrete", "Concrete wall"]].forEach(([k, one]) => S.walls.filter(r => r.kind === k).forEach((r, i) => chk(r, one + " #" + (i + 1))));
+  }
+  if (S.hasInteriorWalls && F.canAskWalls) (S.interiorWalls || []).forEach((r, i) => { if (!(interiorWallSf(r) > 0)) add("Interior walls #" + (i + 1), "Cavities", "Interior walls #" + (i + 1)); });
+  if (S.hasBetweenFloors && F.canAskBetweenFloors) (S.betweenFloors || []).forEach((r, i) => { if (blank(r.sf)) add("Between floors #" + (i + 1), "SF", "Between floors #" + (i + 1)); });
+  if (S.hasGables && F.canAskGables) (S.gables || []).forEach((r, i) => { if (blank(r.length)) add("Gable #" + (i + 1), "Length", "Gable #" + (i + 1)); else if (blank(r.height)) add("Gable #" + (i + 1), "Height", "Gable #" + (i + 1)); });
+  if (S.hasCants && F.canAskCants) (S.cants || []).forEach((r, i) => { if (blank(r.sf)) add("Cantilever #" + (i + 1), "SF", "Cantilever #" + (i + 1)); });
+  if (S.hasGarage && F.canAskGarage) {
+    const roofOn = F.showFoamRoofPath && S.garageFoamRoof;
+    if (roofOn && blank(S.garageRoofFlat)) add("Garage roofline", "Flat SF", "Garage roofline", "Garage roofline flat SF");
+    if (!roofOn && blank(S.garageCeilingSf) && !(S.garageCeils || []).some(g => n(g.sf) > 0)) add("Garage ceiling", "SF", "Garage ceiling", (S.garageCeils || []).length ? "SF" : "Garage ceiling SF");
+  }
+  if (S.hasPorch && F.canAskPorch && blank(S.porchFlat)) add("Porch", "Flat SF", "Porch", "Porch flat SF");
+  if (S.hasUfbc && F.canAskUfbc && blank(S.ufbcSf)) add("UFBC", "SF", "UFBC (unfinished basement ceiling)", "UFBC SF");
+  if (F.canAskCrawlEncap && S.hasCrawlWalls) (S.crawlWalls || []).forEach((r, i) => { if (blank(r.length)) add("Crawl wall #" + (i + 1), "Length", "Crawl wall #" + (i + 1)); else if (blank(r.height)) add("Crawl wall #" + (i + 1), "Height", "Crawl wall #" + (i + 1)); });
+  if (S.hasDense && F.canAskDense) (S.dense || []).forEach((r, i) => { if (blank(r.sf)) add("Dense-pack #" + (i + 1), "Flat SF", "Dense-pack #" + (i + 1)); });
+  if (S.hasMisc) (S.misc || []).forEach((r, i) => { if (!String(r.material || "").trim()) add("Misc item #" + (i + 1), "Material", "Misc item #" + (i + 1), "Material (required)"); });
+  // closed-cell lines with no depth picked (29as H) — compare mode checks Option B
+  let ls = []; try { ls = foamCompareOn() ? withFoam("cc", allLines) : allLines(); } catch (e) {}
+  Array.from(new Set(ls.filter(L => L._ccMissing).map(L => L.area))).forEach(a => out.push({ area: a, field: "Closed-cell depth", cc: true }));
+  return out;
+}
+function missingText(m) { return m.area + " — " + m.field; }
+function jumpToMissing(m) {
+  const wb = document.querySelector('.nav-btn[data-tab="wizard"]'); if (wb) wb.click();
+  render();
+  let t = null;
+  if (m.id) t = $(m.id);
+  else if (m.cc) t = Array.from(document.querySelectorAll("#assemblyEditors .cc-depth-seg")).find(x => !x.querySelector("button.active")) || document.querySelector("#assemblyEditors .cc-pick-warn");
+  else {
+    const ed = $("assemblyEditors");
+    const card = m.card ? Array.from(ed.querySelectorAll(".row-card")).find(c => { const x = c.querySelector(".row-title"); const tt = x ? x.textContent : ""; return tt === m.card || tt.startsWith(m.card + " "); }) : ed;
+    if (card) { const f = Array.from(card.querySelectorAll(".field")).find(f => { const l = f.querySelector("label"); return l && l.textContent === m.label; }); t = f ? f.querySelector("input,select,textarea") : card; }
+  }
+  if (t) { if (!/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(t.tagName)) t.tabIndex = -1; try { t.scrollIntoView({ block: "center" }); } catch (e) {} if (t.focus) t.focus(); t.classList.add("missing-flag"); }
+  return t;
+}
+function missClose() { const m = $("missModal"); if (m) m.remove(); if (!$("batchModal")) document.body.classList.remove("xl-open"); }
+// Run proceed() right away when nothing is missing; otherwise show the "Some fields are empty" sheet.
+function checkThen(proceed, list, goBack) {
+  const miss = list || missingFields();
+  if (!miss.length) { proceed(); return false; }
+  missClose();
+  const m = el("div", "xl-modal miss-modal"); m.id = "missModal";
+  m.innerHTML = '<div class="xl-bar"><span style="width:60px"></span><div class="xl-title">⚠ Some fields are empty</div><span style="width:60px"></span></div>' +
+    '<div class="batch-body"><p class="cap">These turned-on work areas are missing data. Tap one to fill it in, or continue if you left it blank on purpose.</p><div id="missList"></div></div>' +
+    '<div class="xl-foot"><div class="grid2"><button type="button" class="btn btn-secondary" id="missBack">Go back</button><button type="button" class="btn btn-primary" id="missGo">Continue anyway</button></div></div>';
+  document.body.appendChild(m); document.body.classList.add("xl-open");
+  const lst = $("missList");
+  miss.forEach(x => { const b = el("button", "batch-row miss-item"); b.type = "button"; b.style.cssText = "display:block;width:100%;text-align:left"; b.textContent = "⚠ " + missingText(x); b.onclick = () => { missClose(); (goBack || jumpToMissing)(x); }; lst.appendChild(b); });
+  $("missBack").onclick = () => { missClose(); (goBack || jumpToMissing)(miss[0]); };
+  $("missGo").onclick = () => { missClose(); proceed(); };
+  return true;
+}
+function guardedSave() { checkThen(savePermanent); }
 // One archived job -> its Sky work order entry (or a skip reason). Photos are attached later (async load + resize).
 function batchBuildJob(job) {
   try {
@@ -3718,13 +3790,13 @@ function batchBuildJob(job) {
       const label = (S.address || "").trim() || (S.builder || "").trim() || "(no address)";
       if (!o.pages.length) return { id: job.id, label, skip: "No work order lines on this takeoff (nothing measured/priced) — open it to finish." };
       const where = [o.jobSite, (S.city || "").trim()].filter(Boolean).join(", ");
-      const warn = [];
+      const warn = [], missing = missingFields().map(missingText); // 29as K: flagged in the review card, not blocking
       if (!(S.address || "").trim()) warn.push("no address — files named by " + ((S.builder || "").trim() ? "builder" : "“Job”"));
       const base = photoFileBase(o.jobSite);
       return { id: job.id, label, order: o, line: where + (o.customer ? " (" + o.customer + ")" : ""), single: twoShareText(o, false),
         xlsx: { name: twoFileName(o), bytes: KPWO.buildXlsx(o, o.pages) },
         fp: o.fpPages.length ? { name: base + " - fireplace.txt", text: twoFpText(o) } : null,
-        photoRefs: S.photos.map((x, i) => ({ id: x.id, name: base + " - photo " + (i + 1) + ".jpg" })), photos: [], photoMissing: 0, warn };
+        photoRefs: S.photos.map((x, i) => ({ id: x.id, name: base + " - photo " + (i + 1) + ".jpg" })), photos: [], photoMissing: 0, warn, missing };
     });
   } catch (e) { return { id: job.id, label: (job.address || job.builder || "(no address)"), skip: "Couldn't build the work order (" + (e && e.message || e) + ")." }; }
 }
@@ -3790,6 +3862,13 @@ function batchFiles(entries, withPhotos) {
 }
 const fmtMB = b => (b / 1048576).toFixed(b >= 10485760 ? 0 : 1) + " MB";
 function batchClose() { const m = $("batchModal"); if (!m) return; m.remove(); document.body.classList.remove("xl-open"); }
+// 29as K: per-job archive send checks that job first; Go back opens it on the first empty field
+function archSendOne(id) {
+  const job = (S._fullJobs || []).find(x => x.id === id);
+  let miss = [];
+  try { if (job) miss = withJobState(job, missingFields); } catch (e) {}
+  return checkThen(() => batchOpen([id]), miss, m => { openArchiveJob(id); setTimeout(() => jumpToMissing(m), 50); });
+}
 function batchOpen(ids) {
   ids = (ids || []).slice(); if (!ids.length) return Promise.resolve();
   const go = all => {
@@ -3822,7 +3901,8 @@ function batchRender(st) {
     const fc = 1 + (e.fp ? 1 : 0) + (st.withPhotos ? e.photos.length : 0);
     return '<div class="batch-row"><div class="t">' + escHtml(e.line) + '</div><div class="m">' + fc + " file" + (fc > 1 ? "s" : "") + " · " + escHtml(parts.join(" + ")) + " · " + fmtMB(batchEntrySize(e, st.withPhotos)) + "</div>" +
       (e.photoMissing ? '<div class="m">⚠ ' + e.photoMissing + " photo" + (e.photoMissing > 1 ? "s" : "") + " couldn't be read — not attached</div>" : "") +
-      (e.warn.length ? '<div class="m">⚠ ' + escHtml(e.warn.join("; ")) + "</div>" : "") + "</div>";
+      (e.warn.length ? '<div class="m">⚠ ' + escHtml(e.warn.join("; ")) + "</div>" : "") +
+      (e.missing && e.missing.length ? '<div class="m miss-fields">⚠ Empty fields: ' + escHtml(e.missing.join("; ")) + "</div>" : "") + "</div>";
   }).join("") + (ok.length > 1 ? '<p class="cap">Message:</p><pre class="cap" style="white-space:pre-wrap">' + escHtml(batchMessage(ok).text) + "</pre>" : "");
   let h = "";
   if (!ok.length) { foot.innerHTML = '<p class="status">Nothing to send — ' + (skipped.length ? "every selected job was skipped." : "no jobs.") + "</p>"; return; }
@@ -4374,7 +4454,9 @@ function wireInputs() {
   });
 
   $("airSealed").onclick = () => { S.airSealed = !S.airSealed; render(); };
-  $("foundation").onchange = e => { S.foundation = e.target.value; if (S.foundation === "unfinished" || S.foundation === "finished") { S.hasBasementWalls = true; S.hasWalls = true; } render(); };
+  $("foundation").onchange = e => { S.foundation = e.target.value; if (S.foundation === "unfinished" || S.foundation === "finished") { S.hasBasementWalls = true; S.hasWalls = true; }
+    if (S.foundation === "finished") { S.hasRim = true; if (!Array.isArray(S.rims) || !S.rims.length) S.rims = [{ id: uid(), name: "", lf: "", oc: "16", foam: false }]; } // 29as L: only at the moment it's picked
+    render(); };
   $("basementCrawl").onclick = () => { S.basementCrawl = !S.basementCrawl; render(); };
   $("compareOn").onclick = () => {
     S.compareOn = !S.compareOn;
@@ -4401,15 +4483,15 @@ function wireInputs() {
   $("showBallpark").onclick = () => { S.showBallpark = !S.showBallpark; render(); };
   $("showPriceLib").onclick = () => { S.showPriceLib = !S.showPriceLib; render(); };
 
-  $("btnSaveArchive").onclick = savePermanent;
-  $("btnSaveArchive2").onclick = savePermanent;
-  $("btnSaveArchive3").onclick = savePermanent;
-  $("btnSaveDock").onclick = savePermanent; // 29as: pinned copy, same action
+  // 29as K: every Save to archive (pinned one included) checks for empty fields first
+  $("btnSaveArchive").onclick = guardedSave;
+  $("btnSaveArchive2").onclick = guardedSave;
+  $("btnSaveDock").onclick = guardedSave; // 29as: pinned copy, same action
   syncSaveDock();
-  $("btnGoOutput").onclick = () => {
+  $("btnGoOutput").onclick = () => checkThen(() => {
     const b = document.querySelector('.nav-btn[data-tab="output"]'); if (b) b.click();
     window.scrollTo(0, 0);
-  };
+  });
   $("btnNewJob").onclick = newJob;
   $("btnCopyCsv").onclick = () => {
     const text = buildExcelCsv();
@@ -4449,6 +4531,9 @@ function wireInputs() {
 function syncSaveDock() {
   const a = document.querySelector(".tabs-panel.active"), on = !!a && (a.id === "tab-wizard" || a.id === "tab-output");
   const d = $("saveDock"); if (d) d.classList.toggle("hidden", !on);
+  // 29as M: View Excel takeoff sits beside the pinned save on the Wizard (already on Excel → just the save button, full width)
+  const v = $("btnGoOutput"), row = $("saveDockRow"), onWiz = !!a && a.id === "tab-wizard";
+  if (v) v.classList.toggle("hidden", !onWiz); if (row) row.classList.toggle("grid2", onWiz);
   document.body.classList.toggle("has-save-dock", on);
 }
 /* ---------- Build stamp + pull-to-refresh ---------- */
