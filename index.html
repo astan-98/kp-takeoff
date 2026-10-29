@@ -2131,7 +2131,7 @@ function buildLinesForPackage(p, tag) {
   }
 
   if (S.airSealed) {
-    push(lines, { area: site, assembly: "Air seal (caulk & foam)", product: "Air seal", description: "Caulk & foam — base plate / openings / penetrations", footage: 1, unit: "ea", fixed: true, notes: noteTag });
+    push(lines, { area: site, assembly: "Air seal (caulk & foam)", product: "Air seal", description: "Caulk & Foam Air Penetrations", footage: 1, unit: "ea", fixed: true, notes: noteTag });
     if (n(S.airSealAddon) > 0) push(lines, { area: site, assembly: "Air seal add-on", product: "Air seal add-on", description: "Above-average house +$" + fmt(round2(n(S.airSealAddon))), footage: 1, unit: "ea", dollars: round2(n(S.airSealAddon)), notes: noteTag + "Fixed $ (not margin-scaled)" });
   }
   if (n(S.extraLabor) > 0) push(lines, { area: site, assembly: "Extra labor", product: "Extra labor", description: "$" + fmt(round2(n(S.extraLabor))) + ((S.extraLaborNote || "").trim() ? " — " + S.extraLaborNote.trim() : ""), footage: 1, unit: "ea", dollars: round2(n(S.extraLabor)), notes: noteTag + "Fixed $ (not margin-scaled)" });
@@ -3621,7 +3621,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29r";
+const APP_BUILD = "2026-10-29s";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
