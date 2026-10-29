@@ -1137,6 +1137,13 @@ function foamTypeControls(card, obj, tKey, dKey, force, dflt) {
     card.appendChild(fieldSelect("Closed-cell depth", ccValid(obj[dKey]) ? String(obj[dKey]) : "",
       [["", "Default — " + (dflt || ccDepthJob()) + '"']].concat(CC_DEPTH_CHOICES.map(d => [d, d + '"'])), v => { obj[dKey] = v; render(); }));
 }
+// 29am: band/rim foam type — default is always 3.5" open cell (not the job foam type); per-rim override to closed cell + depth.
+function rimFoamControls(card, r) {
+  card.appendChild(fieldSelect("Band foam type", r.foamType === "cc" ? "cc" : "", [["", 'Default — 3.5" open cell (bands always OC)'], ["cc", "Closed cell (override)"]], v => { r.foamType = v; render(); }));
+  if (r.foamType === "cc") card.appendChild(fieldSelect("Closed-cell depth", ccValid(r.ccDepth) ? String(r.ccDepth) : "",
+    [["", "Default — " + ccDepthJob() + '"']].concat(CC_DEPTH_CHOICES.map(d => [d, d + '"'])), v => { r.ccDepth = v; render(); }));
+  else if (foamTypeJob() === "cc" || foamCompareOn()) card.appendChild(el("p", "cap", 'Band stays 3.5" open cell' + (foamCompareOn() ? " in both options." : " even though the job is closed cell.")));
+}
 function kraftToggle(r) {
   const kr = el("div", "toggle-row"); kr.appendChild(el("span", null, "Kraft faced (default unfaced)"));
   const ks = el("button", "switch" + (r.kraft ? " on" : "")); ks.type = "button";
@@ -2180,7 +2187,10 @@ function buildLinesForPackage(p, tag) {
         product: bandFoam ? "Open-cell spray foam" : "R-19 fiberglass batts",
         description: bandFoam ? '3.5" OC band' : "R19/" + battW(r.oc, "16"),
         footage: round2(lf * 1.2), unit: "LF", notes: noteTag + fmt(lf) + " LF × 1.2" + (bandFoam && !totalFoam ? " · foamed (not batts)" : "") });
-      applyFoamType(lines[lines.length - 1], r, "band");
+      // 29am: bands are ALWAYS 3.5" open cell by default (like walls), even on a closed-cell job and in OC vs CC compare.
+      // Only an explicit per-rim "Closed cell" pick changes it.
+      const BL = applyFoamType(lines[lines.length - 1], { foamType: r.foamType === "cc" ? "cc" : "oc", ccDepth: r.ccDepth }, "band");
+      if (bandFoam && r.foamType !== "cc" && r.foamType !== "oc") BL._foam = "bandoc";
     });
   }
 
@@ -2516,7 +2526,7 @@ function foamCompare() {
     if (j >= 0) used.add(j);
     const b = j >= 0 ? fb[j] : null;
     const same = !!b && a.type === b.type && a.description === b.description && a.sf === b.sf;
-    pairs.push({ a, b, same, note: same ? (a.why === "locked" ? "Locked closed cell — same in both" : a.why === "row" ? "Row set to " + (a.type === "CC" ? "closed" : "open") + " cell — same in both" : "Same in both") : "" });
+    pairs.push({ a, b, same, note: same ? (a.why === "locked" ? "Locked closed cell — same in both" : a.why === "bandoc" ? "Band always open cell — same in both" : a.why === "row" ? "Row set to " + (a.type === "CC" ? "closed" : "open") + " cell — same in both" : "Same in both") : "" });
   });
   fb.forEach((b, k) => { if (!used.has(k)) pairs.push({ a: null, b, same: false, note: "" }); });
   const pa = ballpark(A), pb = ballpark(B);
@@ -2820,8 +2830,8 @@ function renderAssemblyEditors() {
       // batt width only while some line still uses R19 batts for this rim
       const rimBatts = pkList.some(k => !(k && pkgProfile(k).totalFoam) && !(r.foam && rimFoamAllowed(k)));
       if (battUse.rim && rimBatts) card.appendChild(fieldSelect("Batt width", battW(r.oc, "16"), BATT_W_CHOICES, v => { r.oc = v; render(); }));
-      if (anyTotalFoam || (rimFoamAny && r.foam)) foamTypeControls(card, r, "foamType", "ccDepth");
-      if (rimFoamAny && r.foam) card.appendChild(el("p", "cap", 'Band foamed: 3.5" open cell (or closed cell per foam type) × LF×1.2 — replaces the R19 band batts' + (pkList.some(k => k && !rimFoamAllowed(k) && !pkgProfile(k).totalFoam) ? " (options without a foam roofline keep R19 batts)" : "") + "."));
+      if (anyTotalFoam || (rimFoamAny && r.foam)) rimFoamControls(card, r);
+      if (rimFoamAny && r.foam) card.appendChild(el("p", "cap", 'Band foamed: 3.5" open cell by default (closed cell only if picked above) × LF×1.2 — replaces the R19 band batts' + (pkList.some(k => k && !rimFoamAllowed(k) && !pkgProfile(k).totalFoam) ? " (options without a foam roofline keep R19 batts)" : "") + "."));
       box.appendChild(card);
     });
     box.appendChild(addBtn("Add rim", () => { const f0 = S.rims[0] || {}; S.rims.push({ id: uid(), name: "", lf: "", oc: "16", foam: !!f0.foam, foamType: f0.foamType || "", ccDepth: f0.ccDepth || "" }); render(); }));
@@ -4193,7 +4203,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29al";
+const APP_BUILD = "2026-10-29am";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
