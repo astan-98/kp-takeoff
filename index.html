@@ -1412,10 +1412,10 @@ const FG_RULES = [
   { id: "oc_walls", label: "Open-cell foam — walls / gables / bands / between floors 3.5\"", key: "Open-cell foam (walls)", sec: "*", items: ["ENVERGE EasySeal .5 Open Cell Spray Foam"], depth: true, conf: "guess", note: "Depth 3.5." },
   ...["1", "2", "3"].map(d => ({ id: "cc" + d, label: 'Closed-cell foam ' + d + '"', key: 'Closed-cell foam ' + d + '"', sec: "*", items: ["ENVERGE OnePass 2.0 Closed Cell Spray Foam"], depth: true, conf: "guess", note: "Alt: SWD Urethane QS450 Closed Cell." })),
   // —— cellulose / spider ——
-  { id: "cel35", label: 'Cellulose walls 3.5"', key: 'Cellulose walls 3.5"', sec: "*", items: ["GreenFiber Cellulose - R13 - Labor Rate"], conf: "guess", note: "Alt: GreenFiber Cellulose." },
-  { id: "cel55", label: 'Cellulose walls 5.5"', key: 'Cellulose walls 5.5"', sec: "*", items: ["GreenFiber Cellulose - R19 - Labor Rate"], conf: "guess", note: "" },
-  { id: "spi35", label: 'Spider walls 3.5"', key: 'Spider walls 3.5"', sec: "*", items: ["JM Spider - R15 - Labor Rate"], conf: "sure", note: "" },
-  { id: "spi55", label: 'Spider walls 5.5"', key: 'Spider walls 5.5"', sec: "*", items: ["JM Spider - R21 - Labor Rate"], conf: "sure", note: "" },
+  { id: "cel35", label: 'Cellulose walls 3.5"', key: 'Cellulose walls 3.5"', sec: "*", items: ["GreenFiber Cellulose"], depth: true, rv: 13, conf: "sure", note: "Plain GreenFiber Cellulose (includes material; the Labor Rate item doesn't). 2x4 cavity → R-13 / 3.5\" selection (Depth 3.5, RValue 13)." },
+  { id: "cel55", label: 'Cellulose walls 5.5"', key: 'Cellulose walls 5.5"', sec: "*", items: ["GreenFiber Cellulose"], depth: true, rv: 19, conf: "sure", note: "Plain GreenFiber Cellulose (includes material). 2x6 cavity → R-19 / 5.5\" selection (Depth 5.5, RValue 19)." },
+  { id: "spi35", label: 'Spider walls 3.5"', key: 'Spider walls 3.5"', sec: "*", items: ["JM Spider Plus Spray Insulation"], depth: true, rv: 15, conf: "guess", note: "Plain JM Spider Plus (not the Labor Rate item). 2x4 cavity → R-15 / 3.5\" (Depth 3.5, RValue 15)." },
+  { id: "spi55", label: 'Spider walls 5.5"', key: 'Spider walls 5.5"', sec: "*", items: ["JM Spider Plus Spray Insulation"], depth: true, rv: 21, conf: "guess", note: "Plain JM Spider Plus (not the Labor Rate item). 2x6 cavity → R-21 / 5.5\" (Depth 5.5, RValue 21)." },
   { id: "dense_cel", label: "Dense-pack floors (cellulose)", key: "Dense-pack floors", sec: "*", items: ["Cellulose - Dense Pack Floor System"], conf: "sure", note: "" },
   { id: "dense_spi", label: "Dense-pack floors (spider)", key: "Dense-pack floors (spider)", sec: "*", items: ["JM Spider Plus Spray Insulation"], conf: "guess", note: "No spider dense-pack item in FG." },
   { id: "netting", label: "Netting", key: "Netting", sec: "*", items: ["Netting - Insulweb Fabric"], conf: "sure", note: "Work area follows what it nets (walls / between floors / floors)." },
@@ -1485,7 +1485,7 @@ function fgResolve(L) {
   if (!area) area = FG_AREA_BY_SECTION[sec] || (/^Wall/.test(sec) ? "Exterior Walls" : "Entire House");
   let depth = "";
   if (rule.depth) { const dm = (String(L.description || "") + " " + key).match(/(\d+(?:\.\d+)?)"/); if (dm) depth = Number(dm[1]); }
-  const rv = rule.rv === "key" && v.r ? Number(v.r) : "";
+  const rv = typeof rule.rv === "number" ? rule.rv : (rule.rv === "key" && v.r ? Number(v.r) : "");
   const u = String(L.unit || "").toUpperCase();
   const uom = rule.uom || (u === "SF" || u === "LF" ? "SqFt" : u === "EA" ? "Ea." : u === "BAGS" ? "Bags" : "Ea.");
   return { item, area, depth, rv, uom, rule, flag };
@@ -3629,7 +3629,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29x";
+const APP_BUILD = "2026-10-29y";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
