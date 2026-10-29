@@ -216,7 +216,7 @@ html, body { overscroll-behavior-y: none; overflow-x: clip; max-width: 100%; }
 .app-ver { font-size: .68rem; color: var(--text2); opacity: .8; }
 /* 29au: New job always at hand — its own row under the title (sticky header), never over the title */
 .hdr-actions { margin-top: 8px; display: flex; }
-.hdr-actions .btn { min-height: 36px; padding: 6px 14px; font-weight: 700; }
+.hdr-actions .btn { min-height: 36px; padding: 6px 14px; font-weight: 700; width: 66%; min-width: 220px; max-width: 420px; } /* 29av: wider, same height; left-aligned like the title */
 body.xl-open { overflow: hidden; }
 .xl-modal { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column;
   padding-top: var(--safe-t); padding-bottom: var(--safe-b); }
@@ -500,7 +500,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <p class="cap">Same KP work order sheet, filled from this job (customer, address, city, subdivision). The whole takeoff — walls/batts and attic/roof lines — goes to Sky as one work order (long jobs continue onto extra sheets in the same file). Photos ride along, and a fireplace job adds a Fireplace sheet + details file. Preview, then share.</p>
       <div class="grid2">
         <div class="field"><label>Rep</label><input id="woRep" autocapitalize="words"></div>
-        <div class="field"><label>Date (blank = none)</label><input id="woDate" type="date"></div>
+        <div class="field"><label>Date measured (auto = day job was created; blank = none)</label><input id="woDate" type="date"></div>
       </div>
       <div class="field"><label>Notes (print in NOTES — long notes continue on the next sheet)</label><textarea id="woNotes" rows="2"></textarea></div>
       <div id="twoActions"></div>
@@ -610,7 +610,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
   </section>
 </main>
 
-<div class="save-dock hidden" id="saveDock"><div class="grid2" id="saveDockRow"><button type="button" class="btn btn-primary" id="btnSaveDock">Save to archive</button><button type="button" class="btn btn-secondary" id="btnGoOutput">View Excel takeoff</button></div></div>
+<div class="save-dock hidden" id="saveDock"><div id="saveDockRow"><button type="button" class="btn btn-primary" id="btnSaveDock">Save to archive</button></div></div>
 <nav class="bottom-nav">
   <button type="button" class="nav-btn active" data-tab="wizard"><span class="ico">📋</span>Wizard</button>
   <button type="button" class="nav-btn" data-tab="output"><span class="ico">📊</span>Excel</button>
@@ -1341,7 +1341,8 @@ const S = {
   jobId: uid(),
   dateMeasured: todayISO(),
   owner: APP_EDITION === "lance" ? "lance" : "asher",
-  woRep: "", woDate: "", woNotes: "",
+  woRep: "", woDate: todayISO(), woNotes: "",
+  jobCreated: new Date().toISOString(), woDateManual: false, // 29av: Sky work order date defaults to the job's created day
   photos: [],
   accessScaffold: "no", accessScaffoldNote: "", accessDriveway: "", accessDrivewayNote: "", accessGate: "", accessGateCode: "",
   builder: "", city: "", address: "", keywords: "",
@@ -4124,6 +4125,17 @@ function render() {
   saveDraft();
 }
 
+// 29av: Sky work order DATE (S.woDate) = local day the job was created unless Asher edited it (S.woDateManual).
+// Created stamp: S.jobCreated; older jobs → earliest of the time inside the job id (uid = Date.now base36) and savedAt; none → blank.
+function isoLocalDay(t) { const d = new Date(t); if (!t || isNaN(d)) return ""; const p = x => String(x).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); }
+function jobIdTime(id) {
+  const m = String(id || "").match(/^([0-9a-z]{7,9})-[0-9a-z]+$/); if (!m) return "";
+  const t = parseInt(m[1], 36); return (t > Date.UTC(2020, 0, 1) && t < Date.now() + 864e5) ? new Date(t).toISOString() : "";
+}
+function applyWoDateDefault(savedAt) {
+  if (!S.jobCreated) S.jobCreated = [jobIdTime(S.jobId), isNaN(new Date(savedAt || "x")) ? "" : new Date(savedAt).toISOString()].filter(Boolean).sort()[0] || "";
+  if (!S.woDateManual) S.woDate = isoLocalDay(S.jobCreated);
+}
 function draftPayload() {
   const copy = {};
   Object.keys(S).forEach(k => {
@@ -4157,6 +4169,10 @@ function migrateState(d) {
   if (typeof S.accessGateCode !== "string" || !("accessGateCode" in d)) S.accessGateCode = "";
   S.photos = S.photos.filter(x => x && x.id).map(x => ({ id: String(x.id), caption: typeof x.caption === "string" ? x.caption : "" }));
   ["woRep", "woDate", "woNotes"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
+  // 29av: created stamp never inherited from the previous job; a date typed before 29av counts as Asher's edit
+  if (typeof S.jobCreated !== "string" || !("jobCreated" in d)) S.jobCreated = "";
+  if (!("woDateManual" in d)) S.woDateManual = !!S.woDate; else S.woDateManual = !!S.woDateManual;
+  applyWoDateDefault();
   if (!OWNER_LABELS[S.owner]) S.owner = APP_EDITION === "lance" ? "lance" : "asher";
   if (d.caulkFoam) S.airSealed = true;
   // 29as: Total Bat toggle → its own package. Standard + Total Bat on (29ao) loads as the Total Bat package.
@@ -4346,6 +4362,7 @@ function applyJobToS(job) {
   S.jobMode = job.jobMode;
   S.airSealed = !!(job.airSealed || job.caulkFoam);
   migrateState(d);
+  applyWoDateDefault(job.savedAt); // 29av: old jobs with no created stamp → earliest saved stamp
 }
 function applySnapshot(job) {
   S._suppressSave = true;
@@ -4363,7 +4380,8 @@ function newJob() {
   S.jobId = uid();
   S.dateMeasured = todayISO();
   S.builder = ""; S.city = ""; S.address = ""; S.keywords = "";
-  resetCustomer(); S.woRep = ""; S.woDate = ""; S.woNotes = "";
+  resetCustomer(); S.woRep = ""; S.woNotes = "";
+  S.jobCreated = new Date().toISOString(); S.woDateManual = false; S.woDate = todayISO(); // 29av
   photoForget(S.photos.map(x => x.id)); S.photos = [];
   S.accessScaffold = "no"; S.accessScaffoldNote = ""; S.accessDriveway = ""; S.accessDrivewayNote = ""; S.accessGate = ""; S.accessGateCode = "";
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard"; S.foundation = ""; S.basementCrawl = false;
@@ -4466,11 +4484,9 @@ function wireInputs() {
   $("btnSaveArchive2").onclick = guardedSave;
   $("btnSaveDock").onclick = guardedSave; // 29as: pinned copy, same action
   syncSaveDock();
-  $("btnGoOutput").onclick = () => checkThen(() => {
-    const b = document.querySelector('.nav-btn[data-tab="output"]'); if (b) b.click();
-    window.scrollTo(0, 0);
-  });
+  // 29av: "View Excel takeoff" removed from the pinned bar (Excel tab in the nav still opens it)
   $("btnNewJob").onclick = newJob;
+  ["input", "change"].forEach(ev => $("woDate").addEventListener(ev, () => { S.woDateManual = true; })); // 29av: Asher's edit sticks
   // 29au: same handler as the Customer/builder New job (one code path), then show the Wizard if another tab was open
   $("btnNewJobTop").onclick = () => { $("btnNewJob").click(); const w = document.querySelector('.nav-btn[data-tab="wizard"]'); if (w && !w.classList.contains("active")) w.click(); window.scrollTo(0, 0); };
   $("btnCopyCsv").onclick = () => {
@@ -4511,13 +4527,11 @@ function wireInputs() {
 function syncSaveDock() {
   const a = document.querySelector(".tabs-panel.active"), on = !!a && (a.id === "tab-wizard" || a.id === "tab-output");
   const d = $("saveDock"); if (d) d.classList.toggle("hidden", !on);
-  // 29as M: View Excel takeoff sits beside the pinned save on the Wizard (already on Excel → just the save button, full width)
-  const v = $("btnGoOutput"), row = $("saveDockRow"), onWiz = !!a && a.id === "tab-wizard";
-  if (v) v.classList.toggle("hidden", !onWiz); if (row) row.classList.toggle("grid2", onWiz);
+  // 29av: pinned bar is just Save to archive, full width (View Excel takeoff removed)
   document.body.classList.toggle("has-save-dock", on);
 }
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29au";
+const APP_BUILD = "2026-10-29av";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
