@@ -541,6 +541,7 @@ const DEFAULT_PRICE_KEYS = [
   { materialKey: 'Spider walls 3.5"', unit: "SF", price: "1.30" },
   { materialKey: 'Spider walls 5.5"', unit: "SF", price: "1.89" },
   { materialKey: "Dense-pack floors", unit: "SF", price: "1.19" },
+  { materialKey: "Dense-pack floors (spider)", unit: "SF", price: "1.19" },
   { materialKey: "Attic suck-out", unit: "SF", price: "1.25" },
   { materialKey: "Attic batt removal", unit: "SF", price: "1.25" },
   { materialKey: "Crawl insulation removal", unit: "SF", price: "1.25" },
@@ -1200,13 +1201,32 @@ const PORCH_CEIL_MATS = {
   foam5: ['5" open-cell foam', "Spray foam", '5" foam'],
   foam55: ['5.5" open-cell foam', "Open-cell spray foam", '5.5" OC'],
 };
+// [label, product, description, priceKey, netting?]
 const BETWEEN_FLOOR_MATS = {
-  r13_sound: ["R13 sound batts", "R-13 fiberglass batts", "Sound batts R13"],
-  r19: ["R19 batts", "R-19 fiberglass batts", "R19"],
-  acoustical: ['AcousticalBat 3" (rock wool)', "Rock wool", 'AcousticalBat 3"'],
-  comfortbat: ["ComfortBat R15 (rock wool)", "Rock wool", "ComfortBat R15"],
-  blow_fg: ["Blown fiberglass", "Blown fiberglass", "Blown fiberglass"],
-  cellulose: ["Blown cellulose", "Cellulose", "Blown cellulose"],
+  r13_sound: ["R13 sound batts", "R-13 fiberglass batts", "Sound batts R13", "R-13 fiberglass batts"],
+  r19: ["R19 batts", "R-19 fiberglass batts", "R19", "R-19 fiberglass batts"],
+  comfortbat: ["ComfortBat R15 (rock wool)", "Rock wool", "ComfortBat R15", "ComfortBat R15"],
+  acoustical: ['AcousticalBat 3" (rock wool)', "Rock wool", 'AcousticalBat 3"', 'AcousticalBat 3"'],
+  foam: ['Open-cell foam 3.5"', "Open-cell spray foam", '3.5" OC foam', "Open-cell foam (walls)"],
+  dense_cel: ["Dense-pack cellulose", "Cellulose", "Dense-pack cellulose", "Dense-pack floors", true],
+  dense_spider: ["Dense-pack spider", "Spider", "Dense-pack spider", "Dense-pack floors (spider)", true],
+};
+const BETWEEN_FLOOR_MIGRATE = { blow_fg: "r19", cellulose: "dense_cel" };
+// [label, product, description, priceKey]
+const CANT_MATS = {
+  r30: ["R30 batts", "R-30 fiberglass batts", "R30", "R-30 fiberglass batts"],
+  r19: ["R19 batts", "R-19 fiberglass batts", "R19", "R-19 fiberglass batts"],
+  r38: ["R38 batts", "R-38 fiberglass batts", "R38", "R-38 fiberglass batts"],
+  foam55: ['5.5" open-cell foam', "Open-cell spray foam", '5.5" OC', "Open-cell foam (roofline)"],
+  cc2: ['2" closed-cell foam', "Closed-cell spray foam", '2" CC', 'Closed-cell foam 2"'],
+};
+const GARAGE_CEIL_MATS = {
+  r19: ["R19 batts", "R-19 fiberglass batts", "R19", "R-19 fiberglass batts"],
+  r30: ["R30 batts", "R-30 fiberglass batts", "R30", "R-30 fiberglass batts"],
+  r38: ["R38 batts", "R-38 fiberglass batts", "R38", "R-38 fiberglass batts"],
+  blow_r30: ["Blown fiberglass R30", "Blown fiberglass", "R30 blown", "Blown fiberglass R-30"],
+  blow_r38: ["Blown fiberglass R38", "Blown fiberglass", "R38 blown", "Blown fiberglass R-38"],
+  foam5: ['5" open-cell foam', "Spray foam", '5" foam', "Open-cell foam (roofline)"],
 };
 function wallModeOptions() {
   const all = [["batt","Batt"],["foam","Foam"],["cellulose","Cellulose"],["spider","Spider"],["comfortbat","ComfortBat"],["acoustical","Acoustical"]];
@@ -1446,11 +1466,14 @@ function buildLinesForPackage(p, tag) {
   }
 
   if (S.hasBetweenFloors && F.canAskBetweenFloors) {
+    let bfNet = 0;
     (S.betweenFloors || []).forEach(r => {
       const sf = n(r.sf); if (sf <= 0) return;
-      const m = BETWEEN_FLOOR_MATS[r.mat] || BETWEEN_FLOOR_MATS.r13_sound;
-      push(lines, { area: "Between floors", assembly: "Between floors (sound)", product: m[1], description: m[2] + " between floors", footage: round2(sf), unit: "SF", notes: noteTag });
+      const m = BETWEEN_FLOOR_MATS[BETWEEN_FLOOR_MIGRATE[r.mat] || r.mat] || BETWEEN_FLOOR_MATS.r13_sound;
+      push(lines, { area: "Between floors", assembly: "Between floors (sound)", product: m[1], description: m[2] + " between floors", priceKey: m[3], footage: round2(sf), unit: "SF", notes: noteTag });
+      if (m[4]) bfNet += sf;
     });
+    if (bfNet > 0) push(lines, { area: "Between floors", assembly: "Netting", product: "Netting", description: "Matches dense-pack between floors", footage: round2(bfNet), unit: "SF", notes: noteTag });
   }
 
   if (S.hasGables && F.canAskGables) {
@@ -1467,9 +1490,8 @@ function buildLinesForPackage(p, tag) {
   if (S.hasCants && F.canAskCants) {
     S.cants.forEach(r => {
       if (n(r.sf) <= 0) return;
-      push(lines, { area: "Cantilever", assembly: "Cantilever",
-        product: (r.material === "foam55" || totalFoam) ? "Open-cell spray foam" : r.material === "cellulose" ? "Cellulose" : "R-30 fiberglass batts",
-        description: (r.material === "foam55" || totalFoam) ? '5.5" OC' : r.material === "cellulose" ? "Cellulose" : "R30",
+      const m = totalFoam && !/^cc/.test(r.material) ? CANT_MATS.foam55 : (CANT_MATS[r.material] || CANT_MATS.r30);
+      push(lines, { area: "Cantilever", assembly: "Cantilever", product: m[1], description: m[2], priceKey: m[3],
         footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
     });
   }
@@ -1480,9 +1502,8 @@ function buildLinesForPackage(p, tag) {
       push(lines, { area: S.garageBlockAsGable ? "Garage block" : "Garage roof", assembly: "Garage roof foam", product: "Open-cell spray foam", description: '5.5" OC', footage: round2(n(S.garageRoofFlat) * factor), unit: "SF", notes: noteTag });
     }
     if (n(S.garageCeilingSf) > 0) {
-      push(lines, { area: "Garage ceiling", assembly: "Garage ceiling",
-        product: (S.garageCeilMat === "foam5" || totalFoam) ? "Spray foam" : S.garageCeilMat === "cellulose" ? "Cellulose" : "R-19 fiberglass batts",
-        description: (S.garageCeilMat === "foam5" || totalFoam) ? '5" foam' : S.garageCeilMat === "cellulose" ? "Cellulose" : "R19",
+      const m = totalFoam ? GARAGE_CEIL_MATS.foam5 : (GARAGE_CEIL_MATS[S.garageCeilMat] || GARAGE_CEIL_MATS.r19);
+      push(lines, { area: "Garage ceiling", assembly: "Garage ceiling", product: m[1], description: m[2], priceKey: m[3],
         footage: round2(n(S.garageCeilingSf)), unit: "SF", notes: noteTag });
     }
   }
@@ -1507,10 +1528,10 @@ function buildLinesForPackage(p, tag) {
   }
 
   if (S.airSealed) {
-    push(lines, { area: site, assembly: "Air seal (caulk & foam)", product: "Air seal", description: "Caulk & foam — base plate / openings / penetrations", footage: 1, unit: "ea", notes: noteTag });
-    if (n(S.airSealAddon) > 0) push(lines, { area: site, assembly: "Air seal add-on", product: "Air seal add-on", description: "Above-average house +$" + fmt(round2(n(S.airSealAddon))), footage: 1, unit: "ea", dollars: round2(n(S.airSealAddon)), notes: noteTag + "$ amount @ 40%" });
+    push(lines, { area: site, assembly: "Air seal (caulk & foam)", product: "Air seal", description: "Caulk & foam — base plate / openings / penetrations", footage: 1, unit: "ea", fixed: true, notes: noteTag });
+    if (n(S.airSealAddon) > 0) push(lines, { area: site, assembly: "Air seal add-on", product: "Air seal add-on", description: "Above-average house +$" + fmt(round2(n(S.airSealAddon))), footage: 1, unit: "ea", dollars: round2(n(S.airSealAddon)), notes: noteTag + "Fixed $ (not margin-scaled)" });
   }
-  if (n(S.extraLabor) > 0) push(lines, { area: site, assembly: "Extra labor", product: "Extra labor", description: "$" + fmt(round2(n(S.extraLabor))) + ((S.extraLaborNote || "").trim() ? " — " + S.extraLaborNote.trim() : ""), footage: 1, unit: "ea", dollars: round2(n(S.extraLabor)), notes: noteTag + "$ amount @ 40%" });
+  if (n(S.extraLabor) > 0) push(lines, { area: site, assembly: "Extra labor", product: "Extra labor", description: "$" + fmt(round2(n(S.extraLabor))) + ((S.extraLaborNote || "").trim() ? " — " + S.extraLaborNote.trim() : ""), footage: 1, unit: "ea", dollars: round2(n(S.extraLabor)), notes: noteTag + "Fixed $ (not margin-scaled)" });
 
   if (S.gasType === "idk") {
     push(lines, { area: site, assembly: "Gas type", product: "CONFIRM WITH BUILDER", description: "Gas type unknown — confirm before quoting propane kit", footage: 0, unit: "—", notes: noteTag + "Do NOT auto-add propane conversion kit" });
@@ -1534,7 +1555,7 @@ function mergeLikeLines(lines, noteTag) {
   const section = a => String(a || "").replace(/^(Gable)\s*\([^)]*\)\s*$/, "$1").trim();
   const out = [], groups = new Map();
   lines.forEach(L => {
-    if (L.area === "Fireplace" || L.unit === "—" || L.bags || L.dollars != null) { out.push(L); return; }
+    if (L.area === "Fireplace" || L.unit === "—" || L.bags || L.dollars != null || L.fixed) { out.push(L); return; }
     const desc = stripNum(L._mergeDesc != null ? L._mergeDesc : L.description);
     const key = [section(L.assembly), L.product, desc, L.unit].join("|");
     let g = groups.get(key);
@@ -1659,7 +1680,7 @@ function priceKeyFor(L) {
   if (pr === "Closed-cell spray foam") { const m = d.match(/(\d(?:\.\d)?)"/); return 'Closed-cell foam ' + (m ? m[1] : "2") + '"'; }
   if (pr === "Rock wool") return /ComfortBat/i.test(d) ? "ComfortBat R15" : 'AcousticalBat 3"';
   if (pr === "Cellulose" || pr === "Spider") {
-    if (a === "Floor dense-pack") return "Dense-pack floors";
+    if (a === "Floor dense-pack") return pr === "Spider" ? "Dense-pack floors (spider)" : "Dense-pack floors";
     const depth = /5\.5"/.test(d) ? '5.5"' : /3\.5"/.test(d) ? '3.5"' : "";
     if (depth && (/^Wall/.test(a) || a === "Interior walls")) return pr + " walls " + depth;
     if (pr === "Cellulose") { const r = d.match(/R(30|38)/); if (r) return "Blown cellulose R" + r[1]; }
@@ -1671,14 +1692,15 @@ function priceKeyFor(L) {
 }
 function lineIsUnpriced(L) { return L.area === "Fireplace" || (L.footage === 0 && L.unit === "—") || L.assembly === "Gas type"; }
 function ballpark(linesArg) {
+  // unit-priced lines scale with margin; per-house/fixed dollar lines (air seal, add-on, extra labor) do not.
   const scale = marginPct() / MARGIN_BASE;
   const priceMap = new Map();
   S.priceLibrary.forEach(p => { const u = n(p.unitPrice40); if (u > 0) priceMap.set(p.materialKey, u); });
-  let total = 0, pricedLines = 0, unpricedLines = 0;
-  const missing = new Set();
+  let scaled = 0, fixed = 0, pricedLines = 0, unpricedLines = 0;
+  const missing = new Set(), fixedItems = [];
   (linesArg || allLines()).forEach(L => {
     if (lineIsUnpriced(L)) return;
-    if (L.dollars != null) { total += n(L.dollars) * scale; pricedLines++; return; }
+    if (L.dollars != null) { fixed += n(L.dollars); fixedItems.push(L.product + " " + fmtMoney(n(L.dollars))); pricedLines++; return; }
     const pk = priceKeyFor(L);
     let unit40 = priceMap.get(pk);
     if (unit40 === undefined && / \(retro\)$/.test(pk)) { const b = priceMap.get(pk.replace(/ \(retro\)$/, "")); if (b !== undefined) unit40 = b + 0.05; }
@@ -1688,10 +1710,11 @@ function ballpark(linesArg) {
       priceMap.forEach((v, k) => { if (unit40 === undefined && k.trim().toLowerCase() === key) unit40 = v; });
     }
     if (unit40 === undefined || unit40 <= 0) { unpricedLines++; missing.add(pk); return; }
-    total += L.footage * unit40 * scale;
+    if (L.fixed) { fixed += L.footage * unit40; fixedItems.push(L.product + " " + fmtMoney(L.footage * unit40)); }
+    else scaled += L.footage * unit40 * scale;
     pricedLines++;
   });
-  return { total: round2(total), pricedLines, unpricedLines, missing: Array.from(missing).sort() };
+  return { total: round2(scaled + fixed), scaled: round2(scaled), fixed: round2(fixed), fixedItems, pricedLines, unpricedLines, missing: Array.from(missing).sort() };
 }
 
 function buildExcelCsv() {
@@ -1937,7 +1960,7 @@ function renderAssemblyEditors() {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Cantilever #' + (idx+1) + '</div>';
       card.appendChild(fieldInput("SF", r.sf, v => { r.sf = v; schedule(); }, "number"));
-      card.appendChild(fieldSelect("Material", r.material, [["r30","R30"],["foam55",'5.5" foam'],["cellulose","Cellulose"]], v => { r.material = v; render(); }));
+      card.appendChild(fieldSelect("Material", CANT_MATS[r.material] ? r.material : "r30", Object.keys(CANT_MATS).map(k => [k, CANT_MATS[k][0]]), v => { r.material = v; render(); }));
       box.appendChild(card);
     });
     box.appendChild(addBtn("Add cantilever", () => { S.cants.push({ id: uid(), name: "", sf: "", material: "r30" }); render(); }));
@@ -1946,7 +1969,7 @@ function renderAssemblyEditors() {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">Garage</div>';
     card.appendChild(fieldInput("Garage ceiling SF", S.garageCeilingSf, v => { S.garageCeilingSf = v; schedule(); }, "number"));
-    card.appendChild(fieldSelect("Ceiling mat", S.garageCeilMat, [["r19","R19"],["foam5",'5" foam'],["cellulose","Cellulose"]], v => { S.garageCeilMat = v; render(); }));
+    card.appendChild(fieldSelect("Ceiling mat", GARAGE_CEIL_MATS[S.garageCeilMat] ? S.garageCeilMat : "r19", Object.keys(GARAGE_CEIL_MATS).map(k => [k, GARAGE_CEIL_MATS[k][0]]), v => { S.garageCeilMat = v; render(); }));
     const fr = el("div", "toggle-row"); fr.appendChild(el("span", null, "Foam garage roof"));
     const sw = el("button", "switch" + (S.garageFoamRoof ? " on" : "")); sw.type = "button";
     sw.onclick = () => { S.garageFoamRoof = !S.garageFoamRoof; render(); }; fr.appendChild(sw); card.appendChild(fr);
@@ -2273,7 +2296,7 @@ function renderOptionBar() {
     sw.appendChild(b);
   });
   const priced = S.priceLibrary.some(p => n(p.unitPrice40) > 0);
-  let html = "<table><thead><tr><th>Option</th><th>Lines</th>" + (priced ? "<th>Ballpark @ " + marginPct() + "%</th>" : "") + "</tr></thead><tbody>";
+  let html = "<table><thead><tr><th>Option</th><th>Lines</th>" + (priced ? "<th>Ballpark (unit @ " + marginPct() + "% + fixed $)</th>" : "") + "</tr></thead><tbody>";
   ks.forEach((k, i) => {
     const ls = optionLines(i), b = priced ? ballpark(ls) : null;
     html += "<tr" + (i === S.optionView ? " style='font-weight:700'" : "") + "><td>" + escHtml(optionTitle(i)) + "</td><td class='num'>" + ls.length + "</td>" +
@@ -2342,7 +2365,7 @@ function renderOutput() {
   let extra = "";
   if (S.showBallpark) {
     if (pricedCount === 0) extra = " · Ballpark: add 40% prices in Pricing";
-    else { const b = ballpark(); extra = " · Ballpark " + fmtMoney(b.total) + " @ " + marginPct() + "% (not final invoice)"; }
+    else { const b = ballpark(); extra = " · Ballpark " + fmtMoney(b.total) + " (" + fmtMoney(b.scaled) + " @ " + marginPct() + "% + " + fmtMoney(b.fixed) + " fixed; not final invoice)"; }
   }
   hint.innerHTML = (optionsOn() ? "<strong>" + escHtml(optionTitle(S.optionView | 0)) + "</strong> · " : "") + lines.length + " rows · Bags blank until bag-yield · Air seal, gas & chase flags · Owner: " +
     (S.owner === "asher" ? "Asher" : "Sky") + extra;
@@ -2426,8 +2449,8 @@ function renderPricing() {
     if (pricedCount === 0) callout.innerHTML = "<strong>Ballpark — not final invoice</strong>Price library is empty. Add 40% unit prices below.";
     else {
       const b = ballpark();
-      callout.innerHTML = "<strong>Ballpark — not final invoice</strong>" + fmtMoney(b.total) + " @ " + marginPct() +
-        "% · " + b.pricedLines + " priced line(s)" + (b.unpricedLines ? " · " + b.unpricedLines + " unpriced" : "") +
+      callout.innerHTML = "<strong>Ballpark — not final invoice</strong>" + fmtMoney(b.total) + " = " + fmtMoney(b.scaled) + " materials/labor @ " + marginPct() +
+        "% + " + fmtMoney(b.fixed) + " fixed" + (b.fixedItems.length ? " (" + escHtml(b.fixedItems.join(", ")) + ")" : "") + " · " + b.pricedLines + " priced line(s)" + (b.unpricedLines ? " · " + b.unpricedLines + " unpriced" : "") +
         (b.missing.length ? "<br><em>Missing: " + escHtml(b.missing.join(", ")) + "</em>" : "");
     }
   }
@@ -2630,6 +2653,10 @@ function migrateState(d) {
   if (!/^R-(19|30|38|49)$/.test(S.customBlowR || "")) S.customBlowR = "R-38";
   if (!/^R-(19|30|38|49)$/.test(S.customAtticBattR || "")) S.customAtticBattR = "R-38";
   delete S.customRoof; delete S.customWalls;
+  // trimmed material lists (build g): cellulose etc. → nearest valid option
+  if (Array.isArray(S.cants)) S.cants.forEach(c => { if (!CANT_MATS[c.material]) c.material = "r30"; });
+  if (!GARAGE_CEIL_MATS[S.garageCeilMat]) S.garageCeilMat = "r19";
+  if (Array.isArray(S.betweenFloors)) S.betweenFloors.forEach(b => { if (BETWEEN_FLOOR_MIGRATE[b.mat]) b.mat = BETWEEN_FLOOR_MIGRATE[b.mat]; if (!BETWEEN_FLOOR_MATS[b.mat]) b.mat = "r13_sound"; });
   if (Array.isArray(S.knees)) S.knees.forEach(k => { if (k.shape !== "triangle") k.shape = "rectangle"; if (k.oc !== "24") k.oc = "16"; });
 }
 
@@ -2857,7 +2884,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29f";
+const APP_BUILD = "2026-10-29g";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
