@@ -1348,6 +1348,11 @@ function flags(pkgArg) {
     crawlIsEncap, crawlIsTouchup, crawlIsReplace, crawlIsNewBatts, atticBlowR, excludesDeadVaultKnees,
     primaryExcludesDVK, showFoamRoofPath,
     canAskDeadVaultKnees: (isNew || (isAtticRetro && !atticIsFoam)) && !primaryExcludesDVK,
+    // 29an: baffles are decoupled from dead air/vaults/knees — always on for every new construction package/option;
+    // optional toggle (default off) on every attic retro, foam retro included.
+    bafflesRequired: isNew,
+    canAskBaffles: isNew || isAtticRetro,
+    bafflesOn: isNew || (isAtticRetro && !!S.hasBaffles),
     canAskWalls: isNew,
     canAskGables: showFoamRoofPath,
     canAskCants: isNew,
@@ -2059,7 +2064,7 @@ function buildLinesForPackage(p, tag) {
         notes: noteTag + (g.parts.length > 1 ? g.parts.length + " pcs: " : "") + g.parts.join(" + ") });
     });
   }
-  if (S.hasBaffles && n(S.baffles) > 0 && (F.isNew || F.isAtticRetro) && !excludeDVK) {
+  if (F.bafflesOn && n(S.baffles) > 0) { // 29an: never dropped on new construction (any package/roofline)
     push(lines, { area: "Eaves", assembly: "Baffles", product: "Cardboard baffles", description: (S.baffleW === "16" ? "16" : "24") + '" baffles', footage: round2(n(S.baffles)), unit: "ea", notes: noteTag });
   }
 
@@ -2626,11 +2631,11 @@ function renderGates() {
     addToggle("Dead air", "hasDeadAir", true);
     addToggle("Vaults", "hasVaults", true);
     addToggle("Knee walls", "hasKnees", true);
-    addToggle("Baffles", "hasBaffles", true);
   } else if (F.primaryExcludesDVK) {
-    const c = el("div", "callout", "<strong>Foam roofline</strong>Dead air, vaults, knees excluded.");
+    const c = el("div", "callout", "<strong>Foam roofline</strong>Dead air, vaults, knees excluded" + (F.isNew ? " — baffles still included." : "."));
     box.appendChild(c);
   }
+  addToggle("Baffles", "hasBaffles", F.canAskBaffles && !F.bafflesRequired);
   addToggle("Rim / band", "hasRim", F.canAskRim);
   addToggle("Walls", "hasWalls", F.canAskWalls);
   addToggle("Interior walls", "hasInteriorWalls", F.canAskWalls);
@@ -2758,7 +2763,8 @@ function renderAssemblyEditors() {
     });
     box.appendChild(addBtn("Add knee", () => { S.knees.push({ id: uid(), name: "", height: "8", lf: "", oc: "16", shape: "rectangle", wrap: true }); render(); }));
   }
-  if (S.hasBaffles && F.canAskDeadVaultKnees) {
+  if (F.bafflesOn) {
+    if (F.bafflesRequired && !(n(S.baffles) > 0)) box.appendChild(el("div", "callout warn", "<strong>Baffles required</strong>Every new construction job gets baffles — enter the baffle count."));
     box.appendChild(fieldInput("Baffle count", S.baffles, v => { S.baffles = v; schedule(); }, "number"));
     box.appendChild(fieldSelect("Baffle width", S.baffleW || "24", [["16", '16"'], ["24", '24"']], v => { S.baffleW = v; render(); }));
   }
@@ -3333,7 +3339,7 @@ function renderOutput() {
   }
   if (S.showBallpark && pricedCount && foamCompareOn()) { const fc = foamCompare(); extra = " · Ballpark A open cell " + fmtMoney(fc.A.total) + (fc.A.incomplete ? " (incomplete)" : "") + " vs B closed cell " + fmtMoney(fc.B.total) + (fc.B.incomplete ? " (incomplete)" : "") + " @ " + marginPct() + "%; not final invoice"; }
   hint.innerHTML = (optionsOn() ? "<strong>" + escHtml(optionTitle(S.optionView | 0)) + "</strong> · " : "") + (foamCompareOn() ? "<strong>Open cell vs. closed cell</strong> (foam lines show both; Sky prices both ways) · " : "") + lines.length + " rows · Bags blank until bag-yield · Air seal, gas & chase flags · Owner: " +
-    ownerName() + extra;
+    ownerName() + extra + (S.jobMode === "new" && !(n(S.baffles) > 0) ? " · <strong>⚠ Baffles required — enter baffle count</strong>" : "");
 
   const wrap = $("outputTable");
   if (!lines.length) { wrap.innerHTML = "<p class='status'>Enter measurements — Excel rows appear here.</p>"; return; }
@@ -3747,7 +3753,7 @@ function render() {
   $("marginCustom").value = S.marginCustom;
 
   bindSeg("seg-owner", () => S.owner, v => { S.owner = v; S.outputView = v === "sky" ? "excel" : "fg"; render(); });
-  bindSeg("seg-mode", () => S.jobMode, v => { S.jobMode = v; render(); });
+  bindSeg("seg-mode", () => S.jobMode, v => { if (v === "retro" && S.jobMode !== "retro") S.hasBaffles = false; S.jobMode = v; render(); }); // 29an: retro baffles default off
   bindSeg("seg-retroScope", () => S.retroScope, v => { S.retroScope = v; render(); });
   bindSeg("seg-outputView", () => S.outputView, v => { S.outputView = v; render(); });
 
@@ -3843,6 +3849,7 @@ function migrateState(d) {
   ["woRep", "woDate", "woNotes"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
   if (!OWNER_LABELS[S.owner]) S.owner = APP_EDITION === "lance" ? "lance" : "asher";
   if (d.caulkFoam) S.airSealed = true;
+  if (S.jobMode === "new") S.hasBaffles = true; // 29an: old new-construction jobs saved with baffles off still get baffles
   if (S.fpModelId && FP_LEGACY_IDS[S.fpModelId]) S.fpModelId = FP_LEGACY_IDS[S.fpModelId];
   if (typeof S.fpChaseClear !== "boolean") S.fpChaseClear = true;
   if (typeof S.fpChaseNote !== "string") S.fpChaseNote = "";
@@ -4149,7 +4156,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29am";
+const APP_BUILD = "2026-10-29an";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
