@@ -1074,7 +1074,8 @@ function applyFoamType(L, row, word, force, dflt) {
   L._foam = force ? "locked" : (row && (row.foamType === "oc" || row.foamType === "cc")) ? "row" : "job";
   if (!force && foamTypeFor(row && row.foamType) !== "cc") return L;
   const dep = ccDepthFor(row && row.ccDepth, dflt);
-  const swap = t => { const i = String(t).indexOf(" / "); return dep + '" CC ' + word + (i >= 0 ? String(t).slice(i) : ""); };
+  // 29ap: no work-area word or batt width/height on foam descriptions (the Sky product column carries the area); keeps a "(#n)" instance tag
+  const swap = t => { const m = String(t).match(/\s*\(#\d+\)$/); return dep + '" CC' + (m ? m[0] : ""); };
   L.product = "Closed-cell spray foam"; L.description = swap(L.description); delete L.priceKey;
   if (L._mergeDesc != null) L._mergeDesc = swap(L._mergeDesc);
   return L;
@@ -1105,7 +1106,7 @@ function wallExcelDesc(row, mode) {
   const inside = wallWidthLabel(row.oc);
   const h = wallHeightFt(row);
   const hLabel = h + "'";
-  if (mode === "foam") return '3.5" OC foam / ' + inside + " / " + hLabel;
+  if (mode === "foam") return '3.5" OC foam'; // 29ap: spray foam — no batt width/height
   if (mode === "cellulose" || mode === "spider") {
     const depth = (row.kind === "ext_2x6" || row.kind === "daylight") ? '5.5"' : '3.5"';
     return (mode === "spider" ? "Spider" : "Cellulose") + " " + depth + " / " + inside + " / " + hLabel;
@@ -1153,7 +1154,7 @@ function interiorWallLine(r, idx, count, noteTag) {
   const hLabel = wallHeightFt(r) + "'";
   const mode = r.materialMode || "batt";
   let product, desc;
-  if (mode === "foam") { product = "Open-cell spray foam"; desc = '3.5" OC foam / ' + inside + " / " + hLabel; }
+  if (mode === "foam") { product = "Open-cell spray foam"; desc = '3.5" OC foam'; } // 29ap: no width/height on spray foam
   else if (mode === "cellulose") { product = "Cellulose"; desc = 'Cellulose 3.5" / ' + inside + " / " + hLabel; }
   else if (mode === "spider") { product = "Spider"; desc = 'Spider 3.5" / ' + inside + " / " + hLabel; }
   else if (mode === "acoustical") { product = "Rock wool"; desc = 'AcousticalBat 3" / ' + inside + " / " + hLabel; }
@@ -1715,15 +1716,15 @@ function twoLoadContacts() {
 function twoWho(cat) { return TWO_CONTACTS[cat] || TWO_DEFAULT_CONTACTS[cat]; }
 const TWO_ATTIC_SECS = ["Attic blow", "Attic batts", "Attic prep", "Roof foam", "Porch roof foam", "Garage roof foam"];
 const TWO_LABELS = {
-  "Wall — 2x4 exterior (R-13)": "Ext Walls", "Wall — 2x6 exterior (R-19)": "Ext Walls 2x6", "Wall — Daylight basement (R-19)": "Daylight Walls",
+  "Wall — 2x4 exterior (R-13)": "Exterior Walls", "Wall — 2x6 exterior (R-19)": "Exterior Walls 2x6", "Wall — Daylight basement (R-19)": "Daylight Walls",
   "Wall — Concrete basement (R-13)": "Basement Walls", "Wall — Garage exterior": "Garage Walls", "Wall — Interior": "Interior Walls", "Interior walls": "Interior Walls",
   "Knee wall": "Knee Walls", "Knee wrap": "Knee Wrap", "Dead air": "Dead Air", "Open vault": "Open Vault", "Closed vault": "Closed Vault", "Poly vent": "Poly Vents",
   "Garage ceiling": "Garage Ceiling", "Baffles": "Baffles", "Band / rim": "Bands", "Between floors (sound)": "Between Floors", "Cantilever": "Cantilever",
-  "Gable": "Gables", "Gable wrap": "Gable Wrap", "Crawl subfloor": "Crawl", "Crawl touch-up": "Crawl Touch-up", "Crawl prep": "Crawl Removal", "Poly": "Crawl Poly",
+  "Gable": "Gables", "Gable wrap": "Open Gables", "Crawl subfloor": "Crawl", "Crawl touch-up": "Crawl Touch-up", "Crawl prep": "Crawl Removal", "Poly": "Crawl Poly",
   "UFBC": "UFBC", "Porch ceiling": "Porch Ceiling", "Porch gable-off": "Porch Gable", "Floor dense-pack": "Dense-pack", "Netting": "Netting",
   "Encap poly": "Encap Poly", "Seam taping": "Seam Tape", "Crawl wall foam": "Crawl Walls", "Dehumidifier": "Dehumidifier",
   "Air seal (caulk & foam)": "Air Seal", "Miscellaneous": "Misc", "Attic blow": "Attic", "Attic batts": "Attic Batts", "Attic prep": "Attic Removal",
-  "Roof foam": "Roof Foam", "Porch roof foam": "Porch Roof Foam", "Garage roof foam": "Garage Roof Foam",
+  "Roof foam": "Roof Line", "Porch roof foam": "Porch Roof Foam", "Garage roof foam": "Garage Roof Foam",
 };
 function twoCatOf(L) { return TWO_ATTIC_SECS.indexOf(fgSection(L.assembly)) >= 0 ? "attic" : "walls"; }
 // build q: the field takeoff goes to Sky as ONE work order with every line (walls/batts + attic/roof foam); no Josh/attic split here.
@@ -2085,11 +2086,11 @@ function buildLinesForPackage(p, tag) {
       const f = n(r.flatSf); if (f <= 0) return;
       usedExplicit = true;
       const factor = resolvePitchFactor(r.pitch, r.customRise);
-      push(lines, { area: "Roof line", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthFor(r.depth) + '" OC roof', footage: round2(f * factor), unit: "SF", notes: noteTag + "flat×" + factor.toFixed(3) });
+      push(lines, { area: "Roof line", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthFor(r.depth) + '" OC', footage: round2(f * factor), unit: "SF", notes: noteTag + "flat×" + factor.toFixed(3) });
       applyFoamType(lines[lines.length - 1], r, "roof");
     });
     if (!usedExplicit && flat > 0 && (!customAttic || PR.onlyAttic)) {
-      push(lines, { area: "House roof", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthJob() + '" OC roof', footage: round2(flat * housePitchFactor), unit: "SF", notes: noteTag + "flat×" + housePitchFactor.toFixed(3) });
+      push(lines, { area: "House roof", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthJob() + '" OC', footage: round2(flat * housePitchFactor), unit: "SF", notes: noteTag + "flat×" + housePitchFactor.toFixed(3) });
       applyFoamType(lines[lines.length - 1], null, "roof");
     }
   }
@@ -2098,12 +2099,12 @@ function buildLinesForPackage(p, tag) {
     const pf = n(S.porchFlat);
     if (S.includePorchRoof && pf > 0) {
       const factor = resolvePitchFactor(S.porchRoofPitch, S.porchRoofCustomRise);
-      push(lines, { area: "Porch roof", assembly: "Porch roof foam", product: "Open-cell spray foam", description: roofDepthFor(S.porchRoofDepth) + '" OC porch roof', footage: round2(pf * factor), unit: "SF", notes: noteTag + "flat " + fmt(pf) + " ×" + factor.toFixed(3) });
+      push(lines, { area: "Porch roof", assembly: "Porch roof foam", product: "Open-cell spray foam", description: roofDepthFor(S.porchRoofDepth) + '" OC', footage: round2(pf * factor), unit: "SF", notes: noteTag + "flat " + fmt(pf) + " ×" + factor.toFixed(3) });
       applyFoamType(lines[lines.length - 1], { foamType: S.porchRoofFoam, ccDepth: S.porchRoofCc }, "porch roof");
     }
     if (S.includePorchCeiling) {
       const m = PORCH_CEIL_MATS[S.porchCeilMat] || PORCH_CEIL_MATS.batt_r19;
-      if (pf > 0) push(lines, { area: "Porch ceiling", assembly: "Porch ceiling", product: m[1], description: m[2] + (/^batt_/.test(S.porchCeilMat) ? "/" + battW(S.porchCeilOc, "16") : "") + " porch ceiling",
+      if (pf > 0) push(lines, { area: "Porch ceiling", assembly: "Porch ceiling", product: m[1], description: m[2] + (/^batt_/.test(S.porchCeilMat) ? "/" + battW(S.porchCeilOc, "16") : "") + (/spray foam/i.test(m[1]) ? "" : " porch ceiling"),
         footage: round2(pf), unit: "SF", notes: noteTag + "Flat SF (no pitch)" });
       if (pf > 0) applyFoamType(lines[lines.length - 1], { foamType: S.porchCeilFoam, ccDepth: S.porchCeilCc }, "porch ceiling");
     } else if (S.porchGabledOff) {
@@ -2147,7 +2148,7 @@ function buildLinesForPackage(p, tag) {
       const bandFoam = totalFoam || (rimFoamOpt && !!r.foam);
       push(lines, { area: "Rim joist", assembly: "Band / rim",
         product: bandFoam ? "Open-cell spray foam" : "R-19 fiberglass batts",
-        description: bandFoam ? '3.5" OC band' : "R19/" + battW(r.oc, "16"),
+        description: bandFoam ? '3.5" OC' : "R19/" + battW(r.oc, "16"),
         footage: round2(lf * 1.2), unit: "LF", notes: noteTag + fmt(lf) + " LF × 1.2" + (bandFoam && !totalFoam ? " · foamed (not batts)" : "") });
       // 29am: bands are ALWAYS 3.5" open cell by default (like walls), even on a closed-cell job and in OC vs CC compare.
       // Only an explicit per-rim "Closed cell" pick changes it.
@@ -2200,7 +2201,7 @@ function buildLinesForPackage(p, tag) {
     (S.betweenFloors || []).forEach(r => {
       const sf = n(r.sf); if (sf <= 0) return;
       const m = BETWEEN_FLOOR_MATS[BETWEEN_FLOOR_MIGRATE[r.mat] || r.mat] || BETWEEN_FLOOR_MATS.r13_sound;
-      push(lines, { area: "Between floors", assembly: "Between floors (sound)", product: m[1], description: m[2] + (BF_BATT_KEYS.indexOf(BETWEEN_FLOOR_MIGRATE[r.mat] || r.mat) >= 0 ? "/" + battW(r.oc, "16") : "") + " between floors", priceKey: m[3], footage: round2(sf), unit: "SF", notes: noteTag });
+      push(lines, { area: "Between floors", assembly: "Between floors (sound)", product: m[1], description: m[2] + (BF_BATT_KEYS.indexOf(BETWEEN_FLOOR_MIGRATE[r.mat] || r.mat) >= 0 ? "/" + battW(r.oc, "16") : "") + (/spray foam/i.test(m[1]) ? "" : " between floors"), priceKey: m[3], footage: round2(sf), unit: "SF", notes: noteTag });
       applyFoamType(lines[lines.length - 1], r, "between floors");
       if (m[4]) bfNet += sf;
     });
@@ -2213,9 +2214,9 @@ function buildLinesForPackage(p, tag) {
       const sf = r.shape === "triangle" ? (L * H) / 2 : L * H;
       push(lines, { area: "Gable", assembly: "Gable (" + r.shape + ")",
         product: "Open-cell spray foam", // gables are always spray foam (never batts / cellulose / spider)
-        description: '3.5" OC gable', footage: round2(sf), unit: "SF", notes: noteTag });
+        description: '3.5" OC', footage: round2(sf), unit: "SF", notes: noteTag });
       applyFoamType(lines[lines.length - 1], r, "gable");
-      if (r.wrap) push(lines, { area: "Gable", assembly: "Gable wrap", product: "House wrap", description: "W", footage: round2(sf), unit: "SF", notes: noteTag });
+      if (r.wrap) push(lines, { area: "Gable", assembly: "Gable wrap", product: "House wrap", description: "House Wrap", footage: round2(sf), unit: "SF", notes: noteTag });
     });
   }
 
@@ -2499,11 +2500,11 @@ function foamCompare() {
     diff: round2(ob.total - oa.total), priced: S.priceLibrary.some(p => n(p.unitPrice40) > 0) };
 }
 // Excel / Sky handoff in compare mode: ONE line per comparable foam line, same SF, description spells out both,
-// e.g. '5.5" open cell vs. 2" closed cell roof'. Locked CC rows and per-row overrides keep their normal single-type line.
+// e.g. '5.5" open cell vs. 2" closed cell'. Locked CC rows and per-row overrides keep their normal single-type line.
 function foamComboDesc(a, b) {
-  const am = String(a.description || "").match(/^(\d+(?:\.\d+)?)"/), bm = String(b.description || "").match(/^(\d+(?:\.\d+)?)" CC (.*)$/);
+  const am = String(a.description || "").match(/^(\d+(?:\.\d+)?)"/), bm = String(b.description || "").match(/^(\d+(?:\.\d+)?)" CC(.*)$/);
   if (!am || !bm) return String(a.description || "") + " vs. " + String(b.description || "");
-  return am[1] + '" open cell vs. ' + bm[1] + '" closed cell ' + bm[2];
+  return am[1] + '" open cell vs. ' + bm[1] + '" closed cell' + bm[2];
 }
 function combinedLines(linesFn) {
   linesFn = linesFn || allLines;
@@ -4172,7 +4173,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29ao";
+const APP_BUILD = "2026-10-29ap";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
