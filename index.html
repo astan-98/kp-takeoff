@@ -332,6 +332,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
           <div class="seg" id="customWallChips"><button type="button" data-v="batt">Batts</button><button type="button" data-v="foam">Foam</button><button type="button" data-v="cellulose">Cellulose</button><button type="button" data-v="spider">Spider</button></div>
         </div>
       </div>
+    </div>
+
+    <div class="section" id="sec-customer">
+      <h2>Customer / builder</h2>
       <div class="grid2">
         <div class="field"><label>Builder / customer</label><input id="builder" autocomplete="organization"></div>
         <div class="field"><label>City</label><input id="city" placeholder="Gainesville"></div>
@@ -410,7 +414,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <h2>What's on this house?</h2>
       <p class="cap">Gates skip unused assemblies. Foam roof packages skip dead air / vaults / knees; gables only on foam roofline. Flat asked once.</p>
       <div id="gates"></div>
-      <div class="divider"></div>
+    </div>
+
+    <div class="section" id="sec-footprint">
+      <h2>Flat footprint</h2>
       <div class="field"><label>Flat footprint SF (once)</label><input id="flatSf" type="number" inputmode="decimal" min="0" step="any"></div>
       <div id="pitchBlock" class="hidden">
         <div class="field"><label>House roof pitch</label><select id="housePitch"></select></div>
@@ -419,8 +426,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       </div>
       <div id="blowLiveBlock" class="props"><span class="k" id="atticBlowLiveLabel">Attic blow SF</span><span class="v" id="atticBlowLive">0 SF</span></div>
       <div id="touchupField" class="field hidden"><label>Crawl touch-up patch SF</label><input id="touchupPatchSf" type="number" inputmode="decimal"></div>
-      <div id="assemblyEditors"></div>
     </div>
+
+    <!-- 29at: every work area is its own bubble (built in renderAssemblyEditors, measuring-routine order) -->
+    <div id="assemblyEditors"></div>
 
     <div class="section" id="sec-wrapup">
       <h2>Air sealing</h2>
@@ -2977,7 +2986,7 @@ function renderAssemblyEditors() {
     const isBase = k => k === "daylight" || k === "concrete";
     const ownBase = F.basementSections;
     const hideBaseRows = ownBase || F.noBasementKinds || (F.foundation === "unfinished" && !F.basementWalls);
-    const genKinds = Object.keys(WALL_KIND_LABELS).filter(k => !isBase(k) || !(ownBase || F.noBasementKinds));
+    const genKinds = Object.keys(WALL_KIND_LABELS).filter(k => k !== "interior" && (!isBase(k) || !(ownBase || F.noBasementKinds))); // 29at: interior has its own bubble
     const wallCard = (r, title, kinds) => {
       const card = el("div", "row-card");
       const lfMode = r.kind === "concrete" && !!r.measureLf; // 29as: unframed concrete measured LF × wall height
@@ -3021,11 +3030,14 @@ function renderAssemblyEditors() {
     };
     const h = el("div", "divider"); box.appendChild(h);
     box.appendChild(el("p", "cap", "Walls — matching walls of the same type combine into one Excel row (R-13 batts stay split by height). 16 OC = 12×15×h÷144 · 19 OC = 12×18×h÷144 · 24 OC = 12×24×h÷144"));
-    S.walls.filter(r => !(hideBaseRows && isBase(r.kind))).forEach((r, idx) => wallCard(r, "Wall #" + (idx + 1), genKinds));
+    S.walls.filter(r => r.kind !== "interior" && !(hideBaseRows && isBase(r.kind))).forEach((r, idx) => wallCard(r, "Wall #" + (idx + 1), genKinds));
     box.appendChild(addBtn("Add wall area", () => {
       S.walls.push({ id: uid(), name: "", kind: "ext_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: defaultWallMode(S.pkg, "ext_2x4") });
       render();
     }));
+    // 29at: interior rows saved in the old walls list show in the Interior walls bubble (same S.walls rows → identical lines)
+    const legacyInt = S.walls.filter(r => r.kind === "interior");
+    if (legacyInt.length) { SEC = 62; legacyInt.forEach((r, idx) => wallCard(r, "Interior wall row #" + (idx + 1), null)); }
     if (ownBase) [["daylight", "Daylight walls", "Daylight wall", 80], ["concrete", "Concrete walls", "Concrete wall", 81]].forEach(([kind, head, one, ord]) => {
       SEC = ord;
       box.appendChild(el("div", "divider"));
@@ -3286,8 +3298,21 @@ function renderAssemblyEditors() {
     box.appendChild(addBtn("Add item", () => { S.misc.push(newMiscItem()); render(); }));
   }
   delete box.appendChild;
-  Array.from(box.children).map((c, i) => [Number(c.dataset.ord) || 0, i, c]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).forEach(x => box.appendChild(x[2]));
+  // 29at: one bubble per work area — cards with the same SEC go in one .section, in measuring-routine order
+  const groups = new Map();
+  Array.from(box.children).map((c, i) => [Number(c.dataset.ord) || 0, i, c]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).forEach(([o, , c]) => { if (!groups.has(o)) groups.set(o, []); groups.get(o).push(c); });
+  box.innerHTML = "";
+  groups.forEach((cs, o) => {
+    if (!BUBBLE_TITLES[o]) { cs.forEach(c => box.appendChild(c)); return; } // e.g. the closed-cell depth reminder
+    const b = el("div", "section bubble"); b.dataset.ord = String(o);
+    b.appendChild(el("h2", null, BUBBLE_TITLES[o]));
+    cs.forEach((c, k) => { if (k === 0 && c.classList.contains("divider")) return; b.appendChild(c); });
+    box.appendChild(b);
+  });
 }
+const BUBBLE_TITLES = { 2: "Spray foam type", 5: "Attic", 10: "Roofline", 12: "Dead air", 13: "Vaults", 14: "Knee walls", 20: "Garage roofline", 30: "Garage ceiling",
+  32: "Porch", 35: "Cantilevers", 40: "Gables", 50: "Baffles", 60: "Walls", 62: "Interior walls", 64: "Between floors", 66: "Dense-pack floors",
+  80: "Daylight walls", 81: "Concrete walls", 82: "UFBC (unfinished basement ceiling)", 84: "Crawl – new batts", 85: "Crawl touch-up", 86: "Crawl space", 87: "Crawl walls", 95: "Miscellaneous", 99: "Bands / rim" };
 
 function fieldInput(label, value, onChange, type) {
   const f = el("div", "field");
@@ -3727,7 +3752,8 @@ function missingFields() {
       if (r.kind === "concrete" && r.measureLf) { if (blank(r.lf)) add(title, "Linear feet", title); else if (blank(r.lfHeight)) add(title, "Wall height ft", title); }
       else if (blank(r.cavities)) add(title, "Cavities", title);
     };
-    S.walls.filter(r => !(hideBaseRows && isBase(r.kind))).forEach((r, i) => { if (!isBase(r.kind) || F.basementWalls) chk(r, "Wall #" + (i + 1)); });
+    S.walls.filter(r => r.kind !== "interior" && !(hideBaseRows && isBase(r.kind))).forEach((r, i) => { if (!isBase(r.kind) || F.basementWalls) chk(r, "Wall #" + (i + 1)); });
+    S.walls.filter(r => r.kind === "interior").forEach((r, i) => chk(r, "Interior wall row #" + (i + 1)));
     if (F.basementSections) [["daylight", "Daylight wall"], ["concrete", "Concrete wall"]].forEach(([k, one]) => S.walls.filter(r => r.kind === k).forEach((r, i) => chk(r, one + " #" + (i + 1))));
   }
   if (S.hasInteriorWalls && F.canAskWalls) (S.interiorWalls || []).forEach((r, i) => { if (!(interiorWallSf(r) > 0)) add("Interior walls #" + (i + 1), "Cavities", "Interior walls #" + (i + 1)); });
