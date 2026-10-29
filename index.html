@@ -175,6 +175,12 @@ body.xl-open { overflow: hidden; }
 .xl-head { text-align: center; font-size: 18.7px; margin-bottom: 14px; }
 table.xl { border-collapse: collapse; table-layout: fixed; background: #fff; color: #000; font-size: 18.7px; }
 table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidden; vertical-align: middle; line-height: 1.1; font-weight: 700; color: #000; background: #fff; }
+.wo-recip { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 2px 4px; font-size: .8rem; color: var(--text2); }
+.wo-recip-txt { min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.wo-recip-txt b { color: var(--text); }
+.wo-recip a { color: var(--accent); text-decoration: none; }
+.wo-recip .btn { flex-shrink: 0; }
+.xl-foot .wo-recip { margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -405,6 +411,14 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
     <div class="section">
       <h2>Recent work orders</h2>
       <div id="woRecent"><p class="status">None yet.</p></div>
+    </div>
+
+    <div class="section">
+      <h2>Settings · who gets work orders</h2>
+      <p class="cap">Shown next to the Share buttons with a Copy email button. Saved on this phone.</p>
+      <div id="woContacts"></div>
+      <button type="button" class="btn btn-secondary btn-block btn-sm" id="woContactsReset">Reset to defaults</button>
+      <p class="status" id="woContactsMsg"></p>
     </div>
 
     <div class="section">
@@ -2618,7 +2632,12 @@ return {
 (function () {
 "use strict";
 var K = KPWO, $ = function (id) { return document.getElementById(id); };
-var WO = { lots: K.DATA.lots.slice(), logSource: null, order: null, recent: [] };
+var DEFAULT_CONTACTS = {
+  attic: { name: "Josh", phone: "706-340-6120", email: "joshg@kpiaf.com" },
+  walls: { name: "Sky", phone: "706-296-2731", email: "sporter@kpiaf.com" }
+};
+var WO = { lots: K.DATA.lots.slice(), logSource: null, order: null, recent: [], contacts: JSON.parse(JSON.stringify(DEFAULT_CONTACTS)) };
+function who(cat) { return WO.contacts[cat] || DEFAULT_CONTACTS[cat]; }
 var DBN = "kp-chafin-v1";
 function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
 function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
@@ -2747,23 +2766,23 @@ function renderOrder() {
   [["attic", "Attic", "Josh"], ["walls", "Walls / Batts", "Sky"]].forEach(function (c) { box.appendChild(sheetCard(o, c[0], c[1], c[2])); });
   // actions
   var a = el("div", "section"), any = o.sheets.attic || o.sheets.walls;
-  a.innerHTML = "<h2>Send it</h2><p class='cap'>Each one is its own Excel file. Your share sheet opens so you can pick Messages, Mail, or Files.</p>";
-  if (o.sheets.attic) a.appendChild(btn("Share Attic to Josh", "btn-primary", function () { exportFiles(["attic"]); }));
-  if (o.sheets.walls) a.appendChild(btn("Share " + o.sheets.walls.kind + " to Sky", "btn-primary", function () { exportFiles(["walls"]); }));
+  a.innerHTML = "<h2>Send it</h2><p class='cap'>Each one is its own Excel file. Your share sheet opens so you can pick Mail, Messages, or Files. Tap Copy email first, then paste it into Mail's To line.</p>";
+  if (o.sheets.attic) { a.appendChild(btn("Share Attic to " + who("attic").name, "btn-primary", function () { exportFiles(["attic"]); })); a.appendChild(recipientBlock("attic")); }
+  if (o.sheets.walls) { a.appendChild(btn("Share " + o.sheets.walls.kind + " to " + who("walls").name, "btn-primary", function () { exportFiles(["walls"]); })); a.appendChild(recipientBlock("walls")); }
   if (o.sheets.attic && o.sheets.walls) a.appendChild(btn("Share both files", "btn-secondary", function () { exportFiles(["attic", "walls"]); }));
   if (!any) a.appendChild(el("div", "callout danger", "<strong>No plan sheet yet for " + h(o.plan) + "</strong>Send me the " + h(o.plan) + " sheets and I'll add them."));
   a.appendChild(el("p", "status", "")); a.lastChild.id = "woExportMsg";
   box.appendChild(a);
 }
 function btn(label, cls, fn) { var b = el("button", "btn btn-block " + cls, h(label)); b.type = "button"; b.style.marginTop = "8px"; b.onclick = fn; return b; }
-function sheetCard(o, cat, label, who) {
+function sheetCard(o, cat, label) {
   var sh = o.sheets[cat], s = el("div", "section");
   if (!sh) {
     s.innerHTML = "<h2>" + h(label) + "</h2>";
     s.appendChild(el("div", "callout warn", "<strong>No " + (cat === "attic" ? "Attic" : "Walls/Batts") + " sheet yet for " + h(o.plan) + "</strong>This file won't be made. Send me the sheet and I'll add it."));
     return s;
   }
-  s.innerHTML = "<h2>" + h(sh.title) + "</h2><p class='cap'>Goes to " + who + " · from your sheet saved " + h(sh.mod) + (sh.note ? " · " + h(sh.note) : "") + "</p>";
+  s.innerHTML = "<h2>" + h(sh.title) + "</h2><p class='cap'>Goes to " + h(who(cat).name) + " · from your sheet saved " + h(sh.mod) + (sh.note ? " · " + h(sh.note) : "") + "</p>";
   if (sh.variants.length > 1) {
     var vf = el("div", "field"); vf.appendChild(el("label", null, "Version"));
     var vs = el("select"); vs.innerHTML = sh.variants.map(function (v, i) { return '<option value="' + i + '">' + h(v) + "</option>"; }).join(""); vs.value = String(sh.variantIndex);
@@ -2803,15 +2822,16 @@ function sheetCard(o, cat, label, who) {
 function openPreview(cat) {
   var o = WO.order; if (!o || !o.sheets[cat]) return;
   closePreview();
-  var who = cat === "attic" ? "Josh" : "Sky", sh = o.sheets[cat];
+  var sh = o.sheets[cat];
   var m = el("div", "xl-modal"); m.id = "woPreview";
   m.innerHTML = '<div class="xl-bar"><button type="button" class="btn btn-secondary btn-sm" id="xlClose">Close</button>' +
     '<div class="xl-title">' + h(K.fileNameFor(o, cat).replace(/\.xlsx$/, "")) + '</div>' +
     '<button type="button" class="btn btn-secondary btn-sm" id="xlZoom">100%</button></div>' +
     '<div class="xl-scroll" id="xlScroll"><div class="xl-zoom" id="xlZoomBox">' + K.previewHtml(o, cat) + '</div></div>' +
-    '<div class="xl-foot"><button type="button" class="btn btn-primary btn-block" id="xlShare">Share this file to ' + who + '</button>' +
-    '<p class="status" id="xlMsg" style="text-align:center"></p></div>';
+    '<div class="xl-foot"><button type="button" class="btn btn-primary btn-block" id="xlShare">Share this file to ' + h(who(cat).name) + '</button>' +
+    '<div id="xlRecip"></div><p class="status" id="xlMsg" style="text-align:center"></p></div>';
   document.body.appendChild(m); document.body.classList.add("xl-open");
+  $("xlRecip").appendChild(recipientBlock(cat));
   var fit = true, box = $("xlZoomBox");
   function apply() {
     var page = box.firstChild, w = page.offsetWidth || 806, avail = $("xlScroll").clientWidth - 16;
@@ -2841,7 +2861,8 @@ function exportFiles(cats, msgEl) {
   if (!files.length) return;
   saveRecent(o, cats);
   var m = msgEl || $("woExportMsg");
-  var data = { files: files, title: files.length > 1 ? "Chafin work orders" : files[0].name };
+  var msgParts = shareText(o, cats.filter(function (c) { return o.sheets[c]; }));
+  var data = { files: files, title: msgParts.title, text: msgParts.text };
   if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) {
     navigator.share(data).then(function () { m.textContent = "Shared " + files.map(function (f) { return f.name; }).join(" and ") + "."; })
       .catch(function (e) { if (e && e.name === "AbortError") m.textContent = "Share canceled."; else { download(files); m.textContent = "Share didn't open, so I downloaded the file instead."; } });
@@ -2854,6 +2875,62 @@ function download(files) {
       setTimeout(function () { URL.revokeObjectURL(u); a.remove(); }, 4000);
     }, i * 600);
   });
+}
+
+/* ---- recipients ---- */
+function kindWord(o, cat) { return cat === "attic" ? "attic" : String(o.sheets[cat].kind || "walls").toLowerCase(); }
+function shareText(o, cats) {
+  var lotTxt = o.sub + " Lot " + (isNaN(o.lot.n) ? o.lot.l : o.lot.n);
+  var where = [o.address, o.city].filter(Boolean).join(", ");
+  var kinds = cats.map(function (c) { return kindWord(o, c); });
+  var names = cats.map(function (c) { return who(c).name; }).filter(function (n, i, a) { return n && a.indexOf(n) === i; });
+  var title = cats.length === 1 ? "Chafin WO - " + lotTxt + " - " + o.plan + " - " + (cats[0] === "attic" ? "Attic" : o.sheets[cats[0]].kind)
+    : "Chafin WOs - " + lotTxt + " - " + o.plan;
+  var text = names.join(" and ") + ", attached " + (cats.length === 1 ? "is the " + kinds[0] + " work order" : "are the " + kinds.join(" and ") + " work orders") +
+    " for " + lotTxt + " (" + o.plan + ")" + (where ? ", " + where : "") + (/\.$/.test(where) ? "" : ".") + " - Asher";
+  return { title: title, text: text };
+}
+function copyText(t) {
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).then(function () { return true; }, function () { return legacyCopy(t); });
+  return Promise.resolve(legacyCopy(t));
+}
+function legacyCopy(t) {
+  var ta = document.createElement("textarea"); ta.value = t; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;font-size:16px";
+  document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, t.length);
+  var ok = false; try { ok = document.execCommand("copy"); } catch (e) {} ta.remove(); return ok;
+}
+function recipientBlock(cat) {
+  var c = who(cat), d = el("div", "wo-recip");
+  d.innerHTML = '<div class="wo-recip-txt"><b>To ' + h(c.name) + '</b><br>' + (c.email ? h(c.email) : "<i>no email set</i>") +
+    (c.phone ? ' · <a href="tel:' + h(c.phone.replace(/[^0-9+]/g, "")) + '">' + h(c.phone) + "</a>" : "") + "</div>";
+  var b = el("button", "btn btn-secondary btn-sm", "Copy email"); b.type = "button"; b.disabled = !c.email;
+  b.onclick = function () {
+    copyText(c.email).then(function (ok) { b.textContent = ok ? "Copied ✓" : "Copy failed"; setTimeout(function () { b.textContent = "Copy email"; }, 1800); });
+  };
+  d.appendChild(b); return d;
+}
+function renderContacts() {
+  var box = $("woContacts"); if (!box) return; box.innerHTML = "";
+  [["attic", "Attic work orders"], ["walls", "Walls / Batts work orders"]].forEach(function (x) {
+    var cat = x[0], c = WO.contacts[cat], g = el("div", "row-card");
+    g.appendChild(el("div", "row-title", h(x[1])));
+    [["name", "Name", "text"], ["email", "Email", "email"], ["phone", "Phone", "tel"]].forEach(function (f) {
+      var fd = el("div", "field"), i = el("input"); fd.appendChild(el("label", null, f[1])); i.type = f[2]; i.value = c[f[0]] || "";
+      i.autocapitalize = f[0] === "name" ? "words" : "off"; i.setAttribute("data-cat", cat); i.setAttribute("data-k", f[0]);
+      i.oninput = function () { c[f[0]] = i.value.trim(); saveContacts(); };
+      fd.appendChild(i); g.appendChild(fd);
+    });
+    box.appendChild(g);
+  });
+}
+var saveT = null;
+function saveContacts() {
+  clearTimeout(saveT);
+  saveT = setTimeout(function () {
+    idb("kv", "readwrite", function (os) { os.put(WO.contacts, "contacts"); })
+      .then(function () { $("woContactsMsg").textContent = "Saved."; }).catch(function () { $("woContactsMsg").textContent = "Couldn't save (storage blocked)."; });
+    if (WO.order) renderOrder();
+  }, 400);
 }
 
 /* ---- recent ---- */
@@ -2906,6 +2983,14 @@ function init() {
   setLots(WO.lots, null);
   idb("kv", "readonly", function (os) { return os.get("lotlog"); }).then(function (v) { if (v && v.lots && v.lots.length) setLots(v.lots, v.source); }).catch(function () {});
   loadRecent();
+  renderContacts();
+  idb("kv", "readonly", function (os) { return os.get("contacts"); }).then(function (v) {
+    if (v && v.attic && v.walls) { WO.contacts = v; renderContacts(); if (WO.order) renderOrder(); }
+  }).catch(function () {});
+  $("woContactsReset").onclick = function () {
+    if (!confirm("Reset Josh and Sky's contact info to the defaults?")) return;
+    WO.contacts = JSON.parse(JSON.stringify(DEFAULT_CONTACTS)); renderContacts(); saveContacts();
+  };
   $("woFind").onclick = find;
   $("woAsk").addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); find(); } });
   $("woSub").onchange = fillLots;
