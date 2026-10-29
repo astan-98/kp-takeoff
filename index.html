@@ -541,7 +541,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
   <section id="tab-workorder" class="tabs-panel">
     <div class="section">
       <h2>Chafin work order</h2>
-      <p class="cap">Type or dictate the job, like “Fowler Farms 362 on the 9th” or “Summerlin lot 59 Nov 12”. Tap the mic on the keyboard to talk.</p>
+      <p class="cap">Type or dictate the job, like “Fowler Farms 362 on the 9th” or “Summerlin lot 59 Nov 12”. For more than one lot, say “Summerlin lots 59 and 60 on the 12th” and you get a separate ticket for each. Tap the mic on the keyboard to talk.</p>
       <div class="field"><label>Which job?</label>
         <textarea id="woAsk" rows="2" style="min-height:56px" placeholder="Fowler Farms 362 on the 9th" autocapitalize="words"></textarea>
       </div>
@@ -555,6 +555,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       </div>
     </div>
 
+    <div id="woBatch" class="hidden"></div>
     <div id="woOrder" class="hidden"></div>
 
     <div class="section">
@@ -3766,7 +3767,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29ag";
+const APP_BUILD = "2026-10-29ah";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -4385,7 +4386,7 @@ function extractDate(s, today) {
 
 /* ---------- request parsing ---------- */
 var NUMWORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
-function parseRequest(text, lots, today) {
+function parseOne(text, lots, today) {
   lots = lots || DATA.lots;
   var raw = String(text || "").trim();
   var s = raw.replace(/[,;!?]/g, " ").replace(/\s+/g, " ");
@@ -4400,6 +4401,20 @@ function parseRequest(text, lots, today) {
     var mw = /\blot\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i.exec(s);
     if (mw) { lot = NUMWORDS[mw[1].toLowerCase()]; s = s.replace(mw[0], " "); }
   }
+  var subCands = scoreSubs(s, lots);
+  var matches = [];
+  if (lot != null) {
+    var pool = subCands.length ? lots.filter(function (l) { return subCands.indexOf(l.s) >= 0; }) : lots;
+    matches = pool.filter(function (l) { return l.n === lot; });
+  }
+  return {
+    input: raw, lot: lot, subCandidates: subCands, matches: matches,
+    date: dt.date, dateText: dt.text || null,
+    status: matches.length === 1 ? "ok" : matches.length > 1 ? "choose" : (lot == null ? "nolot" : (subCands.length ? "nolotinsub" : "nosub"))
+  };
+}
+
+function scoreSubs(s, lots) {
   var words = s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(function (w) { return w && !STOP[w]; });
   // score subdivisions
   var subs = subdivisions(lots), scored = [];
@@ -4422,15 +4437,51 @@ function parseRequest(text, lots, today) {
   // if a phase word was matched, keep only phase hits among the top base
   var phaseHits = scored.filter(function (x) { return x.phaseHit && subCands.indexOf(x.sub) >= 0; });
   if (phaseHits.length) subCands = phaseHits.map(function (x) { return x.sub; });
-  var matches = [];
-  if (lot != null) {
-    var pool = subCands.length ? lots.filter(function (l) { return subCands.indexOf(l.s) >= 0; }) : lots;
-    matches = pool.filter(function (l) { return l.n === lot; });
+  return subCands;
+}
+
+/* ---------- multi-lot requests: "Summerlin lots 59 and 60 on the 12th", "Fowler Farms 362 & 364 Nov 12",
+   "Summerlin lot 59, 60, 61 Nov 12", "lots 59-61" (a range only when it's 2–6 lots). Returns null for single-lot text,
+   so single-lot requests go through parseOne exactly as before. ---------- */
+var MAX_RANGE = 6;
+function findLotList(raw, today) {
+  var s = String(raw || "").trim().replace(/[;!?]/g, " ").replace(/,(?=\s*\d{4}\b)/g, " ").replace(/,/g, " & ").replace(/\s+/g, " ").trim();
+  function cut(str, mm) { return (str.slice(0, mm.index) + " " + str.slice(mm.index + mm[0].length)).replace(/\s+/g, " ").trim(); }
+  var nums = null, dt, rest, mm;
+  // a range needs the word "lot(s)" in front so dates like 11-12 are never read as lots
+  mm = /\blots?\s*(?:#|no\.?|number)?\s*#?(\d{1,4})[a-z]?\s*(?:-|\u2013|\u2014|\bthrough\b|\bthru\b|\bto\b)\s*(?:lots?\s*)?#?(\d{1,4})[a-z]?\b/i.exec(s);
+  if (mm) {
+    var a = parseInt(mm[1], 10), b = parseInt(mm[2], 10);
+    if (!(b > a && b - a + 1 <= MAX_RANGE)) return null; // too big / backwards: not a range, leave it to the single-lot parser
+    nums = []; for (var k = a; k <= b; k++) nums.push(k);
+    s = cut(s, mm); dt = extractDate(s, today); rest = dt.rest;
+  } else {
+    dt = extractDate(s, today); rest = dt.rest;
+    var SEP = "(?:\\s*(?:&|\\+|\\band\\b))+\\s*";
+    var kw = new RegExp("\\blots?\\s*(?:#|no\\.?|number)?\\s*#?(\\d{1,4}[a-z]?)\\b((?:(?:" + SEP + "|\\s+)(?:lots?\\s*)?#?\\d{1,4}[a-z]?\\b)+)", "i");
+    var nokw = new RegExp("#?\\b(\\d{1,4}[a-z]?)\\b((?:" + SEP + "(?:lots?\\s*)?#?\\d{1,4}[a-z]?\\b)+)", "i");
+    mm = kw.exec(rest) || nokw.exec(rest);
+    if (!mm) return null;
+    nums = (mm[0].match(/\d{1,4}/g) || []).map(function (x) { return parseInt(x, 10); });
+    rest = cut(rest, mm);
   }
+  var seen = {}; nums = nums.filter(function (n) { if (seen[n]) return false; seen[n] = 1; return true; });
+  if (nums.length < 2) return null;
+  return { nums: nums, dt: dt, rest: rest.replace(/&/g, " ").replace(/\s+/g, " ").trim() };
+}
+function parseRequest(text, lots, today) {
+  lots = lots || DATA.lots;
+  var L = findLotList(text, today);
+  if (!L) return parseOne(text, lots, today);
+  var subCands = scoreSubs(L.rest, lots);
+  var pool = subCands.length ? lots.filter(function (l) { return subCands.indexOf(l.s) >= 0; }) : lots;
+  var items = L.nums.map(function (n) {
+    var matches = pool.filter(function (l) { return l.n === n; });
+    return { lot: n, matches: matches, status: matches.length === 1 ? "ok" : matches.length > 1 ? "choose" : (subCands.length ? "nolotinsub" : "nosub") };
+  });
   return {
-    input: raw, lot: lot, subCandidates: subCands, matches: matches,
-    date: dt.date, dateText: dt.text || null,
-    status: matches.length === 1 ? "ok" : matches.length > 1 ? "choose" : (lot == null ? "nolot" : (subCands.length ? "nolotinsub" : "nosub"))
+    input: String(text || "").trim(), multi: true, lots: items, lot: L.nums[0], subCandidates: subCands, matches: [],
+    date: L.dt.date, dateText: L.dt.text || null, status: "multi"
   };
 }
 
@@ -4810,7 +4861,7 @@ var DEFAULT_CONTACTS = {
   attic: { name: "Josh", phone: "706-340-6120", email: "joshg@kpiaf.com" },
   walls: { name: "Sky", phone: "706-296-2731", email: "sporter@kpiaf.com" }
 };
-var WO = { lots: K.DATA.lots.slice(), logSource: null, order: null, recent: [], contacts: JSON.parse(JSON.stringify(DEFAULT_CONTACTS)) };
+var WO = { lots: K.DATA.lots.slice(), logSource: null, order: null, batch: null, recent: [], contacts: JSON.parse(JSON.stringify(DEFAULT_CONTACTS)) };
 function who(cat) { return WO.contacts[cat] || DEFAULT_CONTACTS[cat]; }
 var DBN = "kp-chafin-v1";
 function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -4864,6 +4915,8 @@ function find() {
   var r = K.parseRequest($("woAsk").value, WO.lots, new Date());
   WO.lastParse = r;
   var opts = { date: r.date, dateText: r.dateText };
+  if (r.status === "multi") { msg(""); openBatch(r); return; }
+  clearBatch();
   if (r.status === "ok") { msg(""); openOrder(r.matches[0], opts); return; }
   hideOrder();
   if (r.status === "choose") {
@@ -4893,6 +4946,13 @@ function find() {
 
 /* ---- order editor ---- */
 function hideOrder() { $("woOrder").classList.add("hidden"); WO.order = null; }
+function setOrder(n) {
+  var b = WO.batch;
+  var hit = false;
+  if (b) b.slots.forEach(function (sl) { if (sl.order && sl.order === WO.order) { sl.order = n; hit = true; } });
+  WO.order = n;
+  if (hit) renderBatch();
+}
 function isoDate(d) { return d ? d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") : ""; }
 function openOrder(lot, opts) {
   WO.order = K.buildOrder(lot, opts || {});
@@ -4947,6 +5007,7 @@ function renderOrder() {
   if (!any) a.appendChild(el("div", "callout danger", "<strong>No plan sheet yet for " + h(o.plan) + "</strong>Send me the " + h(o.plan) + " sheets and I'll add them."));
   a.appendChild(el("p", "status", "")); a.lastChild.id = "woExportMsg";
   box.appendChild(a);
+  if (WO.batch) renderBatch();
 }
 function btn(label, cls, fn) { var b = el("button", "btn btn-block " + cls, h(label)); b.type = "button"; b.style.marginTop = "8px"; b.onclick = fn; return b; }
 function sheetCard(o, cat, label) {
@@ -4966,7 +5027,7 @@ function sheetCard(o, cat, label) {
       keep.variant[cat] = +vs.value;
       var n = K.buildOrder(o.lot, keep); n.jobSite = o.jobSite; n.address = o.address;
       var other = cat === "attic" ? "walls" : "attic"; n.sheets[other] = o.sheets[other];
-      WO.order = n; renderOrder();
+      setOrder(n); renderOrder();
     };
     vf.appendChild(vs); s.appendChild(vf);
   }
@@ -5051,6 +5112,127 @@ function download(files) {
   });
 }
 
+
+/* ---- multi-lot batch: one ticket per lot, all sent together in one share ---- */
+function joinAnd(a) { return a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]; }
+function lotNo(o) { return isNaN(o.lot.n) ? o.lot.l : o.lot.n; }
+function clearBatch() { WO.batch = null; var b = $("woBatch"); if (b) { b.innerHTML = ""; b.classList.add("hidden"); } }
+function openBatch(r) {
+  var opts = { date: r.date, dateText: r.dateText };
+  WO.batch = { opts: opts, subs: r.subCandidates, slots: r.lots.map(function (x) {
+    return { lot: x.lot, status: x.status, matches: x.matches, order: x.status === "ok" ? K.buildOrder(x.matches[0], opts) : null };
+  }) };
+  var first = WO.batch.slots.filter(function (sl) { return sl.order; })[0];
+  if (first) { WO.order = first.order; renderOrder(); } else hideOrder();
+  renderBatch();
+  $("woBatch").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function batchOrders() { return WO.batch ? WO.batch.slots.filter(function (sl) { return sl.order; }).map(function (sl) { return sl.order; }) : []; }
+function selectSlot(sl) { WO.order = sl.order; renderOrder(); renderBatch(); $("woOrder").scrollIntoView({ behavior: "smooth", block: "start" }); }
+function renderBatch() {
+  var B = WO.batch, box = $("woBatch");
+  if (!B) { clearBatch(); return; }
+  box.classList.remove("hidden"); box.innerHTML = "";
+  var o0 = B.opts, ready = batchOrders();
+  var dtxt = o0.date ? o0.date.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : (o0.dateText || "no date");
+  var s = el("div", "section");
+  s.innerHTML = "<h2>" + B.slots.length + " lots · " + h(dtxt) + "</h2><p class='cap'>Each lot is its own ticket, built from its own plan. Tap a lot to review or edit it below. The Send all buttons put every lot's file into one share, one file per lot.</p>";
+  B.slots.forEach(function (sl) {
+    var o = sl.order, c;
+    if (o) {
+      c = el("div", "row-card");
+      var on = WO.order === o;
+      c.innerHTML = '<div class="row-title">' + h(o.sub) + " · Lot " + h(lotNo(o)) + " · " + h(o.plan) + (on ? " <span style='font-weight:400'>(showing below)</span>" : "") + "</div>" +
+        '<p class="status">' + h(o.address || "No address") + " · " + h(o.date ? K.fmtDate(o.date) : (o.dateText || "no date")) +
+        " · Attic " + (o.sheets.attic ? "✓" : "— no sheet") + " · " + (o.sheets.walls ? h(o.sheets.walls.kind) + " ✓" : "Walls — no sheet") + "</p>";
+      var acts = el("div", "archive-actions");
+      var rv = el("button", "btn btn-secondary btn-sm", on ? "Reviewing ✓" : "Review / edit"); rv.type = "button"; rv.onclick = function () { selectSlot(sl); };
+      var rm = el("button", "btn btn-danger btn-sm", "Leave out"); rm.type = "button";
+      rm.onclick = function () { B.slots = B.slots.filter(function (x) { return x !== sl; }); if (WO.order === o) { var n = batchOrders()[0]; if (n) { WO.order = n; renderOrder(); } else hideOrder(); } renderBatch(); };
+      acts.appendChild(rv); acts.appendChild(rm); c.appendChild(acts);
+    } else if (sl.status === "choose") {
+      c = el("div", "callout warn", "<strong>Lot " + h(sl.lot) + " needs a pick</strong>It's in more than one place:");
+      sl.matches.forEach(function (l) {
+        var b = el("button", "btn btn-secondary btn-block", h(subLabel(l.s)) + " · Lot " + h(l.n) + " · " + h(l.p));
+        b.style.marginTop = "8px"; b.type = "button"; b.onclick = function () { sl.order = K.buildOrder(l, B.opts); sl.status = "ok"; selectSlot(sl); }; c.appendChild(b);
+      });
+    } else if (sl.status === "nolotinsub" && B.subs.length) {
+      var subs = B.subs, have = WO.lots.filter(function (l) { return subs.indexOf(l.s) >= 0; }).map(function (l) { return l.n; }).sort(function (a, b) { return a - b; });
+      c = el("div", "callout warn", "<strong>Lot " + h(sl.lot) + " isn't in the lot log for " + h(K.subDisplay(subs[0])) + "</strong>It's left out until you fix it. Lots on file: " + h(have.join(", ")) + ". If it's a new lot, pick the plan and I'll build it:");
+      var f = el("div", "field"); f.style.marginTop = "10px";
+      var ps = el("select"); ps.innerHTML = '<option value="">Plan…</option>' + Object.keys(K.DATA.plans).sort().map(function (p) { return "<option>" + h(p) + "</option>"; }).join("");
+      var ad = el("input"); ad.placeholder = "Street address (optional)"; ad.style.marginTop = "8px";
+      var go = el("button", "btn btn-primary btn-block", "Build lot " + h(sl.lot) + " from this plan"); go.type = "button"; go.style.marginTop = "8px";
+      go.onclick = function () { if (!ps.value) { ps.focus(); return; } sl.order = K.buildOrder(K.normLot({ s: subs[0], l: String(sl.lot), p: ps.value, a: ad.value }), B.opts); sl.status = "ok"; selectSlot(sl); };
+      f.appendChild(ps); f.appendChild(ad); f.appendChild(go); c.appendChild(f);
+    } else {
+      c = el("div", "callout warn", "<strong>Couldn't find lot " + h(sl.lot) + "</strong>No subdivision in the lot log has that lot, so it's left out. Check the number and add it as its own request if needed.");
+    }
+    c.style.marginTop = "10px"; s.appendChild(c);
+  });
+  box.appendChild(s);
+  // send all
+  var a = el("div", "section");
+  a.innerHTML = "<h2>Send all lots</h2>";
+  if (!ready.length) { a.appendChild(el("p", "status", "No lots are ready yet. Fix the lots above first.")); box.appendChild(a); return; }
+  var withA = ready.filter(function (o) { return o.sheets.attic; }), withW = ready.filter(function (o) { return o.sheets.walls; });
+  a.appendChild(el("p", "cap", "One share with a separate Excel file for each lot. Tap Copy email first, then paste it into Mail's To line."));
+  if (withW.length) { a.appendChild(btn("Share " + withW.length + " " + wallsLabel(withW) + " file" + (withW.length > 1 ? "s" : "") + " to " + who("walls").name, "btn-primary", function () { exportBatch(["walls"]); })); a.appendChild(recipientBlock("walls")); }
+  if (withA.length) { a.appendChild(btn("Share " + withA.length + " Attic file" + (withA.length > 1 ? "s" : "") + " to " + who("attic").name, "btn-primary", function () { exportBatch(["attic"]); })); a.appendChild(recipientBlock("attic")); }
+  if (withA.length && withW.length) a.appendChild(btn("Share all " + (withA.length + withW.length) + " files", "btn-secondary", function () { exportBatch(["attic", "walls"]); }));
+  var missW = ready.filter(function (o) { return !o.sheets.walls; }), missA = ready.filter(function (o) { return !o.sheets.attic; });
+  if (missW.length) a.appendChild(el("p", "status", "⚠️ No walls/batts sheet yet for " + h(joinAnd(missW.map(function (o) { return "Lot " + lotNo(o) + " (" + o.plan + ")"; }))) + ", so it's not in the " + h(who("walls").name) + " send."));
+  if (missA.length) a.appendChild(el("p", "status", "⚠️ No attic sheet yet for " + h(joinAnd(missA.map(function (o) { return "Lot " + lotNo(o) + " (" + o.plan + ")"; }))) + ", so it's not in the " + h(who("attic").name) + " send."));
+  var left = WO.batch.slots.length - ready.length;
+  if (left) a.appendChild(el("p", "status", "⚠️ " + left + " lot" + (left > 1 ? "s aren't" : " isn't") + " included until fixed above."));
+  a.appendChild(el("p", "status", "")); a.lastChild.id = "woBatchMsg";
+  box.appendChild(a);
+}
+function wallsLabel(orders) {
+  var k = []; orders.forEach(function (o) { var w = o.sheets.walls.kind || "Walls"; if (k.indexOf(w) < 0) k.push(w); });
+  return k.join("/");
+}
+function exportBatch(cats) {
+  var orders = batchOrders(), files = [], used = [];
+  orders.forEach(function (o) {
+    var oc = cats.filter(function (c) { return o.sheets[c]; });
+    if (!oc.length) return;
+    used.push({ o: o, cats: oc });
+    oc.forEach(function (cat) { // one file per lot per sheet kind — lots are never merged
+      files.push(new File([K.buildXlsx(o, [cat])], K.fileNameFor(o, cat), { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    });
+  });
+  if (!files.length) return;
+  used.forEach(function (u) { saveRecent(u.o, u.cats); });
+  var m = $("woBatchMsg");
+  var mp = used.length === 1 ? shareText(used[0].o, used[0].cats) : batchShareText(used);
+  var data = { files: files, title: mp.title, text: mp.text };
+  function done(t) { if (m) m.textContent = t; }
+  if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) {
+    navigator.share(data).then(function () { done("Shared " + files.length + " files: " + files.map(function (f) { return f.name; }).join(", ") + "."); })
+      .catch(function (e) { if (e && e.name === "AbortError") done("Share canceled."); else { download(files); done("Share didn't open, so I downloaded the files instead."); } });
+  } else { download(files); done("Downloaded " + files.map(function (f) { return f.name; }).join(", ") + "."); }
+}
+function batchShareText(used) {
+  var cats = [], subs = [], bySub = {};
+  used.forEach(function (u) { u.cats.forEach(function (c) { if (cats.indexOf(c) < 0) cats.push(c); }); if (!bySub[u.o.sub]) { bySub[u.o.sub] = []; subs.push(u.o.sub); } bySub[u.o.sub].push(String(lotNo(u.o))); });
+  cats.sort(function (a, b) { return a === "attic" ? -1 : b === "attic" ? 1 : 0; });
+  var names = cats.map(function (c) { return who(c).name; }).filter(function (n, i, a) { return n && a.indexOf(n) === i; });
+  var kinds = [];
+  used.forEach(function (u) { u.cats.forEach(function (c) { var k = kindWord(u.o, c); if (kinds.indexOf(k) < 0) kinds.push(k); }); });
+  var wk = kinds.filter(function (k) { return k !== "attic"; });
+  kinds = (kinds.indexOf("attic") >= 0 ? ["attic"] : []).concat(wk.length ? [wk.join("/")] : []);
+  var lotsTxt = joinAnd(subs.map(function (sb) { return sb + " Lot" + (bySub[sb].length > 1 ? "s " : " ") + joinAnd(bySub[sb]); }));
+  var each = used.map(function (u) {
+    var o = u.o, where = [o.address, o.city].filter(Boolean).join(", ").replace(/\.$/, "");
+    return (subs.length > 1 ? o.sub + " " : "") + "Lot " + lotNo(o) + " (" + o.plan + ")" + (where ? ", " + where : "");
+  });
+  var title = "Chafin WOs - " + subs.map(function (sb) { return sb + " Lots " + bySub[sb].join(", "); }).join(" + ") +
+    (cats.length === 1 ? " - " + (cats[0] === "attic" ? "Attic" : wallsLabel(used.map(function (u) { return u.o; }))) : "");
+  var text = names.join(" and ") + ", attached are the " + kinds.join(" and ") + " work orders for " + lotsTxt + ": " + each.join("; ") + ". - Asher";
+  return { title: title, text: text };
+}
+
 /* ---- recipients ---- */
 function kindWord(o, cat) { return cat === "attic" ? "attic" : String(o.sheets[cat].kind || "walls").toLowerCase(); }
 function shareText(o, cats) {
@@ -5104,6 +5286,7 @@ function saveContacts() {
     idb("kv", "readwrite", function (os) { os.put(WO.contacts, "contacts"); })
       .then(function () { $("woContactsMsg").textContent = "Saved."; }).catch(function () { $("woContactsMsg").textContent = "Couldn't save (storage blocked)."; });
     if (WO.order) renderOrder();
+    if (WO.batch) renderBatch();
   }, 400);
 }
 
@@ -5129,7 +5312,7 @@ function renderRecent() {
       var o = r.order, c = el("div", "archive-card");
       c.innerHTML = '<div class="meta">' + h(new Date(r.at).toLocaleString()) + " · " + h(o.date || o.dateText || "no date") + '</div><div class="title">' + h(o.jobSite) + " · " + h(o.plan) + "</div>";
       var acts = el("div", "archive-actions"), b = el("button", "btn btn-secondary btn-sm", "Open"); b.type = "button";
-      b.onclick = function () { var nb = document.querySelector('.nav-btn[data-tab="workorder"]'); if (nb && id !== "woRecent") nb.click(); WO.order = revive(o); renderOrder(); $("woOrder").scrollIntoView({ behavior: "smooth" }); };
+      b.onclick = function () { var nb = document.querySelector('.nav-btn[data-tab="workorder"]'); if (nb && id !== "woRecent") nb.click(); clearBatch(); WO.order = revive(o); renderOrder(); $("woOrder").scrollIntoView({ behavior: "smooth" }); };
       var d = el("button", "btn btn-danger btn-sm", "Delete"); d.type = "button";
       d.onclick = function () { if (!confirm("Remove this work order from the list?")) return; WO.recent = WO.recent.filter(function (x) { return x.id !== r.id; }); renderRecent(); idb("orders", "readwrite", function (os) { os.delete(r.id); }).catch(function () {}); };
       acts.appendChild(b); acts.appendChild(d); c.appendChild(acts); box.appendChild(c);
@@ -5159,7 +5342,7 @@ function init() {
   loadRecent();
   renderContacts();
   idb("kv", "readonly", function (os) { return os.get("contacts"); }).then(function (v) {
-    if (v && v.attic && v.walls) { WO.contacts = v; renderContacts(); if (WO.order) renderOrder(); }
+    if (v && v.attic && v.walls) { WO.contacts = v; renderContacts(); if (WO.order) renderOrder(); if (WO.batch) renderBatch(); }
   }).catch(function () {});
   $("woContactsReset").onclick = function () {
     if (!confirm("Reset Josh and Sky's contact info to the defaults?")) return;
@@ -5170,7 +5353,7 @@ function init() {
   $("woSub").onchange = fillLots;
   $("woLot").onchange = function () {
     var s = $("woSub").value, l = $("woLot").value, lot = WO.lots.filter(function (x) { return x.s === s && x.l === l; })[0];
-    if (lot) { msg(""); var r = WO.lastParse; openOrder(lot, r ? { date: r.date, dateText: r.dateText } : {}); }
+    if (lot) { msg(""); clearBatch(); var r = WO.lastParse; openOrder(lot, r ? { date: r.date, dateText: r.dateText } : {}); }
   };
   $("woLogFile").onchange = function () { var f = this.files && this.files[0]; if (f) importLog(f); this.value = ""; };
   $("woLogReset").onclick = function () {

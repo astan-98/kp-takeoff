@@ -3716,7 +3716,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29ag";
+const APP_BUILD = "2026-10-29ah";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -4332,7 +4332,7 @@ function extractDate(s, today) {
 
 /* ---------- request parsing ---------- */
 var NUMWORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
-function parseRequest(text, lots, today) {
+function parseOne(text, lots, today) {
   lots = lots || DATA.lots;
   var raw = String(text || "").trim();
   var s = raw.replace(/[,;!?]/g, " ").replace(/\s+/g, " ");
@@ -4347,6 +4347,20 @@ function parseRequest(text, lots, today) {
     var mw = /\blot\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i.exec(s);
     if (mw) { lot = NUMWORDS[mw[1].toLowerCase()]; s = s.replace(mw[0], " "); }
   }
+  var subCands = scoreSubs(s, lots);
+  var matches = [];
+  if (lot != null) {
+    var pool = subCands.length ? lots.filter(function (l) { return subCands.indexOf(l.s) >= 0; }) : lots;
+    matches = pool.filter(function (l) { return l.n === lot; });
+  }
+  return {
+    input: raw, lot: lot, subCandidates: subCands, matches: matches,
+    date: dt.date, dateText: dt.text || null,
+    status: matches.length === 1 ? "ok" : matches.length > 1 ? "choose" : (lot == null ? "nolot" : (subCands.length ? "nolotinsub" : "nosub"))
+  };
+}
+
+function scoreSubs(s, lots) {
   var words = s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(function (w) { return w && !STOP[w]; });
   // score subdivisions
   var subs = subdivisions(lots), scored = [];
@@ -4369,15 +4383,51 @@ function parseRequest(text, lots, today) {
   // if a phase word was matched, keep only phase hits among the top base
   var phaseHits = scored.filter(function (x) { return x.phaseHit && subCands.indexOf(x.sub) >= 0; });
   if (phaseHits.length) subCands = phaseHits.map(function (x) { return x.sub; });
-  var matches = [];
-  if (lot != null) {
-    var pool = subCands.length ? lots.filter(function (l) { return subCands.indexOf(l.s) >= 0; }) : lots;
-    matches = pool.filter(function (l) { return l.n === lot; });
+  return subCands;
+}
+
+/* ---------- multi-lot requests: "Summerlin lots 59 and 60 on the 12th", "Fowler Farms 362 & 364 Nov 12",
+   "Summerlin lot 59, 60, 61 Nov 12", "lots 59-61" (a range only when it's 2–6 lots). Returns null for single-lot text,
+   so single-lot requests go through parseOne exactly as before. ---------- */
+var MAX_RANGE = 6;
+function findLotList(raw, today) {
+  var s = String(raw || "").trim().replace(/[;!?]/g, " ").replace(/,(?=\s*\d{4}\b)/g, " ").replace(/,/g, " & ").replace(/\s+/g, " ").trim();
+  function cut(str, mm) { return (str.slice(0, mm.index) + " " + str.slice(mm.index + mm[0].length)).replace(/\s+/g, " ").trim(); }
+  var nums = null, dt, rest, mm;
+  // a range needs the word "lot(s)" in front so dates like 11-12 are never read as lots
+  mm = /\blots?\s*(?:#|no\.?|number)?\s*#?(\d{1,4})[a-z]?\s*(?:-|\u2013|\u2014|\bthrough\b|\bthru\b|\bto\b)\s*(?:lots?\s*)?#?(\d{1,4})[a-z]?\b/i.exec(s);
+  if (mm) {
+    var a = parseInt(mm[1], 10), b = parseInt(mm[2], 10);
+    if (!(b > a && b - a + 1 <= MAX_RANGE)) return null; // too big / backwards: not a range, leave it to the single-lot parser
+    nums = []; for (var k = a; k <= b; k++) nums.push(k);
+    s = cut(s, mm); dt = extractDate(s, today); rest = dt.rest;
+  } else {
+    dt = extractDate(s, today); rest = dt.rest;
+    var SEP = "(?:\\s*(?:&|\\+|\\band\\b))+\\s*";
+    var kw = new RegExp("\\blots?\\s*(?:#|no\\.?|number)?\\s*#?(\\d{1,4}[a-z]?)\\b((?:(?:" + SEP + "|\\s+)(?:lots?\\s*)?#?\\d{1,4}[a-z]?\\b)+)", "i");
+    var nokw = new RegExp("#?\\b(\\d{1,4}[a-z]?)\\b((?:" + SEP + "(?:lots?\\s*)?#?\\d{1,4}[a-z]?\\b)+)", "i");
+    mm = kw.exec(rest) || nokw.exec(rest);
+    if (!mm) return null;
+    nums = (mm[0].match(/\d{1,4}/g) || []).map(function (x) { return parseInt(x, 10); });
+    rest = cut(rest, mm);
   }
+  var seen = {}; nums = nums.filter(function (n) { if (seen[n]) return false; seen[n] = 1; return true; });
+  if (nums.length < 2) return null;
+  return { nums: nums, dt: dt, rest: rest.replace(/&/g, " ").replace(/\s+/g, " ").trim() };
+}
+function parseRequest(text, lots, today) {
+  lots = lots || DATA.lots;
+  var L = findLotList(text, today);
+  if (!L) return parseOne(text, lots, today);
+  var subCands = scoreSubs(L.rest, lots);
+  var pool = subCands.length ? lots.filter(function (l) { return subCands.indexOf(l.s) >= 0; }) : lots;
+  var items = L.nums.map(function (n) {
+    var matches = pool.filter(function (l) { return l.n === n; });
+    return { lot: n, matches: matches, status: matches.length === 1 ? "ok" : matches.length > 1 ? "choose" : (subCands.length ? "nolotinsub" : "nosub") };
+  });
   return {
-    input: raw, lot: lot, subCandidates: subCands, matches: matches,
-    date: dt.date, dateText: dt.text || null,
-    status: matches.length === 1 ? "ok" : matches.length > 1 ? "choose" : (lot == null ? "nolot" : (subCands.length ? "nolotinsub" : "nosub"))
+    input: String(text || "").trim(), multi: true, lots: items, lot: L.nums[0], subCandidates: subCands, matches: [],
+    date: L.dt.date, dateText: L.dt.text || null, status: "multi"
   };
 }
 
