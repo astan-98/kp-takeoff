@@ -430,6 +430,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         </div>
         <p class="status" id="optionStatus"></p>
       </div>
+      <div id="foamCompareBar" class="hidden">
+        <h2>Open cell vs closed cell</h2>
+        <div class="table-wrap" id="foamCompareBox"></div>
+      </div>
       <div class="callout" id="outputHint"></div>
       <div class="table-wrap" id="outputTable"></div>
       <div class="grid2">
@@ -451,6 +455,11 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <p class="cap">Import file for FieldGroove → Opportunities → Import Estimates. One row per line; compare mode = one estimate per option. Fireplace lines left out.</p>
       <div class="toggle-row"><span>Include app unit prices (at this job's margin)</span><button type="button" class="switch" id="fgPrices"></button></div>
       <button type="button" class="btn btn-primary btn-block" id="btnExportFg">Export for FieldGroove (.xlsx)</button>
+      <div id="fgFoamChoice" class="hidden">
+        <p class="cap">Open vs closed cell compare is on — pick what goes to FieldGroove. “Both” = one import file with two estimates on the same project: “… - Option A - Open Cell” and “… - Option B - Closed Cell”.</p>
+        <div class="grid2"><button type="button" class="btn btn-primary" id="btnExportFgOc">Export Open cell</button><button type="button" class="btn btn-primary" id="btnExportFgCc">Export Closed cell</button></div>
+        <button type="button" class="btn btn-secondary btn-block" id="btnExportFgBoth" style="margin-top:6px">Export both (A + B)</button>
+      </div>
       <p class="status" id="fgStatus"></p>
       <div class="field hidden" id="csvField" style="margin-top:12px"><label>CSV</label><textarea id="csvText" class="csv-box" rows="8"></textarea></div>
     </div>
@@ -1066,14 +1075,22 @@ function roofDepthSelect(label, value, onChange, jobLevel) {
 }
 // Spray foam type: open cell (default, ~90% of jobs) or closed cell. Job-level default + per-row override (blank = job default).
 function ccValid(d) { return CC_DEPTH_CHOICES.indexOf(String(d)) >= 0; }
-function foamTypeJob() { return S.foamType === "cc" ? "cc" : "oc"; }
+// 29aj: "both" = compare mode — the takeoff stays one job; lines are built twice (Option A open cell, Option B closed cell).
+// FOAM_VIEW is set only while building one option's lines (withFoam); outside that the job behaves as open cell (UI cards).
+let FOAM_VIEW = null;
+function foamCompareOn() { return S.foamType === "both"; }
+function foamTypeJob() { return S.foamType === "cc" ? "cc" : S.foamType === "both" ? (FOAM_VIEW === "cc" ? "cc" : "oc") : "oc"; }
+function withFoam(v, fn) { const prev = FOAM_VIEW; FOAM_VIEW = v === "cc" ? "cc" : "oc"; try { return fn(); } finally { FOAM_VIEW = prev; } }
+function foamViewNow() { return S.foamView === "cc" ? "cc" : "oc"; }
+const FOAM_OPT_LABEL = { oc: "Option A - Open Cell", cc: "Option B - Closed Cell" };
 function foamTypeFor(t) { return t === "cc" || t === "oc" ? t : foamTypeJob(); }
 function ccDepthJob() { return ccValid(S.ccFoamDepth) ? String(S.ccFoamDepth) : "2"; }
 function ccDepthFor(d, dflt) { return ccValid(d) ? String(d) : (dflt || ccDepthJob()); }
 function isOcFoam(L) { return L.product === "Open-cell spray foam" || L.product === "Spray foam"; }
 // Swap an open-cell line to closed cell when its row (or the job) says closed cell; force = always CC (concrete walls).
 function applyFoamType(L, row, word, force, dflt) {
-  if (!isOcFoam(L)) return L;
+  if (!isOcFoam(L)) { if (/^Closed-cell/.test(L.product || "")) L._foam = "locked"; return L; }
+  L._foam = force ? "locked" : (row && (row.foamType === "oc" || row.foamType === "cc")) ? "row" : "job";
   if (!force && foamTypeFor(row && row.foamType) !== "cc") return L;
   const dep = ccDepthFor(row && row.ccDepth, dflt);
   const swap = t => { const i = String(t).indexOf(" / "); return dep + '" CC ' + word + (i >= 0 ? String(t).slice(i) : ""); };
@@ -1084,7 +1101,8 @@ function applyFoamType(L, row, word, force, dflt) {
 function foamTypeControls(card, obj, tKey, dKey, force, dflt) {
   if (force) card.appendChild(el("p", "cap", "Concrete walls foam = closed cell"));
   else card.appendChild(fieldSelect("Foam type", obj[tKey] === "oc" || obj[tKey] === "cc" ? obj[tKey] : "",
-    [["", "Job default — " + (foamTypeJob() === "cc" ? "Closed cell" : "Open cell")], ["oc", "Open cell"], ["cc", "Closed cell"]], v => { obj[tKey] = v; render(); }));
+    [["", "Job default — " + (foamCompareOn() ? "compare both" : foamTypeJob() === "cc" ? "Closed cell" : "Open cell")], ["oc", "Open cell"], ["cc", "Closed cell"]], v => { obj[tKey] = v; render(); }));
+  if (!force && foamCompareOn() && (obj[tKey] === "oc" || obj[tKey] === "cc")) card.appendChild(el("p", "cap", "Compare: this row stays " + (obj[tKey] === "cc" ? "closed" : "open") + " cell in both options."));
   if (force || foamTypeFor(obj[tKey]) === "cc")
     card.appendChild(fieldSelect("Closed-cell depth", ccValid(obj[dKey]) ? String(obj[dKey]) : "",
       [["", "Default — " + (dflt || ccDepthJob()) + '"']].concat(CC_DEPTH_CHOICES.map(d => [d, d + '"'])), v => { obj[dKey] = v; render(); }));
@@ -1292,7 +1310,7 @@ const S = {
   cants: [{ id: uid(), name: "", sf: "", material: "r30" }],
   garageLivingAbove: false, garageCeilingSf: "", garageCeilMat: "r19", garageCeilOc: "16", garageCeils: [],
   roofFoamDepth: "", porchRoofDepth: "", garageRoofDepth: "",
-  foamType: "oc", ccFoamDepth: "2", porchRoofFoam: "", porchRoofCc: "", porchCeilFoam: "", porchCeilCc: "", garageRoofFoam: "", garageRoofCc: "", garageCeilFoam: "", garageCeilCc: "",
+  foamType: "oc", foamView: "oc", ccFoamDepth: "2", porchRoofFoam: "", porchRoofCc: "", porchCeilFoam: "", porchCeilCc: "", garageRoofFoam: "", garageRoofCc: "", garageCeilFoam: "", garageCeilCc: "",
   garageFoamRoof: false, garageRoofFlat: "", garageRoofPitch: "6", garageRoofCustomRise: "", garageBlockAsGable: false,
   includePorchRoof: true, porchGabledOff: false, porchRoofFlat: "", porchRoofPitch: "6", porchRoofCustomRise: "",
   porchCeilingSf: "", porchCeilMat: "batt_r19", porchJoistOc: "16", porchCeilOc: "16", touchupOc: "16",
@@ -1577,7 +1595,7 @@ function fgEstimateType(pkg) {
 }
 function fgPricesOn() { return lsGet(FG_PRICE_KEY) === "1"; }
 // Returns { rows: [[33 values]...], skipped: [text], estimates: [names] }
-function fgBuildRows() {
+function fgBuildRows(foamChoice) {
   const site = (S.address || "").trim(), city = (S.city || "").trim(), st = (S.siteState || "").trim(), zip = (S.siteZip || "").trim();
   const first = (S.custFirst || "").trim(), last = (S.custLast || "").trim();
   const company = (S.custCompany || "").trim() || (!first && !last ? (S.builder || "").trim() : "");
@@ -1586,11 +1604,17 @@ function fgBuildRows() {
   const project = site || (S.builder || "").trim() || "Job";
   const projType = S.jobMode === "retro" ? "Retrofit" : "Residential";
   const ests = [];
-  if (optionsOn()) optionPkgs().forEach((k, i) => ests.push({ name: project + " - " + optionTitle(i), type: fgEstimateType(k), lines: optionLines(i) }));
-  else {
-    const lbl = S.jobMode === "retro" ? packageLabel().replace(/ · FP .*$/, "") : (PACKAGE_LABELS[S.pkg] || S.pkg);
-    ests.push({ name: project + " - " + lbl, type: fgEstimateType(S.pkg), lines: allLines() });
-  }
+  // 29aj: OC vs CC compare never exports silently — the caller must pick "oc", "cc" or "both" (both = two estimates on the same project/opportunity).
+  const variants = !foamCompareOn() ? [null] : foamChoice === "both" ? ["oc", "cc"] : (foamChoice === "oc" || foamChoice === "cc") ? [foamChoice] : null;
+  if (!variants) return { rows: [], skipped: [], flags: [], estimates: [], needChoice: true };
+  variants.forEach(v => {
+    const sfx = v ? " - " + FOAM_OPT_LABEL[v] : "", run = fn => v ? withFoam(v, fn) : fn();
+    if (optionsOn()) optionPkgs().forEach((k, i) => ests.push({ name: project + " - " + optionTitle(i) + sfx, type: fgEstimateType(k), lines: run(() => optionLines(i)) }));
+    else {
+      const lbl = S.jobMode === "retro" ? packageLabel().replace(/ · FP .*$/, "") : (PACKAGE_LABELS[S.pkg] || S.pkg);
+      ests.push({ name: project + " - " + lbl + sfx, type: fgEstimateType(S.pkg), lines: run(allLines) });
+    }
+  });
   const scale = marginPct() / MARGIN_BASE, priceMap = new Map();
   S.priceLibrary.forEach(p => { const u = n(p.unitPrice40); if (u > 0) priceMap.set(p.materialKey, u); });
   const rows = [], skipped = new Set(), flags = new Set();
@@ -1633,14 +1657,17 @@ function fgXlsx(rows) {
   ];
   return KPWO.zipStore(files);
 }
-function fgFileName() { return ((S.address || "").trim() || (S.builder || "").trim() || "Job").replace(/[\\/:*?"<>|]+/g, "-") + " - FieldGroove import.xlsx"; }
-function exportFieldGroove() {
+function fgFileName(foamChoice) {
+  const sfx = !foamCompareOn() ? "" : foamChoice === "both" ? " - Open vs Closed Cell" : foamChoice === "cc" ? " - Closed Cell" : " - Open Cell";
+  return ((S.address || "").trim() || (S.builder || "").trim() || "Job").replace(/[\\/:*?"<>|]+/g, "-") + sfx + " - FieldGroove import.xlsx"; }
+function exportFieldGroove(foamChoice) {
   const st = $("fgStatus");
-  const res = fgBuildRows();
+  const res = fgBuildRows(foamChoice);
   window.__lastFg = res;
+  if (res.needChoice) { if (st) st.textContent = "Open vs closed cell compare is on — tap Export Open cell, Export Closed cell, or Export both."; return Promise.resolve(); }
   if (!res.rows.length) { if (st) st.textContent = "Nothing to export — no mapped lines."; return Promise.resolve(); }
   const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-  const bytes = fgXlsx(res.rows), name = fgFileName();
+  const bytes = fgXlsx(res.rows), name = fgFileName(foamChoice);
   const msg = res.rows.length + " line" + (res.rows.length > 1 ? "s" : "") + " · " + res.estimates.length + " estimate" + (res.estimates.length > 1 ? "s" : "") +
     (res.skipped.length ? " · not mapped (left out): " + res.skipped.join("; ") : "") + (res.flags.length ? " · check: " + res.flags.join("; ") : "");
   let file = null; try { file = new File([bytes], name, { type: XT }); } catch (e) {}
@@ -1707,9 +1734,9 @@ const TWO_LABELS = {
 function twoCatOf(L) { return TWO_ATTIC_SECS.indexOf(fgSection(L.assembly)) >= 0 ? "attic" : "walls"; }
 // build q: the field takeoff goes to Sky as ONE work order with every line (walls/batts + attic/roof foam); no Josh/attic split here.
 function twoLines() {
-  return allLines().filter(L => !lineIsUnpriced(L) && L.dollars == null);
+  return (foamCompareOn() ? combinedLines() : allLines()).filter(L => !lineIsUnpriced(L) && L.dollars == null);
 }
-function twoOrder() {
+function twoOrder(foamChoice) {
   const first = (S.custFirst || "").trim(), last = (S.custLast || "").trim();
   const customer = (S.custCompany || "").trim() || (S.builder || "").trim() || [first, last].filter(Boolean).join(" ");
   const cityLine = [(S.city || "").trim(), [(S.siteState || "").trim(), (S.siteZip || "").trim()].filter(Boolean).join(" ")].filter(Boolean).join(", ");
@@ -1717,7 +1744,8 @@ function twoOrder() {
   const o = {
     kind: "takeoff", customer: customer, jobSite: (S.address || "").trim() || (S.builder || "").trim() || "Job", address: cityLine,
     city: (S.subdivision || "").trim() ? "Subdivision: " + S.subdivision.trim() : "",
-    line7: optionsOn() ? optionTitle(S.optionView | 0) : packageLabel().replace(/ · FP .*$/, ""), plan: "",
+    line7: (optionsOn() ? optionTitle(S.optionView | 0) : packageLabel().replace(/ · FP .*$/, "")) + (foamCompareOn() ? " · Open cell vs. closed cell" : ""), plan: "",
+    foamLabel: "",
     date: d.length === 3 ? new Date(+d[0], +d[1] - 1, +d[2]) : null, dateText: "", sheets: {}, overflow: {},
   };
   // Order: walls/batts lines first, then attic/roof lines; 21 rows per sheet, extra lines continue on more sheets (tabs) — nothing dropped.
@@ -1824,12 +1852,16 @@ function twoFpText(o) {
   return head.concat(det.map(r => r[0] + ": " + r[1]), ["", "FIREPLACE LINES"],
     ls.map(L => "- " + (L.assembly || "") + " | " + (L.product || "") + " | " + (L.description || "") + ((L.footage && L.unit !== "—") ? " | " + fmt(n(L.footage)) + " " + (L.unit || "") : "") + (L.notes ? " (" + String(L.notes).trim() + ")" : ""))).join("\n") + "\n";
 }
-function twoFileName(o) { return ("WO - " + o.jobSite).replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() + ".xlsx"; }
-function twoShareText(o) {
+function twoFileName(o) { return ("WO - " + o.jobSite + (o.foamLabel ? " - " + o.foamLabel : "")).replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() + ".xlsx"; }
+function twoShareText(o, both) {
   const who = twoWho("walls").name, where = [o.jobSite, (S.city || "").trim()].filter(Boolean).join(", ");
-  return { title: "WO - " + o.jobSite,
-    text: who + ", attached is the work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + "." };
+  if (both) return { title: "WO - " + o.jobSite + " - Open vs Closed Cell",
+    text: who + ", attached are two work orders for " + where + (o.customer ? " (" + o.customer + ")" : "") + ": Option A - Open Cell and Option B - Closed Cell." };
+  return { title: "WO - " + o.jobSite + (o.foamLabel ? " - " + o.foamLabel : ""),
+    text: who + ", attached is the work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + (o.foamLabel ? " — " + o.foamLabel : "") + "." };
 }
+// 29aj: Sky work order = one file; in OC vs CC compare its foam lines read "open cell vs. closed cell" (no export choice needed here).
+function twoOrdersFor() { return [twoOrder()]; }
 function twoRecipient(cat) {
   const c = twoWho(cat), d = el("div", "wo-recip");
   d.innerHTML = '<div class="wo-recip-txt"><b>To ' + escHtml(c.name) + "</b><br>" + (c.email ? escHtml(c.email) : "<i>no email set</i>") +
@@ -1838,49 +1870,57 @@ function twoRecipient(cat) {
   b.onclick = () => copyText(c.email).then(ok => { b.textContent = ok ? "Copied ✓" : "Copy failed"; setTimeout(() => { b.textContent = "Copy email"; }, 1800); });
   d.appendChild(b); return d;
 }
-function twoExport(msgEl) {
-  const o = twoOrder(); if (!o.pages.length) return Promise.resolve();
-  const bytes = KPWO.buildXlsx(o, o.pages), name = twoFileName(o), XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-  const t = twoShareText(o), m = msgEl || $("twoStatus");
-  let file = null; try { file = new File([bytes], name, { type: XT }); } catch (e) {}
+function twoExport(msgEl, foamChoice) {
+  const m = msgEl || $("twoStatus");
+  const orders = twoOrdersFor(foamChoice);
+  if (!orders) { if (m) m.textContent = "Open vs closed cell compare is on — pick Open cell, Closed cell, or Both."; return Promise.resolve(); }
+  const o = orders[0]; if (!o.pages.length) return Promise.resolve();
+  const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const built = orders.map(x => ({ o: x, bytes: KPWO.buildXlsx(x, x.pages), name: twoFileName(x) }));
+  const bytes = built[0].bytes, name = built.map(b => b.name).join(" + ");
+  const t = twoShareText(o, orders.length > 1);
+  const mains = built.map(b => { try { return new File([b.bytes], b.name, { type: XT }); } catch (e) { return null; } });
+  const file = mains.every(Boolean) ? mains[0] : null, mainFiles = mains.filter(Boolean);
   // build q: job photos ride along in the same share sheet (Sky's walls/batts sheet). Bytes are already in memory so the share stays inside the tap.
   const ph = photoFilesForShare(o.jobSite), pFiles = ph.files.slice(), pn = ph.files.length;
   if (o.fpPages.length) { try { pFiles.unshift(new File([twoFpText(o)], photoFileBase(o.jobSite) + " - fireplace.txt", { type: "text/plain" })); } catch (e) {} }
   const withFp = o.fpPages.length ? " + fireplace details" : "";
   const missing = ph.missing ? " (" + ph.missing + " photo" + (ph.missing > 1 ? "s" : "") + " still loading — not attached)" : "";
-  window.__lastTwo = { name, bytes, pages: o.pages.length, fpPages: o.fpPages.length, lines: o.lineCount, extras: pFiles.map(f => f.name) };
+  window.__lastTwo = { name, bytes, pages: o.pages.length, fpPages: o.fpPages.length, lines: o.lineCount, extras: pFiles.map(f => f.name), files: built.map(b => b.name), line7: built.map(b => b.o.line7) };
   const withP = withFp + (pn ? " + " + pn + " photo" + (pn > 1 ? "s" : "") : "");
   const dlBlob = (b, nm) => { const url = URL.createObjectURL(b);
     const a = document.createElement("a"); a.href = url; a.download = nm; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); };
-  const dl = () => { dlBlob(new Blob([bytes], { type: XT }), name); pFiles.forEach(f => dlBlob(f, f.name));
+  const dl = () => { built.forEach(b => dlBlob(new Blob([b.bytes], { type: XT }), b.name)); pFiles.forEach(f => dlBlob(f, f.name));
     if (m) m.textContent = "Downloaded " + name + withP + "." + missing; };
   const canShare = fs => { try { return !!(navigator.canShare && navigator.share && navigator.canShare({ files: fs })); } catch (e) { return false; } };
   const att = [o.fpPages.length ? "fireplace details" : "", pn ? pn + " photo" + (pn > 1 ? "s" : "") : ""].filter(Boolean).join(" + ");
   const text = att ? t.text.replace(/\. - /, " (" + att + " attached). - ") : t.text;
-  if (file && pFiles.length && canShare([file].concat(pFiles))) {
-    return navigator.share({ files: [file].concat(pFiles), title: t.title, text }).then(() => { if (m) m.textContent = "Shared " + name + withP + "." + missing; },
+  if (file && pFiles.length && canShare(mainFiles.concat(pFiles))) {
+    return navigator.share({ files: mainFiles.concat(pFiles), title: t.title, text }).then(() => { if (m) m.textContent = "Shared " + name + withP + "." + missing; },
       e => { if (e && e.name === "AbortError") { if (m) m.textContent = "Share canceled."; } else { dl(); if (m) m.textContent = "Share didn't open, so I downloaded the files instead." + missing; } });
   }
-  if (file && canShare([file])) {
+  if (file && canShare(mainFiles)) {
     const note = pFiles.length ? " Photos/fireplace file couldn't go in the same share on this phone — the Fireplace sheet is still in the work order; send photos from the Photos app." : "";
-    return navigator.share({ files: [file], title: t.title, text: t.text }).then(() => { if (m) m.textContent = "Shared " + name + "." + note + missing; },
+    return navigator.share({ files: mainFiles, title: t.title, text: t.text }).then(() => { if (m) m.textContent = "Shared " + name + "." + note + missing; },
       e => { if (e && e.name === "AbortError") { if (m) m.textContent = "Share canceled."; } else { dl(); if (m) m.textContent = "Share didn't open, so I downloaded the files instead." + missing; } });
   }
   dl(); return Promise.resolve();
 }
-function twoPreview() {
-  const o = twoOrder(); if (!o.pages.length) return;
+function twoPreview(foamChoice) {
+  const orders = twoOrdersFor(foamChoice);
+  if (!orders) { const st = $("twoStatus"); if (st) st.textContent = "Open vs closed cell compare is on — pick Open cell, Closed cell, or Both."; return; }
+  const o = orders[0]; if (!o.pages.length) return;
   twoClose();
   const m = el("div", "xl-modal"); m.id = "twoPreview";
   m.innerHTML = '<div class="xl-bar"><button type="button" class="btn btn-secondary btn-sm" id="twoXlClose">Close</button>' +
-    '<div class="xl-title">' + escHtml(twoFileName(o).replace(/\.xlsx$/, "")) + "</div>" +
+    '<div class="xl-title">' + escHtml(orders.map(x => twoFileName(x).replace(/\.xlsx$/, "")).join(" + ")) + "</div>" +
     '<button type="button" class="btn btn-secondary btn-sm" id="twoXlZoom">100%</button></div>' +
-    '<div class="xl-scroll" id="twoXlScroll"><div class="xl-zoom" id="twoXlZoomBox">' + o.pages.map(k => KPWO.previewHtml(o, k)).join('<div style="height:12px"></div>') + "</div></div>" +
+    '<div class="xl-scroll" id="twoXlScroll"><div class="xl-zoom" id="twoXlZoomBox">' + orders.map(x => (orders.length > 1 ? '<p class="status"><strong>' + escHtml(x.foamLabel) + "</strong></p>" : "") + x.pages.map(k => KPWO.previewHtml(x, k)).join('<div style="height:12px"></div>')).join('<div style="height:24px"></div>') + "</div></div>" +
     '<div class="xl-foot">' + ((o.pages.length - o.fpPages.length) > 1 ? '<p class="status">' + o.lineCount + " lines — continues across " + (o.pages.length - o.fpPages.length) + " sheets (tabs) in the same file.</p>" : "") +
     (o.fpPages.length ? '<p class="status">🔥 Fireplace sheet + fireplace details file included.</p>' : "") +
     (S.photos.length ? '<p class="status">📷 ' + S.photos.length + " job photo" + (S.photos.length > 1 ? "s" : "") + " will be attached too.</p>" : "") +
-    '<button type="button" class="btn btn-primary btn-block" id="twoXlShare">Share ' + (S.photos.length ? "work order + photos" : "this file") + " to " + escHtml(twoWho("walls").name) + "</button>" +
+    '<button type="button" class="btn btn-primary btn-block" id="twoXlShare">Share ' + (orders.length > 1 ? "both work orders" + (S.photos.length ? " + photos" : "") : S.photos.length ? "work order + photos" : "this file") + " to " + escHtml(twoWho("walls").name) + "</button>" +
     '<div id="twoXlRecip"></div><p class="status" id="twoXlMsg" style="text-align:center"></p></div>';
   document.body.appendChild(m); document.body.classList.add("xl-open");
   $("twoXlRecip").appendChild(twoRecipient("walls"));
@@ -1890,7 +1930,7 @@ function twoPreview() {
   apply(); window.addEventListener("resize", apply); m._apply = apply;
   $("twoXlZoom").onclick = () => { fit = !fit; apply(); };
   $("twoXlClose").onclick = twoClose;
-  $("twoXlShare").onclick = () => twoExport($("twoXlMsg"));
+  $("twoXlShare").onclick = () => twoExport($("twoXlMsg"), foamChoice);
 }
 function twoClose() { const m = $("twoPreview"); if (!m) return; if (m._apply) window.removeEventListener("resize", m._apply); m.remove(); document.body.classList.remove("xl-open"); }
 function renderTwo() {
@@ -1900,6 +1940,7 @@ function renderTwo() {
   if ($("woDate") && document.activeElement !== $("woDate")) $("woDate").value = S.woDate || "";
   if ($("woNotes") && document.activeElement !== $("woNotes")) $("woNotes").value = S.woNotes || "";
   box.innerHTML = "";
+  if (foamCompareOn()) box.appendChild(el("p", "cap", "Open vs closed cell compare is on — foam lines on this work order read “open cell vs. closed cell” with both depths and the same SF, so " + escHtml(twoWho("walls").name) + " prices them both ways."));
   const b = el("button", "btn btn-primary btn-block", "Work order → " + escHtml(twoWho("walls").name)); b.type = "button"; b.id = "btnTwoWalls";
   b.disabled = !hasW; b.onclick = () => twoPreview(); box.appendChild(b); box.appendChild(twoRecipient("walls"));
   if (!hasW) box.appendChild(el("p", "status", "No lines on this takeoff yet."));
@@ -2093,7 +2134,7 @@ function buildLinesForPackage(p, tag) {
       S.crawlWalls.forEach(r => {
         const sf = n(r.length) * n(r.height); if (sf <= 0) return;
         const dep = ccValid(S.ccDepth) ? String(S.ccDepth) : "1.5";
-        push(lines, { area: "Crawl wall", assembly: "Crawl wall foam", product: "Closed-cell spray foam", priceKey: 'Closed-cell foam ' + dep + '"', description: dep + '" CC', footage: round2(sf), unit: "SF", notes: noteTag });
+        push(lines, { area: "Crawl wall", assembly: "Crawl wall foam", product: "Closed-cell spray foam", priceKey: 'Closed-cell foam ' + dep + '"', description: dep + '" CC', footage: round2(sf), unit: "SF", notes: noteTag, _foam: "locked" });
       });
     }
     push(lines, { area: "Crawl", assembly: "Dehumidifier", product: "Dehumidifier", description: "Install included", footage: 1, unit: "ea", notes: noteTag });
@@ -2336,13 +2377,14 @@ function appendFpLines(lines, noteTag) {
 }
 
 function allLines() {
+  if (foamCompareOn() && FOAM_VIEW == null) return withFoam(foamViewNow(), allLines);
   if (optionsOn()) {
     const ks = optionPkgs(); const i = Math.min(Math.max(0, S.optionView | 0), ks.length - 1);
     return buildLinesForPackage(ks[i], "");
   }
   return buildLinesForPackage(S.pkg, "");
 }
-function optionLines(i) { return buildLinesForPackage(optionPkgs()[i], ""); }
+function optionLines(i) { if (foamCompareOn() && FOAM_VIEW == null) return withFoam(foamViewNow(), () => optionLines(i)); return buildLinesForPackage(optionPkgs()[i], ""); }
 
 function packageLabel() {
   const F = flags();
@@ -2387,6 +2429,20 @@ function priceKeyFor(L) {
   return pr;
 }
 function lineIsUnpriced(L) { return L.area === "Fireplace" || (L.footage === 0 && L.unit === "—") || L.assembly === "Gas type"; }
+function priceMapNow() { const m = new Map(); S.priceLibrary.forEach(p => { const u = n(p.unitPrice40); if (u > 0) m.set(p.materialKey, u); }); return m; }
+// The 40%-margin unit price a line uses (same lookup order the ballpark has always used); undefined = no price.
+function unitPrice40For(L, priceMap, pk) {
+  pk = pk || priceKeyFor(L);
+  let unit40 = priceMap.get(pk);
+  if (unit40 === undefined && roofFoamBaseKey(pk) !== pk) unit40 = priceMap.get(ROOF_FOAM_BASE);
+  if (unit40 === undefined && / \(retro\)$/.test(pk)) { const b = priceMap.get(pk.replace(/ \(retro\)$/, "")); if (b !== undefined) unit40 = b + 0.05; }
+  if (unit40 === undefined) unit40 = priceMap.get(L.product);
+  if (unit40 === undefined && L.product) {
+    const key = String(L.product).trim().toLowerCase();
+    priceMap.forEach((v, k) => { if (unit40 === undefined && k.trim().toLowerCase() === key) unit40 = v; });
+  }
+  return unit40;
+}
 function ballpark(linesArg) {
   // unit-priced lines scale with margin; per-house/fixed dollar lines (air seal, add-on, extra labor) do not.
   const scale = marginPct() / MARGIN_BASE;
@@ -2398,20 +2454,87 @@ function ballpark(linesArg) {
     if (lineIsUnpriced(L)) return;
     if (L.dollars != null) { fixed += n(L.dollars); fixedItems.push(L.product + " " + fmtMoney(n(L.dollars))); pricedLines++; return; }
     const pk = priceKeyFor(L);
-    let unit40 = priceMap.get(pk);
-    if (unit40 === undefined && roofFoamBaseKey(pk) !== pk) unit40 = priceMap.get(ROOF_FOAM_BASE);
-    if (unit40 === undefined && / \(retro\)$/.test(pk)) { const b = priceMap.get(pk.replace(/ \(retro\)$/, "")); if (b !== undefined) unit40 = b + 0.05; }
-    if (unit40 === undefined) unit40 = priceMap.get(L.product);
-    if (unit40 === undefined && L.product) {
-      const key = String(L.product).trim().toLowerCase();
-      priceMap.forEach((v, k) => { if (unit40 === undefined && k.trim().toLowerCase() === key) unit40 = v; });
-    }
+    const unit40 = unitPrice40For(L, priceMap, pk);
     if (unit40 === undefined || unit40 <= 0) { unpricedLines++; missing.add(pk); return; }
     if (L.fixed) { fixed += L.footage * unit40; fixedItems.push(L.product + " " + fmtMoney(L.footage * unit40)); }
     else scaled += L.footage * unit40 * scale;
     pricedLines++;
   });
   return { total: round2(scaled + fixed), scaled: round2(scaled), fixed: round2(fixed), fixedItems, pricedLines, unpricedLines, missing: Array.from(missing).sort() };
+}
+
+// ===== Open cell vs closed cell compare (29aj) =====
+// Same job, lines built twice: A = open cell (current OC depth logic), B = closed cell at the job CC depth.
+// Locked CC rows (concrete basement walls, crawl encapsulation walls, CC materials) and rows with their own foam type are the same in both.
+function isFoamLine(L) { return /spray foam/i.test(String(L.product || "")); }
+function foamCompare() {
+  const A = withFoam("oc", allLines), B = withFoam("cc", allLines);
+  const scale = marginPct() / MARGIN_BASE, pm = priceMapNow();
+  const info = L => {
+    const pk = priceKeyFor(L), u = unitPrice40For(L, pm, pk), dm = String(L.description || "").match(/(\d+(?:\.\d+)?)"/);
+    const unit = u > 0 ? Math.round(u * (L.fixed ? 1 : scale) * 10000) / 10000 : null;
+    return { area: workAreaOf(L), assembly: L.assembly, sf: n(L.footage), unitLabel: L.unit, depth: dm ? dm[1] + '"' : "", type: /^Closed-cell/.test(L.product) ? "CC" : "OC",
+      description: L.description, priceKey: pk, unit, total: unit != null ? round2(n(L.footage) * unit) : null, why: L._foam || "job" };
+  };
+  const fa = A.filter(isFoamLine).map(info), fb = B.filter(isFoamLine).map(info), used = new Set(), pairs = [];
+  fa.forEach(a => {
+    let j = fb.findIndex((b, k) => !used.has(k) && b.assembly === a.assembly && b.area === a.area);
+    if (j < 0) j = fb.findIndex((b, k) => !used.has(k) && b.assembly === a.assembly);
+    if (j >= 0) used.add(j);
+    const b = j >= 0 ? fb[j] : null;
+    const same = !!b && a.type === b.type && a.description === b.description && a.sf === b.sf;
+    pairs.push({ a, b, same, note: same ? (a.why === "locked" ? "Locked closed cell — same in both" : a.why === "row" ? "Row set to " + (a.type === "CC" ? "closed" : "open") + " cell — same in both" : "Same in both") : "" });
+  });
+  fb.forEach((b, k) => { if (!used.has(k)) pairs.push({ a: null, b, same: false, note: "" }); });
+  const pa = ballpark(A), pb = ballpark(B);
+  const opt = (lines, bp, fl) => ({ lines, total: bp.total, missing: bp.missing, unpricedLines: bp.unpricedLines,
+    foamMissing: fl.filter(x => x.unit == null).map(x => x.priceKey), incomplete: bp.unpricedLines > 0 });
+  const oa = opt(A, pa, fa), ob = opt(B, pb, fb);
+  return { A: oa, B: ob, pairs, shared: A.filter(L => !isFoamLine(L) && !lineIsUnpriced(L)), ccDepth: ccDepthJob(),
+    diff: round2(ob.total - oa.total), priced: S.priceLibrary.some(p => n(p.unitPrice40) > 0) };
+}
+// Excel / Sky handoff in compare mode: ONE line per comparable foam line, same SF, description spells out both,
+// e.g. '5.5" open cell vs. 2" closed cell roof'. Locked CC rows and per-row overrides keep their normal single-type line.
+function foamComboDesc(a, b) {
+  const am = String(a.description || "").match(/^(\d+(?:\.\d+)?)"/), bm = String(b.description || "").match(/^(\d+(?:\.\d+)?)" CC (.*)$/);
+  if (!am || !bm) return String(a.description || "") + " vs. " + String(b.description || "");
+  return am[1] + '" open cell vs. ' + bm[1] + '" closed cell ' + bm[2];
+}
+function combinedLines(linesFn) {
+  linesFn = linesFn || allLines;
+  const A = withFoam("oc", linesFn), B = withFoam("cc", linesFn), used = new Set();
+  const out = A.map(L => {
+    if (!isFoamLine(L) || L._foam !== "job" || /^Closed-cell/.test(L.product)) return L;
+    let k = B.findIndex((x, i) => !used.has(i) && x._foam === "job" && x.assembly === L.assembly && x.area === L.area && x.footage === L.footage);
+    if (k < 0) k = B.findIndex((x, i) => !used.has(i) && x._foam === "job" && x.assembly === L.assembly);
+    if (k < 0) return L;
+    used.add(k); const b = B[k];
+    if (!/^Closed-cell/.test(b.product)) return L;
+    return Object.assign({}, L, { product: "Spray foam (open cell vs. closed cell)", description: foamComboDesc(L, b), _combo: true, _ccDesc: b.description });
+  });
+  B.forEach((x, i) => { if (!used.has(i) && x._foam === "job" && /^Closed-cell/.test(x.product)) out.push(Object.assign({}, x, { description: x.description + " (closed cell option)" })); });
+  return out;
+}
+function foamCompareTotalsHtml(fc) {
+  if (!fc.priced) return "<p class='cap'>Add prices in Pricing to see the open cell vs closed cell ballpark.</p>";
+  const t = (o, lbl) => "<td class='num'><strong>" + fmtMoney(o.total) + "</strong>" + (o.incomplete ? " <span class='cap' style='color:#b45309'>⚠ incomplete — " + o.unpricedLines + " line" + (o.unpricedLines > 1 ? "s" : "") + " missing a price</span>" : "") + "</td>";
+  const diff = (fc.A.incomplete || fc.B.incomplete) ? "<span class='cap'>Difference not shown — a total is incomplete</span>" :
+    (fc.diff === 0 ? "Same price" : (fc.diff > 0 ? "Closed cell is " + fmtMoney(fc.diff) + " more" : "Closed cell is " + fmtMoney(-fc.diff) + " less"));
+  return "<table><thead><tr><th>Option A — Open cell</th><th>Option B — Closed cell (" + escHtml(fc.ccDepth) + "\")</th></tr></thead><tbody><tr>" + t(fc.A) + t(fc.B) +
+    "</tr><tr><td colspan='2'>" + diff + " <span class='cap'>(ballpark @ " + marginPct() + "% — not final; FieldGroove pricing rules)</span></td></tr></tbody></table>";
+}
+function foamCompareHtml(fc) {
+  const cell = x => !x ? "<td colspan='4' class='cap'>—</td>" :
+    "<td class='num'>" + fmt(x.sf) + "</td><td>" + escHtml(x.depth + " " + x.type) + "</td>" +
+    (x.unit != null ? "<td class='num'>" + fmtMoney(x.unit) + "</td><td class='num'>" + fmtMoney(x.total) + "</td>" : "<td colspan='2' class='cap' style='color:#b45309'>price missing (" + escHtml(x.priceKey) + ")</td>");
+  let h = foamCompareTotalsHtml(fc);
+  h += "<table><thead><tr><th rowspan='2'>Foam line</th><th colspan='4'>A — Open cell</th><th colspan='4'>B — Closed cell</th></tr><tr><th>SF</th><th>Depth</th><th>Unit</th><th>Total</th><th>SF</th><th>Depth</th><th>Unit</th><th>Total</th></tr></thead><tbody>";
+  if (!fc.pairs.length) h += "<tr><td colspan='9' class='cap'>No foam lines yet.</td></tr>";
+  fc.pairs.forEach(p => { const x = p.a || p.b;
+    h += "<tr><td>" + escHtml(x.area) + (p.note ? "<br><span class='cap'>" + escHtml(p.note) + "</span>" : "") + "</td>" + cell(p.a) + cell(p.b) + "</tr>"; });
+  h += "</tbody></table>";
+  if (fc.shared.length) h += "<p class='cap'>Shared by both options (shown once): " + fc.shared.map(L => escHtml(workAreaOf(L) + " — " + (L.description || L.product) + (L.unit === "ea" ? "" : " " + fmt(n(L.footage)) + " " + L.unit))).join(" · ") + "</p>";
+  return h;
 }
 
 // Work area shown on every Excel summary row (where the material goes).
@@ -2456,7 +2579,7 @@ function buildExcelCsv() {
   const first = (S.custFirst || "").trim(), last = (S.custLast || "").trim();
   const customer = [first, last].filter(Boolean).join(" ") || (S.custCompany || "").trim() || (S.builder || "").trim();
   const cityLine = [(S.city || "").trim(), [(S.siteState || "").trim(), (S.siteZip || "").trim()].filter(Boolean).join(" ")].filter(Boolean).join(", ");
-  const pkgLine = optionsOn() ? optionTitle(S.optionView | 0) : packageLabel().replace(/ · FP .*$/, "");
+  const pkgLine = (optionsOn() ? optionTitle(S.optionView | 0) : packageLabel().replace(/ · FP .*$/, "")) + (foamCompareOn() ? " · Open cell vs. closed cell" : "");
   const rows = [
     row(["WORK ORDER", "", ""]),
     row(["REP:", ownerName(), "DATE: " + csvDate(S.dateMeasured)]),
@@ -2466,7 +2589,7 @@ function buildExcelCsv() {
     row(["", pkgLine, ""]),
     row(["WORK AREA", "MATERIAL", "FOOTAGE"]),
   ];
-  { const al = allLines(); al.filter(L => twoCatOf(L) === "attic").concat(al.filter(L => twoCatOf(L) !== "attic")).forEach(L => rows.push(row([workAreaOf(L), woMaterial(L), wholeQty(L)]))); }
+  { const al = foamCompareOn() ? combinedLines() : allLines(); al.filter(L => twoCatOf(L) === "attic").concat(al.filter(L => twoCatOf(L) !== "attic")).forEach(L => rows.push(row([workAreaOf(L), woMaterial(L), wholeQty(L)]))); }
   return rows.join("\n");
 }
 
@@ -2583,13 +2706,16 @@ function renderAssemblyEditors() {
   const anyTotalFoam = pkList.some(k => k && pkgProfile(k).totalFoam);
   // Job-level spray foam type (open cell default) — shown whenever this job has a spray foam line.
   let jobHasFoam = false;
-  try { jobHasFoam = S.foamType === "cc" || allLines().some(L => /spray foam/i.test(L.product) && L.assembly !== "Crawl wall foam"); } catch (e) {}
+  try { jobHasFoam = S.foamType === "cc" || S.foamType === "both" || allLines().some(L => /spray foam/i.test(L.product) && L.assembly !== "Crawl wall foam"); } catch (e) {}
   if (jobHasFoam) {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">Spray foam type (job)</div>';
-    card.appendChild(fieldSelect("Foam type", foamTypeJob(), [["oc", "Open cell (default)"], ["cc", "Closed cell"]], v => { S.foamType = v; render(); }));
-    if (foamTypeJob() === "cc") card.appendChild(fieldSelect("Closed-cell depth (job)", ccDepthJob(), CC_DEPTH_CHOICES.map(d => [d, d + '"']), v => { S.ccFoamDepth = v; render(); }));
-    card.appendChild(el("p", "cap", "Every foam row uses this unless the row picks its own foam type. Concrete basement walls are always closed cell."));
+    card.appendChild(fieldSelect("Foam type", foamCompareOn() ? "both" : foamTypeJob(), [["oc", "Open cell (default)"], ["cc", "Closed cell"], ["both", "Show both (compare)"]], v => { S.foamType = v; render(); }));
+    if (foamCompareOn()) card.appendChild(fieldSelect("Closed-cell depth (Option B)", ccDepthJob(), CC_DEPTH_CHOICES.map(d => [d, d + '"']), v => { S.ccFoamDepth = v; render(); }));
+    else if (foamTypeJob() === "cc") card.appendChild(fieldSelect("Closed-cell depth (job)", ccDepthJob(), CC_DEPTH_CHOICES.map(d => [d, d + '"']), v => { S.ccFoamDepth = v; render(); }));
+    card.appendChild(el("p", "cap", foamCompareOn() ? "Compare: every foam row is priced both ways — A open cell (its OC depth) and B closed cell (depth above). Rows that pick their own foam type, concrete basement walls and crawl walls stay the same in both. Excel tab shows the side-by-side; exports ask which option." :
+      "Every foam row uses this unless the row picks its own foam type. Concrete basement walls are always closed cell."));
+    if (foamCompareOn()) { try { const d = el("div", "table-wrap"); d.innerHTML = foamCompareTotalsHtml(foamCompare()); card.appendChild(d); } catch (e) {} }
     box.appendChild(card);
   }
   if (F.crawlIsTouchup) {
@@ -2883,6 +3009,7 @@ function renderAssemblyEditors() {
     if (foamTypeJob() !== "cc") {
       card.appendChild(roofDepthSelect("Roofline foam depth (job)", S.roofFoamDepth, v => { S.roofFoamDepth = v; render(); }, true));
       card.appendChild(el("p", "cap", 'Open cell fills in from the job site address: Athens-Clarke County 8", Highlands NC 10", everywhere else 5.5". Pick a depth to override.'));
+      if (foamCompareOn()) card.appendChild(el("p", "cap", 'Compare on: this is Option A (open cell). Option B prices these lines closed cell at ' + ccDepthJob() + '".'));
     } else card.appendChild(el("p", "cap", 'Job foam type is closed cell — house roofline uses the job closed-cell depth (' + ccDepthJob() + '"). Lines can switch back to open cell below.'));
     S.foamRoofs.forEach((r, idx) => {
       card.appendChild(fieldInput("Flat SF #" + (idx+1), r.flatSf, v => { r.flatSf = v; schedule(); }, "number"));
@@ -3156,14 +3283,14 @@ function takeoffXlsx(lines, title) {
 }
 function optionFileName(i) {
   const job = (S.address.trim() || S.builder.trim() || "Job").replace(/[\\/:*?"<>|]+/g, "-");
-  return job + " - " + optionTitle(i).replace(/[\\/:*?"<>|]+/g, "-") + ".xlsx";
+  return job + " - " + (optionTitle(i) + (foamCompareOn() ? " - Open vs Closed Cell" : "")).replace(/[\\/:*?"<>|]+/g, "-") + ".xlsx";
 }
 function exportOptions(idxs) {
   const st = $("optionStatus");
   const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const made = idxs.map(i => {
-    const title = optionTitle(i) + " · " + (S.address.trim() || S.builder.trim() || "Job") + " · " + (S.dateMeasured || "");
-    const bytes = takeoffXlsx(optionLines(i), title), name = optionFileName(i);
+    const title = optionTitle(i) + (foamCompareOn() ? " · Open cell vs. closed cell" : "") + " · " + (S.address.trim() || S.builder.trim() || "Job") + " · " + (S.dateMeasured || "");
+    const bytes = takeoffXlsx(foamCompareOn() ? combinedLines(() => optionLines(i)) : optionLines(i), title), name = optionFileName(i);
     let file = null; try { file = new File([bytes], name, { type: XT }); } catch (e) {}
     return { name, bytes, file };
   });
@@ -3184,10 +3311,20 @@ function exportOptions(idxs) {
   return Promise.resolve();
 }
 
+function renderFoamCompareBar() {
+  const bar = $("foamCompareBar"); if (!bar) return;
+  const on = foamCompareOn();
+  bar.classList.toggle("hidden", !on);
+  toggleField("btnExportFg", !on); toggleField("fgFoamChoice", on);
+  if ($("btnCopyCsv")) $("btnCopyCsv").textContent = on ? "Copy Excel CSV (open vs. closed cell)" : "Copy Excel CSV";
+  if (!on) return;
+  try { $("foamCompareBox").innerHTML = foamCompareHtml(foamCompare()); } catch (e) { $("foamCompareBox").innerHTML = "<p class='status'>Compare unavailable: " + escHtml(e.message) + "</p>"; }
+}
 function renderOutput() {
   renderOptionBar();
+  renderFoamCompareBar();
   renderTwo();
-  const lines = allLines();
+  const lines = foamCompareOn() ? combinedLines() : allLines();
   const hint = $("outputHint");
   const pricedCount = S.priceLibrary.filter(p => n(p.unitPrice40) > 0).length;
   let extra = "";
@@ -3195,7 +3332,8 @@ function renderOutput() {
     if (pricedCount === 0) extra = " · Ballpark: add 40% prices in Pricing";
     else { const b = ballpark(); extra = " · Ballpark " + fmtMoney(b.total) + " (" + fmtMoney(b.scaled) + " @ " + marginPct() + "% + " + fmtMoney(b.fixed) + " fixed; not final invoice)"; }
   }
-  hint.innerHTML = (optionsOn() ? "<strong>" + escHtml(optionTitle(S.optionView | 0)) + "</strong> · " : "") + lines.length + " rows · Bags blank until bag-yield · Air seal, gas & chase flags · Owner: " +
+  if (S.showBallpark && pricedCount && foamCompareOn()) { const fc = foamCompare(); extra = " · Ballpark A open cell " + fmtMoney(fc.A.total) + (fc.A.incomplete ? " (incomplete)" : "") + " vs B closed cell " + fmtMoney(fc.B.total) + (fc.B.incomplete ? " (incomplete)" : "") + " @ " + marginPct() + "%; not final invoice"; }
+  hint.innerHTML = (optionsOn() ? "<strong>" + escHtml(optionTitle(S.optionView | 0)) + "</strong> · " : "") + (foamCompareOn() ? "<strong>Open cell vs. closed cell</strong> (foam lines show both; Sky prices both ways) · " : "") + lines.length + " rows · Bags blank until bag-yield · Air seal, gas & chase flags · Owner: " +
     ownerName() + extra;
 
   const wrap = $("outputTable");
@@ -3278,7 +3416,8 @@ function renderPricing() {
     if (pricedCount === 0) callout.innerHTML = "<strong>Ballpark — not final invoice</strong>Price library is empty. Add 40% unit prices below.";
     else {
       const b = ballpark();
-      callout.innerHTML = "<strong>Ballpark — not final invoice</strong>" + fmtMoney(b.total) + " = " + fmtMoney(b.scaled) + " materials/labor @ " + marginPct() +
+      if (foamCompareOn()) callout.innerHTML = "<strong>Ballpark — not final invoice · open cell vs closed cell</strong>" + foamCompareHtml(foamCompare());
+      else callout.innerHTML = "<strong>Ballpark — not final invoice</strong>" + fmtMoney(b.total) + " = " + fmtMoney(b.scaled) + " materials/labor @ " + marginPct() +
         "% + " + fmtMoney(b.fixed) + " fixed" + (b.fixedItems.length ? " (" + escHtml(b.fixedItems.join(", ")) + ")" : "") + " · " + b.pricedLines + " priced line(s)" + (b.unpricedLines ? " · " + b.unpricedLines + " unpriced" : "") +
         (b.missing.length ? "<br><em>Missing: " + escHtml(b.missing.join(", ")) + "</em>" : "");
     }
@@ -3318,6 +3457,7 @@ function renderLiveOnly() {
   let ball = "";
   if (S.showBallpark) {
     if (pricedCount === 0) ball = '<span class="pill">Ballpark: add prices</span>';
+    else if (foamCompareOn()) { const fc = foamCompare(); ball = '<span class="pill">OC ' + fmtMoney(fc.A.total) + (fc.A.incomplete ? "*" : "") + " · CC " + fmtMoney(fc.B.total) + (fc.B.incomplete ? "*" : "") + " @ " + marginPct() + "%</span>"; }
     else ball = '<span class="pill">' + fmtMoney(ballpark().total) + " @ " + marginPct() + "%</span>";
   }
   $("liveBar").innerHTML = '<span class="pill">' + ownerName() + "</span>" +
@@ -3484,7 +3624,8 @@ function migrateState(d) {
   ["porchRoofFoam", "porchRoofCc", "porchCeilFoam", "porchCeilCc", "garageRoofFoam", "garageRoofCc", "garageCeilFoam", "garageCeilCc"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
   if (!("foamType" in d)) S.foamType = "oc"; // jobs saved before 29ag: open cell, never inherit the previous job's pick
   if (!("ccFoamDepth" in d)) S.ccFoamDepth = "2";
-  if (S.foamType !== "cc") S.foamType = "oc";
+  if (S.foamType !== "cc" && S.foamType !== "both") S.foamType = "oc"; // "both" = OC vs CC compare (29aj)
+  if (!("foamView" in d) || S.foamView !== "cc") S.foamView = "oc";
   if (!ccValid(S.ccFoamDepth)) S.ccFoamDepth = "2";
   if (!ccValid(S.ccDepth)) S.ccDepth = "1.5"; // crawl wall CC: blank/invalid → 1.5"; a saved valid pick is kept
   if (!("hasMisc" in d)) { S.hasMisc = false; S.misc = [newMiscItem()]; }
@@ -3560,7 +3701,7 @@ function refreshArchive() {
 }
 
 function savePermanent() {
-  const lines = allLines();
+  const lines = foamCompareOn() ? combinedLines() : allLines();
   const snap = {
     id: S.jobId,
     savedAt: new Date().toISOString(),
@@ -3569,7 +3710,7 @@ function savePermanent() {
     builder: (S.builder || "").trim(),
     city: (S.city || "").trim(),
     address: (S.address || "").trim(),
-    packageLabel: packageLabel(),
+    packageLabel: packageLabel() + (foamCompareOn() ? " · Open vs closed cell compare" : ""),
     packageType: S.pkg,
     jobMode: S.jobMode,
     gasType: S.gasType,
@@ -3581,6 +3722,8 @@ function savePermanent() {
     flatSf: S.flatSf,
     excelRows: lines.map(L => ({ product: L.product, description: L.description, footage: (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), bags: L.bags })),
     fgRows: lines.map(L => ({ area: L.area, assembly: L.assembly, material: L.product + " — " + L.description, qty: fmt(L.footage), unit: L.unit, notes: L.notes })),
+    foamCompare: foamCompareOn() ? ["oc", "cc"].map(v => ({ foam: v, title: FOAM_OPT_LABEL[v],
+      excelRows: withFoam(v, allLines).map(L => ({ product: L.product, description: L.description, footage: (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), bags: L.bags })) })) : undefined,
     options: optionsOn() ? optionPkgs().map((k, i) => ({ pkg: k, title: optionTitle(i),
       excelRows: optionLines(i).map(L => ({ product: L.product, description: L.description, footage: (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), bags: L.bags })) })) : undefined,
     draft: draftPayload()
@@ -3664,7 +3807,7 @@ function newJob() {
   S.gables = [{ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false }];
   S.cants = [{ id: uid(), name: "", sf: "", material: "r30" }];
   S.touchupPatchSf = ""; S.roofFoamDepth = ""; S.porchRoofDepth = ""; S.garageRoofDepth = "";
-  S.foamType = "oc"; S.ccFoamDepth = "2"; S.porchRoofFoam = ""; S.porchRoofCc = ""; S.porchCeilFoam = ""; S.porchCeilCc = ""; S.garageRoofFoam = ""; S.garageRoofCc = ""; S.garageCeilFoam = ""; S.garageCeilCc = ""; S.includePorchRoof = true; S.porchGabledOff = false;
+  S.foamType = "oc"; S.foamView = "oc"; S.ccFoamDepth = "2"; S.porchRoofFoam = ""; S.porchRoofCc = ""; S.porchCeilFoam = ""; S.porchCeilCc = ""; S.garageRoofFoam = ""; S.garageRoofCc = ""; S.garageCeilFoam = ""; S.garageCeilCc = ""; S.includePorchRoof = true; S.porchGabledOff = false;
   S.includeFp = false; S.fpMode = "nc"; S.fpRetroKind = "tearout"; S.fpOtherDemo = false;
   S.fpModelId = "apex42"; S.fpPipeFt = ""; S.fpTerm = "roof"; S.fpAccessNotes = "";
   S.fpChaseClear = true; S.fpChaseNote = "";
@@ -3720,6 +3863,9 @@ function wireInputs() {
   $("btnExportOption").onclick = () => exportOptions([Math.min(S.optionView | 0, optionPkgs().length - 1)]);
   $("btnExportAll").onclick = () => exportOptions(optionPkgs().map((k, i) => i));
   $("btnExportFg").onclick = () => exportFieldGroove();
+  $("btnExportFgOc").onclick = () => exportFieldGroove("oc");
+  $("btnExportFgCc").onclick = () => exportFieldGroove("cc");
+  $("btnExportFgBoth").onclick = () => exportFieldGroove("both");
   $("fgPrices").onclick = () => { lsSet(FG_PRICE_KEY, fgPricesOn() ? "0" : "1"); render(); };
   $("billSame").onclick = () => { S.billSame = S.billSame === false; render(); };
   $("showFgMap").onclick = () => { S.showFgMap = !S.showFgMap; render(); };
@@ -3770,7 +3916,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29ai";
+const APP_BUILD = "2026-10-29aj";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
