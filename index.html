@@ -100,6 +100,10 @@ button { cursor: pointer; border: none; background: none; }
   border: 1.5px solid transparent;
 }
 .seg button.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.cust-box { border: 1px solid var(--line, #d6dbe3); border-radius: 10px; padding: 8px 10px; margin: 8px 0; }
+.cust-box summary { font-weight: 600; cursor: pointer; padding: 4px 0; }
+.fgmap-row { padding: 6px 0; border-bottom: 1px solid var(--line, #e3e6ea); }
+.fgmap-row input { font-size: 13px; }
 .toggle-row {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   min-height: 44px; padding: 6px 0; border-bottom: 1px solid var(--border);
@@ -285,6 +289,31 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       </div>
       <div class="field"><label>Job site address</label><input id="address" placeholder="123 Main St"></div>
       <div class="grid2">
+        <div class="field"><label>State</label><input id="siteState" placeholder="GA" autocapitalize="characters"></div>
+        <div class="field"><label>Zip</label><input id="siteZip" inputmode="numeric"></div>
+      </div>
+      <div class="field"><label>Subdivision (optional)</label><input id="subdivision"></div>
+      <details class="cust-box" id="custBox"><summary>Customer (for FieldGroove)</summary>
+        <div class="grid2">
+          <div class="field"><label>First name</label><input id="custFirst" autocomplete="off"></div>
+          <div class="field"><label>Last name</label><input id="custLast" autocomplete="off"></div>
+        </div>
+        <div class="field"><label>Company (blank = builder above if no name)</label><input id="custCompany" autocomplete="off"></div>
+        <div class="grid2">
+          <div class="field"><label>Phone</label><input id="custPhone" type="tel" autocomplete="off"></div>
+          <div class="field"><label>Email</label><input id="custEmail" type="email" autocomplete="off"></div>
+        </div>
+        <div class="toggle-row"><span>Billing address same as job site</span><button type="button" class="switch" id="billSame"></button></div>
+        <div id="billFields" class="hidden">
+          <div class="field"><label>Billing address</label><input id="billAddress"></div>
+          <div class="grid2">
+            <div class="field"><label>City</label><input id="billCity"></div>
+            <div class="field"><label>State</label><input id="billState"></div>
+          </div>
+          <div class="field"><label>Zip</label><input id="billZip" inputmode="numeric"></div>
+        </div>
+      </details>
+      <div class="grid2">
         <div class="field"><label>Date measured</label><input id="dateMeasured" type="date"></div>
         <div class="field"><label>Gas type</label>
           <select id="gasType">
@@ -367,6 +396,12 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <button type="button" class="btn btn-primary" id="btnCopyCsv">Copy Excel CSV</button>
         <button type="button" class="btn btn-secondary" id="btnSaveArchive2">Save to archive</button>
       </div>
+      <div class="divider"></div>
+      <h2>FieldGroove</h2>
+      <p class="cap">Import file for FieldGroove → Opportunities → Import Estimates. One row per line; compare mode = one estimate per option. Fireplace lines left out.</p>
+      <div class="toggle-row"><span>Include app unit prices (at this job's margin)</span><button type="button" class="switch" id="fgPrices"></button></div>
+      <button type="button" class="btn btn-primary btn-block" id="btnExportFg">Export for FieldGroove (.xlsx)</button>
+      <p class="status" id="fgStatus"></p>
       <div class="field hidden" id="csvField" style="margin-top:12px"><label>CSV</label><textarea id="csvText" class="csv-box" rows="8"></textarea></div>
     </div>
   </section>
@@ -442,6 +477,14 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <button type="button" class="btn btn-secondary btn-block" id="btnAddPrice">Add material to library</button>
         <button type="button" class="btn btn-primary btn-block" style="margin-top:8px" id="btnSaveAllPrices">Save all filled prices</button>
         <p class="status" id="priceLibNote"></p>
+      </div>
+      <div class="divider"></div>
+      <div class="toggle-row"><span>FieldGroove mapping (item + work area per material)</span><button type="button" class="switch" id="showFgMap"></button></div>
+      <div id="fgMapBody" class="hidden">
+        <p class="cap">Blank = default (shown greyed). Type or pick the exact FieldGroove name to override.</p>
+        <div id="fgMapList"></div>
+        <button type="button" class="btn btn-secondary btn-block" id="btnFgMapReset">Reset all to defaults</button>
+        <p class="status" id="fgMapNote"></p>
       </div>
     </div>
   </section>
@@ -1069,6 +1112,8 @@ const S = {
   dateMeasured: todayISO(),
   owner: "asher",
   builder: "", city: "", address: "", keywords: "",
+  siteState: "GA", siteZip: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
+  billSame: true, billAddress: "", billCity: "", billState: "", billZip: "", showFgMap: false,
   gasType: "natural",
   outputView: "excel",
   jobMode: "new",
@@ -1228,6 +1273,253 @@ const GARAGE_CEIL_MATS = {
   blow_r38: ["Blown fiberglass R38", "Blown fiberglass", "R38 blown", "Blown fiberglass R-38"],
   foam5: ['5" open-cell foam', "Spray foam", '5" foam', "Open-cell foam (roofline)"],
 };
+/* ===== FieldGroove export (build 29h) =====
+   EDIT HERE: FG_RULES is the one table that maps app lines → FieldGroove ItemName + WorkArea.
+   Each row: id (stable, used by Pricing → FieldGroove mapping overrides), label (what Asher sees),
+   key = the app's price-library key (priceKeyFor), sec = app sections it applies to ("*" = any),
+   items = FieldGroove ItemName candidates in order; {w} = batt width 15/23 (from 16/24 OC), {W} = 16/24,
+   {h} = 8 or 9 (wall height; skipped when the height isn't 8' or 9'), {r} = R-value number from the key.
+   The first candidate that exists in FieldGroove's item list wins. area = WorkArea (null → FG_AREA_BY_SECTION).
+   rv: "key" puts the R-value from the key into RValue. depth: true puts inches from the description into Depth.
+   conf/note are for the review sheet only. */
+const FG_HEADERS = ["CustomerCompanyName", "CustomerFirstName", "CustomerLastName", "CustomerEmail", "CustomerPhone", "CustomerAddress", "CustomerCity", "CustomerState", "CustomerZip", "ProjectName", "SiteAddress", "SiteCity", "SiteState", "SiteZip", "Subdivision", "PlanName", "ProjectType", "EstimateName", "EstimateType", "Phase", "PhaseOptional", "PhaseTotal", "ItemName", "WorkArea", "Quantity", "UnitOfMeasure", "Depth", "RValue", "Optional", "CoverageNote", "UnitPrice", "PhaseOnly", "LaborRate"];
+const FG_ITEM_NAMES = ["1.5 Mil Poly", "10 Mil Poly", "12x48 Vent Chutes", "16\" Poly-Vent", "2 Mil Poly", "20 Mil Poly", "24\" Poly-Vent", "4 Mil Poly", "6 Mil Poly", "Attic Air Seal Kit", "Attic Air Seal Labor", "Baffles - 16\"", "Baffles - 24\"", "Blower Door Test", "Blown Cellulose Insulation for Open Attics (Owens Corning)", "Cellulose - Dense Pack Floor System", "DC-315 Intumescent Thermal Coating", "Duct Blaster Test", "EL36", "EL42", "Energy Star Caulk & Foam Air Package", "Energy Star Caulk & Foam Labor", "ENVERGE EasySeal .5 Open Cell Spray Foam", "ENVERGE OnePass 2.0 Closed Cell Spray Foam", "Fiberglass Batt Template", "Froth Pack - 205 BF Closed Cell", "Gap and Crack Can Foam", "Gap and Crack Can Foam - Material Only", "GreenFiber Cellulose", "GreenFiber Cellulose - R13 - Labor Rate", "GreenFiber Cellulose - R19 - Labor Rate", "House Wrap", "Insulation Removal", "JM Spider - R15 - Labor Rate", "JM Spider - R21 - Labor Rate", "JM Spider Plus Spray Insulation", "Knauf Jet Stream Ultra Blowing Wool (Owens Corning)", "Kraken Spray Foam Insulation", "Labor", "Mineral Wool - Can Light Covers", "Netting - Insulweb Fabric", "NO-BURN Intumescent Thermal Coating", "Owens Corning ProPink L77 (Owens Corning)", "Post Drywall Air Seal", "Pre Hang Labor - House Wrap", "Pre Hang Labor - Thermo Ply", "Pre Hang Tubs/FP - House Wrap", "Pre Hang Tubs/FP ? House Wrap (Large)", "Pre Hang Tubs/FP ? House Wrap (Mid Size)", "Pre Hang Tubs/FP ? Thermo Ply (Large)", "Pre Hang Tubs/FP ? Thermo Ply (Mid Size)", "Pre Hang Tubs/FP ? Thermo Ply (Standard)", "Premium Caulk & Foam Air Package", "Premium Caulk & Foam Labor", "R11/15/8' KRAFT (Owens Corning)", "R11/15/8' UF (Owens Corning)", "R11/15/9' UF (Owens Corning)", "R11/16 UF (Owens Corning)", "R11/23/8' KRAFT (Owens Corning)", "R11/23/8' UF (Owens Corning)", "R11/24 UF (Owens Corning)", "R13/15/8' KRAFT (Owens Corning)", "R13/15/8' UF (Owens Corning)", "R13/15/9' KRAFT (Owens Corning)", "R13/15/9' UF (Owens Corning)", "R13/16 KRAFT (Owens Corning)", "R13/16 UF (Owens Corning)", "R13/23/8' KRAFT (Owens Corning)", "R13/23/8' UF (Owens Corning)", "R13/24 UF (Owens Corning)", "R13x15x105k", "R15/15/8' KRAFT (Owens Corning)", "R15/15/8' UF (Owens Corning)", "R15/15/9' KRAFT (Owens Corning)", "R15/15/9' UF (Owens Corning)", "R15/16 KRAFT (Owens Corning)", "R15/16 UF (Owens Corning)", "R15/23/8' KRAFT (Owens Corning)", "R15/23/8' UF (Owens Corning)", "R15/24 UF (Owens Corning)", "R19/15 UF (Owens Corning)", "R19/15/4' UF (Owens Corning)", "R19/15/8' KRAFT (Owens Corning)", "R19/15/8' UF (Owens Corning)", "R19/15/9' KRAFT (Owens Corning)", "R19/15/9' UF (Owens Corning)", "R19/16 KRAFT (Owens Corning)", "R19/16 UF (Owens Corning)", "R19/19 KRAFT (Owens Corning)", "R19/19 UF (Owens Corning)", "R19/23/4' UF (Owens Corning)", "R19/23/8' KRAFT (Owens Corning)", "R19/23/8' UF (Owens Corning)", "R19/24 KRAFT (Owens Corning)", "R19/24 UF (Owens Corning)", "R19x15x105k", "R20/15/8' KRAFT (Owens Corning)", "R20/15/8' UF (Owens Corning)", "R20/15/9' UF (Owens Corning)", "R21/15/8' KRAFT (Owens Corning)", "R21/15/8' UF (Owens Corning)", "R21/15/9' KRAFT (Owens Corning)", "R21/15/9' UF (Owens Corning)", "R21/16 KRAFT (Owens Corning)", "R21/16 UF (Owens Corning)", "R21/23/8' KRAFT (Owens Corning)", "R21/23/8' UF (Owens Corning)", "R21/24 UF (Owens Corning)", "R30/16 KRAFT (Owens Corning)", "R30/16 UF (Owens Corning)", "R30/19 KRAFT (Owens Corning)", "R30/19 UF (Owens Corning)", "R30/24 KRAFT (Owens Corning)", "R30/24 UF (Owens Corning)", "R38/16 KRAFT (Owens Corning)", "R38/16 UF (Owens Corning)", "R38/19 UF (Owens Corning)", "R38/24 KRAFT (Owens Corning)", "R38/24 UF (Owens Corning)", "Red Devil Acrylic Painters Caulk", "Right Choice Caulk & Foam Air Package", "Right Choice Caulk & Foam Labor", "Rockwool AFB - 3\"/16\"", "Rockwool AFB - 3\"/24\"", "Rockwool AFB - 5\"/16\"", "Rockwool AFB - 5\"/24\"", "Rockwool Comfort Batt (R13) - 3.5\"/15\"", "Rockwool Comfort Batt (R13) - 3.5\"/23\"", "Rockwool Comfort Batt (R15) - 3.5\"/15\"", "Rockwool Comfort Batt (R15) - 3.5\"/23\"", "Rockwool Comfort Batt (R21) - 5.5\"/15\"", "Rockwool Comfort Batt (R21) - 5.5\"/23\"", "Santa - Fe Advance Dehumidifier Pump Kit", "Santa - Fe Compact 70 Pint Dehumidifier", "Santa - FE Compact 90 Pint Dehumidifier", "Service Call - SALES REP", "Service Call - Vented Fireplace", "Service Call - Ventless Fireplace", "Soudal Fireblock Gun Foam", "Standard Caulk & Foam Air Package", "Standard Caulk & Foam Labor", "SWD Urethane QS450 Closed Cell Spray Foam Insulation", "Thermo Ply (T-Ply)", "Trip Charge", "Viper Tape"];
+const FG_WORK_AREAS = ["16\" Tiger Teeth", "17\" Tiger Teeth", "2/4 Basement Seperation Wall", "2/4 Concrete Wall", "2/4 Corridor Walls", "2/4 Daylight Walls", "2/4 Demising Walls", "2/4 Exterior Walls", "2/4 Garage Common Wall", "2/4 Garage Walls", "2/4 Interior Walls", "2/4 Knee Walls", "2/4 Party Walls", "2/6 Basement Seperation Wall", "2/6 Concrete Wall", "2/6 Corridor Walls", "2/6 Daylight Walls", "2/6 Exterior Walls", "2/6 Garage Common Wall", "2/6 Garage Walls", "2/6 Interior Walls", "2/6 Knee Walls", "2/6 Party Walls", "21\" Tiger Teeth", "26\" Tiger Teeth", "Air Infiltration", "Attic", "Attic Bands", "Attic Gables", "Attic Insulation Removal", "Attic Locations", "Back Porch Ceiling", "Bands", "Basement Bands", "Basement Ceiling", "Basement Ceiling Sound", "Basement Concrete Walls", "Basement Garage Concrete Walls", "Basement Garage Metal Ceiling", "Basement Great Room", "Basement Interior Walls", "Basement Level Metal Pan", "Between Floors", "Block Building Exterior Walls", "Blower Door Test", "Bonus Roofline", "Bonus Room Dead Air", "Bonus Room Knee Walls", "Bonus Room Slopes", "Bonus Room Subfloor", "Building Envelope", "Cantilever", "Closed Vaulted Ceiling", "CMU Wall", "Concrete Crawl Walls", "Concrete Parking Deck Ceiling", "Corridor Ceilings", "Crawl", "Crawl Bands", "Crawl Encapsulation", "Crawl Floor", "Crawl Space Foundation Walls", "Crawl Space Removal", "Crawl Space Subfloor", "Crawl Walls", "Dead Air space", "Deck Fireplace", "Detached Garage Gables", "Detached Garage Roofline", "Duct Blaster Test", "Elevator Shaft Walls", "Entire House", "Eves", "Exterior Walls", "Fireblocking & Draft Stopping", "Fireplace Chase", "Front Porch Ceiling", "Gables", "Garage Attic", "Garage Bands", "Garage Ceiling", "Garage Roofline", "Garage Storage Room", "Great Room Interior Walls", "Guest Bathroom Interior Walls", "Guest Bedroom Interior Walls", "HVAC Platform", "HVAC Units", "Intumescent Paint at Exposed Foam", "Kitchen Fireplace", "Labor", "Laundry Room Interior Walls", "Living Room Ceiling", "Living Room Fireplace", "Living Room Interior Walls", "Main Level Attic Spaces", "Main Level Bands", "Main Level Concrete Walls", "Main Level Interior Walls", "Main Level Walls", "Master Bathroom Fireplace", "Master Bathroom Interior Walls", "Master Bedroom Ceiling", "Master Bedroom Fireplace", "Master Bedroom Interior Walls", "Mechanical Closet", "Mechanical Room Ceiling", "Metal Pan at Front Entry", "Office Fireplace", "Open Gables", "Open Knee Walls", "Open Vaulted Ceiling", "Outdoor Fireplace", "Outdoor Living Area Attic", "Over Hang", "Pool House Gables", "Pool House Roofline", "Porch Ceiling", "Porch Gables", "Porch Roofline", "Powder Room Interior Walls", "Pre Hang Tubs", "Prep/Clean", "Rim Joist", "Roofline", "Roofline Including Garage", "Safe Room Ceiling", "Safe Room Walls", "Separation Walls", "Soffit Locations", "Spray Down Sheetrock Ceiling", "Stair Shaft Walls", "Sundroom Exterior Walls", "Sunroom Subfloor", "Terrace Level Fireplace", "Top Of Interior Walls", "Tray Ceiling", "Trip Charge", "Tubs", "Unfinished Basement Ceiling", "Upstairs Exterior Walls", "Upstairs Interior Walls", "Vaulted Ceiling Locations", "Zip Seam Tape"];
+const FG_ITEM_SET = new Set(FG_ITEM_NAMES);
+const FG_AREA_BY_SECTION = {
+  "Attic prep": "Attic Insulation Removal", "Crawl prep": "Crawl Space Removal", "Crawl touch-up": "Crawl Space Subfloor",
+  "Crawl subfloor": "Crawl Space Subfloor", "Poly": "Crawl Floor", "Attic blow": "Attic", "Attic batts": "Attic",
+  "Dead air": "Dead Air space", "Open vault": "Open Vaulted Ceiling", "Closed vault": "Closed Vaulted Ceiling", "Poly vent": "Closed Vaulted Ceiling",
+  "Knee wall": "2/4 Knee Walls", "Knee wrap": "Open Knee Walls", "Baffles": "Eves", "Roof foam": "Roofline",
+  "Porch roof foam": "Porch Roofline", "Porch ceiling": "Porch Ceiling", "Porch gable-off": "Porch Gables",
+  "UFBC": "Unfinished Basement Ceiling", "Encap poly": "Crawl Encapsulation", "Seam taping": "Crawl Encapsulation",
+  "Crawl wall foam": "Crawl Space Foundation Walls", "Dehumidifier": "Crawl Encapsulation", "Band / rim": "Rim Joist",
+  "Wall — 2x4 exterior (R-13)": "2/4 Exterior Walls", "Wall — 2x6 exterior (R-19)": "2/6 Exterior Walls",
+  "Wall — Daylight basement (R-19)": "2/6 Daylight Walls", "Wall — Concrete basement (R-13)": "2/4 Concrete Wall",
+  "Wall — Garage exterior": "2/4 Garage Walls", "Wall — Interior": "2/4 Interior Walls", "Interior walls": "2/4 Interior Walls",
+  "Between floors (sound)": "Between Floors", "Gable": "Attic Gables", "Gable wrap": "Attic Gables", "Cantilever": "Cantilever",
+  "Garage roof foam": "Garage Roofline", "Garage ceiling": "Garage Ceiling", "Floor dense-pack": "Bonus Room Subfloor",
+  "Air seal (caulk & foam)": "Air Infiltration", "Air seal add-on": "Air Infiltration", "Extra labor": "Labor", "Miscellaneous": "Entire House",
+};
+const FG_NET_AREA = { "Interior": "2/4 Interior Walls", "Interior walls": "2/4 Interior Walls", "Between floors": "Between Floors", "Dense-pack": "Bonus Room Subfloor" };
+const OC = " (Owens Corning)";
+const WALL_SECS = ["Wall — 2x4 exterior (R-13)", "Wall — 2x6 exterior (R-19)", "Wall — Daylight basement (R-19)", "Wall — Concrete basement (R-13)", "Wall — Garage exterior"];
+const INT_SECS = ["Wall — Interior", "Interior walls"];
+const FG_RULES = [
+  // —— blown ——
+  ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r, label: "Blown fiberglass R-" + r + " (new)", key: "Blown fiberglass R-" + r, sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool" + OC], rv: "key", conf: "sure", note: "RValue column carries R" + r + ". Alt: Owens Corning ProPink L77." })),
+  ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r + "_retro", label: "Blown fiberglass R-" + r + " (retro / Add Attic Blow)", key: "Blown fiberglass R-" + r + " (retro)", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool" + OC], rv: "key", conf: "sure", note: "Same item as new; FG showed 'R38 Retro Blow: Knauf Jet Stream…' so retro is set by the estimate, not the item." })),
+  ...["30", "38"].map(r => ({ id: "blow_cel_r" + r, label: "Blown cellulose R" + r, key: "Blown cellulose R" + r, sec: "*", items: ["Blown Cellulose Insulation for Open Attics" + OC], rv: "key", conf: "sure", note: "Alt: GreenFiber Cellulose." })),
+  // —— batts: walls ——
+  { id: "wall_r13", label: "R-13 batts — exterior / concrete / garage walls", key: "R-13 fiberglass batts", sec: WALL_SECS, items: ["R13/{w}/{h}' KRAFT" + OC, "R13/{W} KRAFT" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Kraft-faced; 16 OC→15\", 24 OC→23\"; 8'/9' precuts, other heights → R13/16 KRAFT roll (24 OC → R13/24 UF, no kraft 24\" roll)." },
+  { id: "wall_r19", label: "R-19 batts — 2x6 / daylight / garage walls", key: "R-19 fiberglass batts", sec: WALL_SECS, items: ["R19/{w}/{h}' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "guess", note: "Kraft-faced; 8'/9' precuts else R19/16 or R19/24 KRAFT. Mixed-height merged lines use the roll." },
+  { id: "int_r13", label: "R-13 sound batts — interior walls", key: "R-13 fiberglass batts", sec: INT_SECS, items: ["R13/{w}/{h}' UF" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Unfaced for sound walls." },
+  { id: "knee_r19", label: "R-19 batts — knee walls", key: "R-19 fiberglass batts", sec: ["Knee wall"], items: ["R19/{w}/8' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "guess", note: "Kraft 8' precut by OC. Work area 2/4 Knee Walls (alt Bonus Room Knee Walls)." },
+  { id: "gable_batts", label: "Gable batts (non-foam)", key: "R-13 fiberglass batts", sec: ["Gable"], items: ["R13/{W} KRAFT" + OC], conf: "guess", note: "App doesn't track gable OC → 16\" roll." },
+  // —— batts: ceilings / floors ——
+  { id: "attic_batts", label: "Attic floor batts R19/R30/R38 (custom mix)", key: "R-{r} fiberglass batts", sec: ["Attic batts"], items: ["R{r}/24 UF" + OC], conf: "guess", note: "Unfaced 24\" (trusses). R-49 has no FG batt item." },
+  { id: "deadair_r38", label: "Dead air R38 batts", key: "R-38 fiberglass batts", sec: ["Dead air"], items: ["R38/24 UF" + OC], conf: "guess", note: "Unfaced 24\"." },
+  { id: "openvault_r38", label: "Open vault R38 batts", key: "R-38 fiberglass batts", sec: ["Open vault"], items: ["R38/16 KRAFT" + OC], conf: "guess", note: "App doesn't track rafter OC → 16\" kraft." },
+  { id: "closedvault_r30", label: "Closed (decked) vault R30 batts", key: "R-30 fiberglass batts", sec: ["Closed vault"], items: ["R30/16 KRAFT" + OC], conf: "guess", note: "16\" kraft." },
+  { id: "crawl_batts", label: "Crawl subfloor / touch-up / new batts", key: "R-{r} fiberglass batts", sec: ["Crawl subfloor", "Crawl touch-up"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "guess", note: "R19 → R19/15/4' UF (or 23\" at 24 OC); R13/R30 → 16\" UF roll." },
+  { id: "ufbc_batts", label: "UFBC (unfinished basement ceiling) batts", key: "R-{r} fiberglass batts", sec: ["UFBC"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "guess", note: "Same as crawl subfloor." },
+  { id: "rim_r19", label: "Rim joist R19 batts (LF × 1.2)", key: "R-19 fiberglass batts", sec: ["Band / rim"], items: ["R19x15x105k"], conf: "guess", note: "Looks like a 15\" kraft R19 item; alt R19/15/4' UF. Qty = LF×1.2 exported as SqFt." },
+  { id: "bf_r13", label: "Between floors R13 sound batts", key: "R-13 fiberglass batts", sec: ["Between floors (sound)"], items: ["R13/16 UF" + OC], conf: "guess", note: "" },
+  { id: "bf_r19", label: "Between floors R19 batts", key: "R-19 fiberglass batts", sec: ["Between floors (sound)"], items: ["R19/16 UF" + OC], conf: "guess", note: "" },
+  { id: "cant_batts", label: "Cantilever batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Cantilever"], items: ["R{r}/16 KRAFT" + OC], conf: "guess", note: "" },
+  { id: "garage_batts", label: "Garage ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Garage ceiling"], items: ["R{r}/16 UF" + OC], conf: "guess", note: "Unfaced 16\" (installed from below)." },
+  { id: "porch_batts", label: "Porch ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Porch ceiling"], items: ["R{r}/16 UF" + OC], conf: "guess", note: "" },
+  // —— rock wool ——
+  { id: "comfortbat", label: "ComfortBat R15", key: "ComfortBat R15", sec: "*", items: ['Rockwool Comfort Batt (R15) - 3.5"/{w}"'], conf: "sure", note: "15\" or 23\" by OC (between floors → 15\")." },
+  { id: "acoustical", label: 'AcousticalBat 3"', key: 'AcousticalBat 3"', sec: "*", items: ['Rockwool AFB - 3"/{W}"'], conf: "sure", note: "AFB = acoustical fire batt; 16\"/24\" by OC." },
+  // —— foam ——
+  { id: "oc_roof", label: "Open-cell foam — roofline / porch / garage roof / 5–5.5\"", key: "Open-cell foam (roofline)", sec: "*", items: ["ENVERGE EasySeal .5 Open Cell Spray Foam"], depth: true, conf: "guess", note: "Depth column = inches. Alt open-cell: Kraken Spray Foam Insulation." },
+  { id: "oc_walls", label: "Open-cell foam — walls / gables / bands / between floors 3.5\"", key: "Open-cell foam (walls)", sec: "*", items: ["ENVERGE EasySeal .5 Open Cell Spray Foam"], depth: true, conf: "guess", note: "Depth 3.5." },
+  ...["1", "2", "3"].map(d => ({ id: "cc" + d, label: 'Closed-cell foam ' + d + '"', key: 'Closed-cell foam ' + d + '"', sec: "*", items: ["ENVERGE OnePass 2.0 Closed Cell Spray Foam"], depth: true, conf: "guess", note: "Alt: SWD Urethane QS450 Closed Cell." })),
+  // —— cellulose / spider ——
+  { id: "cel35", label: 'Cellulose walls 3.5"', key: 'Cellulose walls 3.5"', sec: "*", items: ["GreenFiber Cellulose - R13 - Labor Rate"], conf: "guess", note: "Alt: GreenFiber Cellulose." },
+  { id: "cel55", label: 'Cellulose walls 5.5"', key: 'Cellulose walls 5.5"', sec: "*", items: ["GreenFiber Cellulose - R19 - Labor Rate"], conf: "guess", note: "" },
+  { id: "spi35", label: 'Spider walls 3.5"', key: 'Spider walls 3.5"', sec: "*", items: ["JM Spider - R15 - Labor Rate"], conf: "sure", note: "" },
+  { id: "spi55", label: 'Spider walls 5.5"', key: 'Spider walls 5.5"', sec: "*", items: ["JM Spider - R21 - Labor Rate"], conf: "sure", note: "" },
+  { id: "dense_cel", label: "Dense-pack floors (cellulose)", key: "Dense-pack floors", sec: "*", items: ["Cellulose - Dense Pack Floor System"], conf: "sure", note: "" },
+  { id: "dense_spi", label: "Dense-pack floors (spider)", key: "Dense-pack floors (spider)", sec: "*", items: ["JM Spider Plus Spray Insulation"], conf: "guess", note: "No spider dense-pack item in FG." },
+  { id: "netting", label: "Netting", key: "Netting", sec: "*", items: ["Netting - Insulweb Fabric"], conf: "sure", note: "Work area follows what it nets (walls / between floors / floors)." },
+  // —— removal / prep ——
+  { id: "rm_suck", label: "Attic suck-out", key: "Attic suck-out", sec: "*", items: ["Insulation Removal"], conf: "sure", note: "" },
+  { id: "rm_batt", label: "Attic batt removal", key: "Attic batt removal", sec: "*", items: ["Insulation Removal"], conf: "sure", note: "" },
+  { id: "rm_crawl", label: "Crawl insulation removal", key: "Crawl insulation removal", sec: "*", items: ["Insulation Removal"], conf: "sure", note: "" },
+  // —— crawl / encap ——
+  { id: "poly6", label: "6 mil poly", key: "6 mil poly", sec: "*", items: ["6 Mil Poly"], conf: "sure", note: "" },
+  { id: "poly10", label: "10 mil poly", key: "10 mil poly", sec: "*", items: ["10 Mil Poly"], conf: "sure", note: "" },
+  { id: "seamtape", label: "Seam taping (10 mil)", key: "Seam taping (10 mil)", sec: "*", items: ["Viper Tape"], conf: "guess", note: "" },
+  { id: "dehu", label: "Dehumidifier", key: "Dehumidifier", sec: "*", items: ["Santa - Fe Compact 70 Pint Dehumidifier"], uom: "Ea.", conf: "guess", note: "Alt: 90 pint; pump kit not added." },
+  // —— misc materials ——
+  { id: "housewrap", label: "House wrap (knee / gable / porch gable-off)", key: "House wrap", sec: "*", items: ["House Wrap"], conf: "sure", note: "" },
+  { id: "baffles", label: "Cardboard baffles", key: "Cardboard baffles", sec: "*", items: ['Baffles - 24"'], uom: "Pieces", conf: "guess", note: "Alt: Baffles - 16\" / 12x48 Vent Chutes." },
+  { id: "polyvent", label: "Poly vents (closed vault)", key: "Poly vent", sec: "*", items: ['16" Poly-Vent'], uom: "Pieces", conf: "guess", note: "Alt: 24\" Poly-Vent." },
+  { id: "airseal", label: "Air seal (caulk & foam)", key: "Air seal", sec: "*", items: ["Standard Caulk & Foam Air Package"], uom: "Ea.", conf: "guess", note: "Alt: Right Choice / Premium / Energy Star package, Attic Air Seal Kit." },
+  { id: "airseal_add", label: "Air seal add-on $", key: "Air seal add-on", sec: "*", items: ["Standard Caulk & Foam Labor"], uom: "Ea.", conf: "guess", note: "Fixed $ → UnitPrice always filled." },
+  { id: "extralabor", label: "Extra labor $", key: "Extra labor", sec: "*", items: ["Labor"], uom: "Ea.", conf: "sure", note: "Fixed $ → UnitPrice always filled." },
+];
+const FG_MAP_KEY = "kp-fg-map-v1", FG_PRICE_KEY = "kp-fg-prices-v1";
+function fgOverrides() { try { return JSON.parse(lsGet(FG_MAP_KEY) || "{}") || {}; } catch (e) { return {}; } }
+function fgSection(a) { return String(a || "").replace(/^(Gable)\s*\([^)]*\)\s*$/, "$1").trim(); }
+function fgVars(L, key) {
+  const d = String(L.description || "");
+  let oc = "16";
+  const m1 = d.match(/(16|24) OC/); const m2 = d.match(/(?:^|\/)\s*(15|23|24)\s*(?:\/|$)/);
+  if (m1) oc = m1[1]; else if (m2) oc = m2[1] === "15" ? "16" : "24";
+  const hm = d.match(/\/\s*(\d+(?:\.\d+)?)'\s*(?:\(|$)/);
+  const h = hm && (hm[1] === "8" || hm[1] === "9") ? hm[1] : null;
+  const rm = String(key || "").match(/R-?(\d+)/);
+  return { w: oc === "24" ? "23" : "15", W: oc, h, r: rm ? rm[1] : "" };
+}
+function fgRuleFor(L) {
+  const sec = fgSection(L.assembly);
+  const key = L.dollars != null ? L.product : priceKeyFor(L);
+  const esc = t => t.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&");
+  const keyOk = r => r.key === key || (r.key.indexOf("{r}") >= 0 && new RegExp("^" + r.key.split("{r}").map(esc).join("\\d+") + "$").test(key));
+  return FG_RULES.find(r => keyOk(r) && r.sec !== "*" && r.sec.indexOf(sec) >= 0) || FG_RULES.find(r => keyOk(r) && r.sec === "*") || null;
+}
+function fgResolve(L) {
+  const rule = fgRuleFor(L);
+  const sec = fgSection(L.assembly);
+  if (!rule) {
+    if (L.assembly === "Miscellaneous" && FG_ITEM_SET.has(String(L.product).trim())) { const u = String(L.unit || "").toUpperCase(); return { item: String(L.product).trim(), area: "Entire House", depth: "", rv: "", uom: u === "SF" || u === "LF" ? "SqFt" : u === "BAGS" ? "Bags" : "Ea.", rule: null }; }
+    return null;
+  }
+  const key = L.dollars != null ? L.product : priceKeyFor(L), v = fgVars(L, key), ov = fgOverrides()[rule.id] || {};
+  let item = (ov.item || "").trim();
+  if (!item) {
+    for (const t of rule.items) {
+      if (t.indexOf("{h}") >= 0 && !v.h) continue;
+      const s = t.replace(/\{w\}/g, v.w).replace(/\{W\}/g, v.W).replace(/\{h\}/g, v.h || "").replace(/\{r\}/g, v.r);
+      if (FG_ITEM_SET.has(s)) { item = s; break; }
+    }
+  }
+  if (!item) return null;
+  let area = (ov.area || "").trim() || rule.area || "";
+  if (!area && rule.id === "netting") area = FG_NET_AREA[String(L.area || "").replace(/\s*#\d+$/, "")] || FG_AREA_BY_SECTION[sec] || "";
+  if (!area) area = FG_AREA_BY_SECTION[sec] || (/^Wall/.test(sec) ? "Exterior Walls" : "Entire House");
+  let depth = "";
+  if (rule.depth) { const dm = (String(L.description || "") + " " + key).match(/(\d+(?:\.\d+)?)"/); if (dm) depth = Number(dm[1]); }
+  const rv = rule.rv === "key" && v.r ? Number(v.r) : "";
+  const u = String(L.unit || "").toUpperCase();
+  const uom = rule.uom || (u === "SF" || u === "LF" ? "SqFt" : u === "EA" ? "Ea." : u === "BAGS" ? "Bags" : "Ea.");
+  return { item, area, depth, rv, uom, rule };
+}
+function fgEstimateType(pkg) {
+  const F = flags();
+  if (S.jobMode === "retro") {
+    if (F.isAtticRetro) return /foam/.test(S.atticRetro) ? "Spray Foam - Retrofit" : "Attic Blow";
+    return S.crawlRetro === "remove_encap" ? "Crawl Encapsulation" : "Retrofit Application";
+  }
+  if (pkg === "standard") return "Fiberglass";
+  if (pkg === "total_foam") return "Spray Foam - New Construction";
+  if (pkg === "crawl_encap") return "Crawl Encapsulation";
+  if (pkg === "custom") { const p = pkgProfile("custom"); if (p.totalFoam && p.onlyAttic) return "Spray Foam - New Construction"; return p.foamRoof ? "Hybrid - Foam Roofline/Fiberglass Walls" : "Fiberglass"; }
+  return "Hybrid - Foam Roofline/Fiberglass Walls";
+}
+function fgPricesOn() { return lsGet(FG_PRICE_KEY) === "1"; }
+// Returns { rows: [[33 values]...], skipped: [text], estimates: [names] }
+function fgBuildRows() {
+  const site = (S.address || "").trim(), city = (S.city || "").trim(), st = (S.siteState || "").trim(), zip = (S.siteZip || "").trim();
+  const first = (S.custFirst || "").trim(), last = (S.custLast || "").trim();
+  const company = (S.custCompany || "").trim() || (!first && !last ? (S.builder || "").trim() : "");
+  const same = S.billSame !== false;
+  const bill = same ? [site, city, st, zip] : [(S.billAddress || "").trim(), (S.billCity || "").trim(), (S.billState || "").trim(), (S.billZip || "").trim()];
+  const project = site || (S.builder || "").trim() || "Job";
+  const projType = S.jobMode === "retro" ? "Retrofit" : "Residential";
+  const ests = [];
+  if (optionsOn()) optionPkgs().forEach((k, i) => ests.push({ name: project + " - " + optionTitle(i), type: fgEstimateType(k), lines: optionLines(i) }));
+  else {
+    const lbl = S.jobMode === "retro" ? packageLabel().replace(/ · FP .*$/, "") : (PACKAGE_LABELS[S.pkg] || S.pkg);
+    ests.push({ name: project + " - " + lbl, type: fgEstimateType(S.pkg), lines: allLines() });
+  }
+  const scale = marginPct() / MARGIN_BASE, priceMap = new Map();
+  S.priceLibrary.forEach(p => { const u = n(p.unitPrice40); if (u > 0) priceMap.set(p.materialKey, u); });
+  const rows = [], skipped = new Set();
+  ests.forEach(E => E.lines.forEach(L => {
+    if (lineIsUnpriced(L)) return;
+    const r = fgResolve(L);
+    if (!r) { skipped.add(L.product + (L.description ? " — " + L.description : "")); return; }
+    let price = "";
+    if (L.dollars != null) price = round2(n(L.dollars));
+    else if (fgPricesOn()) { const u = priceMap.get(priceKeyFor(L)); if (u > 0) price = Math.round(u * (L.fixed ? 1 : scale) * 10000) / 10000; }
+    const qty = n(L.footage);
+    rows.push([company, first, last, (S.custEmail || "").trim(), (S.custPhone || "").trim(), bill[0], bill[1], bill[2], bill[3],
+      project, site, city, st, zip, (S.subdivision || "").trim(), "", projType, E.name, E.type, "Base Estimate", "No", "",
+      r.item, r.area, qty, r.uom, r.depth, r.rv, "No", "", price, "", ""]);
+  }));
+  return { rows, skipped: Array.from(skipped), estimates: ests.map(e => e.name) };
+}
+function fgXlsx(rows) {
+  const colL = i => { let s = ""; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+  const cell = (ref, v, style) => (typeof v === "number")
+    ? '<c r="' + ref + '"' + (style ? ' s="' + style + '"' : "") + '><v>' + v + "</v></c>"
+    : '<c r="' + ref + '" t="inlineStr"' + (style ? ' s="' + style + '"' : "") + "><is><t xml:space=\"preserve\">" + xmlEsc(v) + "</t></is></c>";
+  const out = ['<row r="1">' + FG_HEADERS.map((h, i) => cell(colL(i) + "1", h, 1)).join("") + "</row>"];
+  rows.forEach((R, k) => {
+    const r = k + 2;
+    out.push('<row r="' + r + '">' + R.map((v, i) => (v === "" || v == null) ? "" : cell(colL(i) + r, v)).join("") + "</row>");
+  });
+  const widths = FG_HEADERS.map((h, i) => '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + (i === 0 ? 25 : i === 22 ? 30 : i === 23 ? 20 : 18) + '" customWidth="1"/>').join("");
+  const last = colL(FG_HEADERS.length - 1);
+  const x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  const sheet = x + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:' + last + (rows.length + 1) + '"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" state="frozen" activePane="bottomLeft"/></sheetView></sheetViews><cols>' + widths + '</cols><sheetData>' + out.join("") + '</sheetData><autoFilter ref="A1:' + last + '1"/></worksheet>';
+  const files = [
+    { name: "[Content_Types].xml", data: x + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
+    { name: "_rels/.rels", data: x + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: "xl/workbook.xml", data: x + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="EstimateImport" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">\'EstimateImport\'!$A$1:$' + last + '$1</definedName></definedNames></workbook>' },
+    { name: "xl/_rels/workbook.xml.rels", data: x + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+    { name: "xl/styles.xml", data: x + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFB0C4DE"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>' },
+    { name: "xl/worksheets/sheet1.xml", data: sheet }
+  ];
+  return KPWO.zipStore(files);
+}
+function fgFileName() { return ((S.address || "").trim() || (S.builder || "").trim() || "Job").replace(/[\\/:*?"<>|]+/g, "-") + " - FieldGroove import.xlsx"; }
+function exportFieldGroove() {
+  const st = $("fgStatus");
+  const res = fgBuildRows();
+  window.__lastFg = res;
+  if (!res.rows.length) { if (st) st.textContent = "Nothing to export — no mapped lines."; return Promise.resolve(); }
+  const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const bytes = fgXlsx(res.rows), name = fgFileName();
+  const msg = res.rows.length + " line" + (res.rows.length > 1 ? "s" : "") + " · " + res.estimates.length + " estimate" + (res.estimates.length > 1 ? "s" : "") +
+    (res.skipped.length ? " · not mapped (left out): " + res.skipped.join("; ") : "");
+  let file = null; try { file = new File([bytes], name, { type: XT }); } catch (e) {}
+  const dl = () => { const url = URL.createObjectURL(new Blob([bytes], { type: XT }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); if (st) st.textContent = "Downloaded " + name + " — " + msg; };
+  if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+    return navigator.share({ files: [file], title: name }).then(() => { if (st) st.textContent = "Shared " + name + " — " + msg; },
+      err => { if (err && err.name === "AbortError") { if (st) st.textContent = "Share cancelled."; } else dl(); });
+  }
+  dl(); return Promise.resolve();
+}
+function renderFgMap() {
+  const box = $("fgMapList"); if (!box) return;
+  const ov = fgOverrides();
+  let dl = '<datalist id="fgItemsDl">' + FG_ITEM_NAMES.map(s => '<option value="' + escHtml(s) + '">').join("") + '</datalist><datalist id="fgAreasDl">' + FG_WORK_AREAS.map(s => '<option value="' + escHtml(s) + '">').join("") + "</datalist>";
+  box.innerHTML = dl + FG_RULES.map(r => {
+    const o = ov[r.id] || {};
+    return '<div class="fgmap-row" data-id="' + r.id + '"><div class="cap"><strong>' + escHtml(r.label) + "</strong> · " + r.conf + "</div>" +
+      '<div class="grid2"><input list="fgItemsDl" data-f="item" placeholder="' + escHtml(r.items[0]) + '" value="' + escHtml(o.item || "") + '">' +
+      '<input list="fgAreasDl" data-f="area" placeholder="' + escHtml(r.area || "(by section)") + '" value="' + escHtml(o.area || "") + '"></div></div>';
+  }).join("");
+  box.querySelectorAll(".fgmap-row input").forEach(inp => {
+    inp.onchange = () => {
+      const id = inp.closest(".fgmap-row").dataset.id, f = inp.dataset.f, cur = fgOverrides();
+      cur[id] = Object.assign({}, cur[id]); const v = inp.value.trim();
+      if (v) cur[id][f] = v; else delete cur[id][f];
+      if (!Object.keys(cur[id]).length) delete cur[id];
+      lsSet(FG_MAP_KEY, JSON.stringify(cur));
+      const bad = f === "item" && v && !FG_ITEM_SET.has(v), bad2 = f === "area" && v && FG_WORK_AREAS.indexOf(v) < 0;
+      const note = $("fgMapNote"); if (note) note.textContent = (bad || bad2) ? "Saved — note “" + v + "” isn't in FieldGroove's list (FG may reject it)." : "Saved.";
+    };
+  });
+}
+
 function wallModeOptions() {
   const all = [["batt","Batt"],["foam","Foam"],["cellulose","Cellulose"],["spider","Spider"],["comfortbat","ComfortBat"],["acoustical","Acoustical"]];
   if (S.pkg !== "custom" || S.jobMode !== "new") return all;
@@ -2509,6 +2801,14 @@ function render() {
   $("builder").value = S.builder;
   $("city").value = S.city;
   $("address").value = S.address;
+  ["siteState", "siteZip", "subdivision", "custFirst", "custLast", "custCompany", "custPhone", "custEmail", "billAddress", "billCity", "billState", "billZip"]
+    .forEach(k => { const e = $(k); if (e && document.activeElement !== e) e.value = S[k] == null ? "" : S[k]; });
+  setSwitch($("billSame"), S.billSame !== false);
+  toggleField("billFields", S.billSame === false);
+  setSwitch($("fgPrices"), fgPricesOn());
+  setSwitch($("showFgMap"), !!S.showFgMap);
+  toggleField("fgMapBody", !!S.showFgMap);
+  if (S.showFgMap && !$("fgMapList").childElementCount) renderFgMap();
   $("dateMeasured").value = S.dateMeasured;
   $("keywords").value = S.keywords;
   $("gasType").value = S.gasType;
@@ -2614,8 +2914,14 @@ function saveDraft() {
   lsSet(DRAFT_KEY, JSON.stringify(draftPayload()));
 }
 
+const CUST_DEFAULTS = { siteState: "GA", siteZip: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
+  billSame: true, billAddress: "", billCity: "", billState: "", billZip: "" };
+function resetCustomer() { Object.keys(CUST_DEFAULTS).forEach(k => { S[k] = CUST_DEFAULTS[k]; }); }
 function migrateState(d) {
   d = d || {};
+  // customer fields (build h): jobs saved before them start blank, never inherit the previous job's customer
+  Object.keys(CUST_DEFAULTS).forEach(k => { if (!(k in d)) S[k] = CUST_DEFAULTS[k]; });
+  if (typeof S.billSame !== "boolean") S.billSame = true;
   if (d.caulkFoam) S.airSealed = true;
   if (S.fpModelId && FP_LEGACY_IDS[S.fpModelId]) S.fpModelId = FP_LEGACY_IDS[S.fpModelId];
   if (typeof S.fpChaseClear !== "boolean") S.fpChaseClear = true;
@@ -2764,6 +3070,7 @@ function newJob() {
   S.jobId = uid();
   S.dateMeasured = todayISO();
   S.builder = ""; S.city = ""; S.address = ""; S.keywords = "";
+  resetCustomer();
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard";
   S.compareOn = false; S.optionPkgs = ["standard", "hybrid_foam_batts"]; S.optionView = 0;
   S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38";
@@ -2805,6 +3112,9 @@ function wireInputs() {
     atticRetro: "atticRetro", crawlRetro: "crawlRetro", blowR: "blowR",
     flatSf: "flatSf", housePitch: "housePitch", houseCustomRise: "houseCustomRise",
     touchupPatchSf: "touchupPatchSf", marginCustom: "marginCustom",
+    siteState: "siteState", siteZip: "siteZip", subdivision: "subdivision", custFirst: "custFirst", custLast: "custLast",
+    custCompany: "custCompany", custPhone: "custPhone", custEmail: "custEmail", billAddress: "billAddress", billCity: "billCity",
+    billState: "billState", billZip: "billZip",
     airSealAddon: "airSealAddon", extraLabor: "extraLabor", extraLaborNote: "extraLaborNote",
     filterText: "filterText", filterBuilder: "filterBuilder", filterCity: "filterCity",
     filterOwner: "filterOwner", filterPkg: "filterPkg", filterFrom: "filterFrom", filterTo: "filterTo"
@@ -2838,6 +3148,11 @@ function wireInputs() {
   };
   $("btnExportOption").onclick = () => exportOptions([Math.min(S.optionView | 0, optionPkgs().length - 1)]);
   $("btnExportAll").onclick = () => exportOptions(optionPkgs().map((k, i) => i));
+  $("btnExportFg").onclick = () => exportFieldGroove();
+  $("fgPrices").onclick = () => { lsSet(FG_PRICE_KEY, fgPricesOn() ? "0" : "1"); render(); };
+  $("billSame").onclick = () => { S.billSame = S.billSame === false; render(); };
+  $("showFgMap").onclick = () => { S.showFgMap = !S.showFgMap; render(); };
+  $("btnFgMapReset").onclick = () => { if (window.confirm("Reset every FieldGroove mapping override to the default?")) { lsSet(FG_MAP_KEY, "{}"); renderFgMap(); $("fgMapNote").textContent = "Reset to defaults."; } };
   $("includeFp").onclick = () => { S.includeFp = !S.includeFp; if (S.includeFp) loadFpSpecs(); render(); };
   $("showBallpark").onclick = () => { S.showBallpark = !S.showBallpark; render(); };
   $("showPriceLib").onclick = () => { S.showPriceLib = !S.showPriceLib; render(); };
@@ -2884,7 +3199,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29g";
+const APP_BUILD = "2026-10-29h";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -3009,7 +3324,7 @@ function buildBackup() {
     saveDraft();
     let draft = null; try { draft = JSON.parse(lsGet(DRAFT_KEY) || "null"); } catch (e) {}
     return { format: BACKUP_FORMAT, version: BACKUP_VERSION, createdAt: new Date().toISOString(), app: APP_BUILD,
-      takeoff: { jobs, prices, fpSpecs: specs, draft },
+      takeoff: { jobs, prices, fpSpecs: specs, draft, fgMap: fgOverrides() },
       workOrders: { orders, kv } };
   });
 }
@@ -3115,6 +3430,12 @@ function restoreBackup(b, opts) {
     if (specPuts.length) writes.push(dbWrite(openDb, SPEC_STORE, os => specPuts.forEach(x => os.put(x))));
     if (orderPuts.length) writes.push(dbWrite(openWoDb, "orders", os => orderPuts.forEach(o => os.put(o))));
     if (kvPuts.length) writes.push(dbWrite(openWoDb, "kv", os => kvPuts.forEach(e => os.put(e.value, e.key))));
+    if (T.fgMap && typeof T.fgMap === "object") {
+      // FieldGroove mapping overrides: fill ones this phone doesn't have; never overwrite local edits
+      const cur = fgOverrides(); let added = 0;
+      Object.keys(T.fgMap).forEach(k => { if (!cur[k]) { cur[k] = T.fgMap[k]; added++; } });
+      if (added) lsSet(FG_MAP_KEY, JSON.stringify(cur));
+    }
     return Promise.all(writes).then(() => {
       if (draftAction) { S._suppressSave = true; lsSet(DRAFT_KEY, draftAction); r.draft = true; }
       return r;
