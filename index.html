@@ -1,0 +1,1871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="KP Takeoff">
+<meta name="theme-color" content="#1a1a1a">
+<meta name="description" content="Keith Porter insulation & fireplace takeoff — offline Safari">
+<title>Insulation Work Assistant</title>
+<style>
+:root {
+  --bg: #f5f5f7; --bg2: #ffffff; --bg3: #ebebef; --text: #1c1c1e; --text2: #6c6c70;
+  --accent: #0a84ff; --accent-soft: rgba(10,132,255,.15); --danger: #ff453a; --ok: #30d158;
+  --warn: #ff9f0a; --border: rgba(0,0,0,.1); --shadow: 0 2px 12px rgba(0,0,0,.08); --radius: 14px;
+  --nav-h: 64px; --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000; --bg2: #1c1c1e; --bg3: #2c2c2e; --text: #f5f5f7; --text2: #98989f;
+    --accent: #0a84ff; --accent-soft: rgba(10,132,255,.22); --danger: #ff453a; --ok: #30d158;
+    --warn: #ff9f0a; --border: rgba(255,255,255,.12); --shadow: 0 2px 16px rgba(0,0,0,.45);
+  }
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100dvh;
+  padding-top: var(--safe-t); padding-bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+  line-height: 1.4; -webkit-tap-highlight-color: transparent;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; border: none; background: none; }
+.app-header {
+  position: sticky; top: 0; z-index: 40;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  padding: 12px 16px 8px; border-bottom: 1px solid var(--border);
+}
+.app-header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+.app-header .sub { font-size: .78rem; color: var(--text2); margin-top: 2px; }
+.live-bar {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px;
+  font-size: .8rem; font-weight: 600; color: var(--text2);
+}
+.live-bar .pill {
+  background: var(--accent-soft); color: var(--accent); padding: 4px 10px; border-radius: 999px;
+}
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; padding: 10px 16px; border-radius: 12px;
+  font-weight: 600; font-size: .92rem; transition: opacity .15s, transform .1s;
+}
+.btn:active { transform: scale(.97); opacity: .85; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-secondary { background: var(--bg3); color: var(--text); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-sm { min-height: 36px; padding: 6px 12px; font-size: .85rem; border-radius: 10px; }
+.btn-block { width: 100%; }
+.tabs-panel { display: none; padding: 12px 16px 24px; }
+.tabs-panel.active { display: block; }
+.section {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow);
+}
+.section h2 { font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; }
+.section .cap { font-size: .78rem; color: var(--text2); margin-bottom: 12px; }
+.field { margin-bottom: 12px; }
+.field label {
+  display: block; font-size: .72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--text2); margin-bottom: 6px;
+}
+.field input, .field select, .field textarea {
+  width: 100%; min-height: 46px; padding: 10px 14px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--bg); outline: none;
+}
+.field textarea { min-height: 80px; resize: vertical; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+@media (max-width: 420px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+.seg {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
+}
+.seg button {
+  min-height: 40px; padding: 8px 12px; border-radius: 999px;
+  background: var(--bg3); color: var(--text2); font-size: .82rem; font-weight: 600;
+  border: 1.5px solid transparent;
+}
+.seg button.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.toggle-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 44px; padding: 6px 0; border-bottom: 1px solid var(--border);
+}
+.toggle-row:last-child { border-bottom: none; }
+.toggle-row span { font-size: .92rem; font-weight: 500; }
+.switch {
+  position: relative; width: 50px; height: 30px; border-radius: 999px;
+  background: var(--bg3); flex-shrink: 0; transition: background .15s;
+}
+.switch.on { background: var(--accent); }
+.switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px;
+  border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 4px rgba(0,0,0,.2);
+}
+.switch.on::after { transform: translateX(20px); }
+.callout {
+  padding: 12px; border-radius: 12px; margin-bottom: 12px; font-size: .88rem;
+  background: var(--accent-soft); color: var(--text);
+}
+.callout.warn { background: rgba(255,159,10,.18); }
+.callout.danger { background: rgba(255,69,58,.18); }
+.callout.ok { background: rgba(48,209,88,.18); }
+.callout strong { display: block; margin-bottom: 4px; }
+.row-card {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px; margin-bottom: 10px;
+}
+.row-card .row-title { font-weight: 700; font-size: .9rem; margin-bottom: 8px; }
+.props { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: .88rem; margin: 10px 0; }
+.props .k { color: var(--text2); }
+.props .v { font-weight: 700; text-align: right; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; border-radius: 12px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: .8rem; background: var(--bg2); }
+th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--bg3); font-size: .7rem; text-transform: uppercase; letter-spacing: .03em; position: sticky; top: 0; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.archive-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px; margin-bottom: 10px; box-shadow: var(--shadow);
+}
+.archive-card .meta { font-size: .78rem; color: var(--text2); margin-bottom: 4px; }
+.archive-card .title { font-weight: 700; margin-bottom: 8px; }
+.archive-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.bottom-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  height: calc(var(--nav-h) + var(--safe-b)); padding-bottom: var(--safe-b);
+  background: color-mix(in srgb, var(--bg2) 92%, transparent);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(4, 1fr);
+}
+.nav-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; color: var(--text2); font-size: .68rem; font-weight: 600; min-height: var(--nav-h);
+}
+.nav-btn .ico { font-size: 1.2rem; line-height: 1; }
+.nav-btn.active { color: var(--accent); }
+.hidden { display: none !important; }
+.divider { height: 1px; background: var(--border); margin: 14px 0; }
+.status { font-size: .82rem; color: var(--text2); margin-top: 8px; }
+.pass { color: var(--ok); font-weight: 800; }
+.fail { color: var(--danger); font-weight: 800; }
+.csv-box { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+<header class="app-header">
+  <h1>Insulation Work Assistant</h1>
+  <div class="sub">Keith Porter takeoff · offline Safari · Excel handoff</div>
+  <div class="live-bar" id="liveBar"></div>
+</header>
+
+<main>
+  <section id="tab-wizard" class="tabs-panel active">
+    <div class="section" id="sec-job">
+      <h2>Job header</h2>
+      <p class="cap">Owner · new/retro · package · site info. Draft autosaves.</p>
+      <div class="field"><label>Whose job?</label>
+        <div class="seg" id="seg-owner">
+          <button type="button" data-v="asher" class="active">Asher's job</button>
+          <button type="button" data-v="sky">Sky's job</button>
+        </div>
+      </div>
+      <div class="callout" id="ownerHint">Asher → FG-style secondary default (Excel still primary handoff)</div>
+      <div class="field"><label>New construction or retro?</label>
+        <div class="seg" id="seg-mode">
+          <button type="button" data-v="new" class="active">New construction</button>
+          <button type="button" data-v="retro">Retro</button>
+        </div>
+      </div>
+      <div id="retroBlock" class="hidden">
+        <div class="seg" id="seg-retroScope">
+          <button type="button" data-v="attic" class="active">Attic retro</button>
+          <button type="button" data-v="crawl">Crawl retro</button>
+        </div>
+        <div id="atticRetroFields">
+          <div class="field"><label>Attic retro path</label>
+            <select id="atticRetro">
+              <option value="suck_foam">Suck out + foam</option>
+              <option value="suck_blow" selected>Suck out + blow</option>
+              <option value="batt_blow">Batt removal + blow</option>
+              <option value="batt_foam">Batt removal + foam</option>
+              <option value="topup_blow">Top-up blow only</option>
+            </select>
+          </div>
+          <div class="field" id="blowRField"><label>Blow R-value</label>
+            <select id="blowR">
+              <option>R-19</option><option>R-30</option><option selected>R-38</option>
+            </select>
+          </div>
+        </div>
+        <div id="crawlRetroFields" class="hidden">
+          <div class="field"><label>Crawl retro path</label>
+            <select id="crawlRetro">
+              <option value="remove_replace" selected>Remove + replace</option>
+              <option value="touchup">Touch-up (tuck / patch)</option>
+              <option value="remove_encap">Remove + encapsulation</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div id="pkgField" class="field"><label>Package type</label>
+        <select id="pkg">
+          <option value="standard">Standard (blow + batts)</option>
+          <option value="hybrid_foam_batts">Hybrid foam + batts</option>
+          <option value="foam_cellulose">Foam roofline + cellulose</option>
+          <option value="foam_spider">Foam roofline + spider</option>
+          <option value="total_foam">Total foam</option>
+          <option value="crawl_encap">Crawl encapsulation</option>
+          <option value="custom">Custom mix</option>
+        </select>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Builder / customer</label><input id="builder" autocomplete="organization"></div>
+        <div class="field"><label>City</label><input id="city" placeholder="Gainesville"></div>
+      </div>
+      <div class="field"><label>Job site address</label><input id="address" placeholder="123 Main St"></div>
+      <div class="grid2">
+        <div class="field"><label>Date measured</label><input id="dateMeasured" type="date"></div>
+        <div class="field"><label>Gas type</label>
+          <select id="gasType">
+            <option value="natural" selected>Natural Gas</option>
+            <option value="propane">Propane</option>
+            <option value="idk">I Don't Know</option>
+          </select>
+        </div>
+      </div>
+      <div id="gasIdk" class="callout warn hidden"><strong>Confirm gas type</strong>Flagged for builder — no propane conversion kit auto-added.</div>
+      <div class="field"><label>Keywords / notes</label><input id="keywords" placeholder="searchable notes"></div>
+      <div class="toggle-row"><span>Air sealed?</span><button type="button" class="switch" id="airSealed"></button></div>
+      <div class="toggle-row"><span>Caulked and foamed?</span><button type="button" class="switch" id="caulkFoam"></button></div>
+      <div class="toggle-row"><span>Also compute alternate package (same flat)</span><button type="button" class="switch" id="alsoAlt"></button></div>
+      <div id="altPkgField" class="field hidden"><label>Alternate package</label>
+        <select id="altPkg">
+          <option value="hybrid_foam_batts">Hybrid foam + batts</option>
+          <option value="standard">Standard (blow + batts)</option>
+          <option value="foam_cellulose">Foam roofline + cellulose</option>
+          <option value="foam_spider">Foam roofline + spider</option>
+          <option value="total_foam">Total foam</option>
+          <option value="crawl_encap">Crawl encapsulation</option>
+          <option value="custom">Custom mix</option>
+        </select>
+      </div>
+      <div class="grid2" style="margin-top:10px">
+        <button type="button" class="btn btn-primary" id="btnSaveArchive">Save to archive</button>
+        <button type="button" class="btn btn-secondary" id="btnNewJob">New job</button>
+      </div>
+      <p class="status" id="statusNote"></p>
+    </div>
+
+    <div class="section" id="sec-assemblies">
+      <h2>What's on this house + footprint</h2>
+      <p class="cap">Gates skip unused assemblies. Foam roof packages skip dead air / vaults / knees. Flat asked once.</p>
+      <div id="gates"></div>
+      <div class="divider"></div>
+      <div class="field"><label>Flat footprint SF (once)</label><input id="flatSf" type="number" inputmode="decimal" min="0" step="any"></div>
+      <div id="pitchBlock" class="hidden">
+        <div class="field"><label>House roof pitch</label><select id="housePitch"></select></div>
+        <div class="field hidden" id="houseCustomRiseField"><label>Custom rise (over 12)</label><input id="houseCustomRise" type="number" inputmode="decimal"></div>
+        <div class="props"><span class="k">Foam roof from flat</span><span class="v" id="foamRoofLive">0 SF</span></div>
+      </div>
+      <div id="blowLiveBlock" class="props"><span class="k">Attic blow SF</span><span class="v" id="atticBlowLive">0 SF</span></div>
+      <div id="touchupField" class="field hidden"><label>Crawl touch-up patch SF</label><input id="touchupPatchSf" type="number" inputmode="decimal"></div>
+      <div id="assemblyEditors"></div>
+    </div>
+
+    <div class="section" id="sec-fp">
+      <h2>Fireplace</h2>
+      <p class="cap">Sealed-face wood = tear-out or NC only. Spec library saved in IndexedDB.</p>
+      <div class="toggle-row"><span>Include fireplace on this job?</span><button type="button" class="switch" id="includeFp"></button></div>
+      <div id="fpBody" class="hidden"></div>
+    </div>
+  </section>
+
+  <section id="tab-output" class="tabs-panel">
+    <div class="section">
+      <h2>Excel takeoff (primary)</h2>
+      <p class="cap">Product · Description · Footage · Bags — handoff for Sky / FieldGroove.</p>
+      <div class="seg" id="seg-outputView">
+        <button type="button" data-v="excel" class="active">Excel (primary)</button>
+        <button type="button" data-v="fg">FG-style (secondary)</button>
+      </div>
+      <div class="callout" id="outputHint"></div>
+      <div class="table-wrap" id="outputTable"></div>
+      <div class="grid2">
+        <button type="button" class="btn btn-primary" id="btnCopyCsv">Copy Excel CSV</button>
+        <button type="button" class="btn btn-secondary" id="btnSaveArchive2">Save to archive</button>
+      </div>
+      <div class="field hidden" id="csvField" style="margin-top:12px"><label>CSV</label><textarea id="csvText" class="csv-box" rows="8"></textarea></div>
+    </div>
+  </section>
+
+  <section id="tab-archive" class="tabs-panel">
+    <div class="section">
+      <h2>Archive / search</h2>
+      <p class="cap">Permanent saves. Filter by builder, city, owner, package, date, keywords.</p>
+      <div class="field"><label>Free-text search</label><input id="filterText" placeholder="builder, city, address…"></div>
+      <div class="grid2">
+        <div class="field"><label>Builder</label><input id="filterBuilder"></div>
+        <div class="field"><label>City</label><input id="filterCity"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Owner</label>
+          <select id="filterOwner"><option value="all">All</option><option value="asher">Asher</option><option value="sky">Sky</option></select>
+        </div>
+        <div class="field"><label>Package contains</label><input id="filterPkg"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>From date</label><input id="filterFrom" type="date"></div>
+        <div class="field"><label>To date</label><input id="filterTo" type="date"></div>
+      </div>
+      <p class="status" id="archiveCount">0 saved job(s)</p>
+      <div id="archiveList"></div>
+    </div>
+  </section>
+
+  <section id="tab-pricing" class="tabs-panel">
+    <div class="section">
+      <h2>Pricing / ballpark</h2>
+      <p class="cap">Enter FieldGroove unit prices at 40% margin once. Live total scales by margin÷40. Not a final invoice.</p>
+      <div class="toggle-row"><span>Show ballpark price</span><button type="button" class="switch" id="showBallpark"></button></div>
+      <div id="ballparkBody" class="hidden">
+        <div class="field"><label>Margin for this job (floor 30%)</label>
+          <div class="seg" id="seg-margin">
+            <button type="button" data-v="30">30%</button>
+            <button type="button" data-v="35">35%</button>
+            <button type="button" data-v="40" class="active">40%</button>
+            <button type="button" data-v="45">45%</button>
+            <button type="button" data-v="50">50%</button>
+            <button type="button" data-v="custom">Custom</button>
+          </div>
+        </div>
+        <div class="field hidden" id="marginCustomField"><label>Custom margin %</label><input id="marginCustom" type="number" value="40" min="30" step="1"></div>
+        <div class="callout" id="ballparkCallout"><strong>Ballpark — not final invoice</strong>Add 40% unit prices below.</div>
+      </div>
+      <div class="divider"></div>
+      <div class="toggle-row"><span>Edit price library (40% unit prices)</span><button type="button" class="switch" id="showPriceLib"></button></div>
+      <div id="priceLibBody" class="hidden">
+        <div id="priceLibList"></div>
+        <div class="divider"></div>
+        <div class="field"><label>Add custom material (must match Excel Product)</label><input id="newPriceKey" placeholder="e.g. Apex 42"></div>
+        <div class="field"><label>Unit</label>
+          <select id="newPriceUnit"><option>SF</option><option>LF</option><option>Ea</option></select>
+        </div>
+        <button type="button" class="btn btn-secondary btn-block" id="btnAddPrice">Add material to library</button>
+        <button type="button" class="btn btn-primary btn-block" style="margin-top:8px" id="btnSaveAllPrices">Save all filled prices</button>
+        <p class="status" id="priceLibNote"></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="bottom-nav">
+  <button type="button" class="nav-btn active" data-tab="wizard"><span class="ico">📋</span>Wizard</button>
+  <button type="button" class="nav-btn" data-tab="output"><span class="ico">📊</span>Excel</button>
+  <button type="button" class="nav-btn" data-tab="archive"><span class="ico">🗂️</span>Archive</button>
+  <button type="button" class="nav-btn" data-tab="pricing"><span class="ico">💰</span>Pricing</button>
+</nav>
+
+<script>
+(function () {
+"use strict";
+
+const DB_NAME = "kp-takeoff-v2";
+const STORE = "jobs";
+const SPEC_STORE = "fp_specs";
+const PRICE_STORE = "price_library";
+const DRAFT_KEY = "kp-takeoff-draft-v1";
+const MARGIN_FLOOR = 30;
+const MARGIN_BASE = 40;
+
+const DEFAULT_PRICE_KEYS = [
+  { materialKey: "Blown fiberglass", unit: "SF" },
+  { materialKey: "R-38 fiberglass batts", unit: "SF" },
+  { materialKey: "R-30 fiberglass batts", unit: "SF" },
+  { materialKey: "R-19 fiberglass batts", unit: "SF" },
+  { materialKey: "R-13 fiberglass batts", unit: "SF" },
+  { materialKey: "Fiberglass batts", unit: "SF" },
+  { materialKey: "Open-cell spray foam", unit: "SF" },
+  { materialKey: "Closed-cell spray foam", unit: "SF" },
+  { materialKey: "Spray foam", unit: "SF" },
+  { materialKey: "Cellulose", unit: "SF" },
+  { materialKey: "Spider", unit: "SF" },
+  { materialKey: "Rock wool", unit: "SF" },
+  { materialKey: "House wrap", unit: "SF" },
+  { materialKey: "Poly vent", unit: "Ea" },
+  { materialKey: "Cardboard baffles", unit: "Ea" },
+  { materialKey: "6 mil poly", unit: "SF" },
+  { materialKey: "10 mil poly", unit: "SF" },
+  { materialKey: "Netting", unit: "SF" },
+  { materialKey: "Dehumidifier", unit: "Ea" },
+  { materialKey: "Air seal", unit: "Ea" },
+  { materialKey: "Caulk & foam", unit: "Ea" },
+  { materialKey: "Labor", unit: "Ea" },
+];
+
+const FP_CATALOG = [
+  { id: "constitution", label: "Constitution", brand: "", category: "sealed_wood", insertOk: false, roH: 40, roW: 42, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "apex42", label: "Apex 42", brand: "", category: "sealed_wood", insertOk: false, roH: 40, roW: 42, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "apex44elite", label: "Apex 44 Elite", brand: "", category: "sealed_wood", insertOk: false, roH: 42, roW: 44, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "el42", label: "EL 42", brand: "", category: "sealed_wood", insertOk: false, roH: 40, roW: 42, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "a42r", label: "A42 R", brand: "", category: "open_wood", insertOk: false, roH: 40, roW: 42, roD: 24, hearthLip: 0, platformH: 0, blower: "none" },
+  { id: "a42c", label: "A42 C", brand: "", category: "open_wood", insertOk: false, roH: 40, roW: 42, roD: 24, hearthLip: 0, platformH: 0, blower: "a42c_only" },
+  { id: "icon36", label: "Icon 36", brand: "", category: "sealed_wood", insertOk: false, roH: 36, roW: 36, roD: 22, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "icon42", label: "Icon 42", brand: "", category: "sealed_wood", insertOk: false, roH: 40, roW: 42, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "icon50", label: "Icon 50", brand: "", category: "sealed_wood", insertOk: false, roH: 44, roW: 50, roD: 26, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "birmingham", label: "Birmingham", brand: "", category: "sealed_wood", insertOk: false, roH: 40, roW: 42, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "c40", label: "C40 (sealed-face wood)", brand: "", category: "sealed_wood", insertOk: false, roH: 40, roW: 40, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "buf42", label: "BUF 42", brand: "", category: "dv", insertOk: false, roH: 38, roW: 42, roD: 20, hearthLip: 0, platformH: 0, blower: "dv_default" },
+  { id: "vrt35", label: "VRT 35", brand: "", category: "dv", insertOk: false, roH: 35, roW: 35, roD: 18, hearthLip: 0, platformH: 0, blower: "dv_default" },
+  { id: "vrt42", label: "VRT 42", brand: "", category: "dv", insertOk: false, roH: 38, roW: 42, roD: 20, hearthLip: 0, platformH: 0, blower: "dv_default" },
+  { id: "vesper", label: "Vesper outdoor VF", brand: "", category: "outdoor_vf", insertOk: false, roH: 36, roW: 42, roD: 18, hearthLip: 0, platformH: 0, blower: "vf_none" },
+  { id: "travis", label: "Travis", brand: "Travis", category: "stove", insertOk: false, roH: 30, roW: 28, roD: 22, hearthLip: 0, platformH: 0, blower: "none" },
+  { id: "fe864", label: "FE 864", brand: "Fireplace Xtrordinair", category: "sealed_wood", insertOk: false, roH: 40, roW: 42, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "probuilder36", label: "ProBuilder 36", brand: "", category: "sealed_wood", insertOk: false, roH: 36, roW: 36, roD: 22, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "probuilder42", label: "ProBuilder 42", brand: "", category: "sealed_wood", insertOk: false, roH: 40, roW: 42, roD: 24, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "quadrafire", label: "Quadra-Fire", brand: "Quadra-Fire", category: "stove", insertOk: false, roH: 30, roW: 28, roD: 22, hearthLip: 0, platformH: 0, blower: "none" },
+  { id: "buck", label: "Buck", brand: "Buck", category: "stove", insertOk: false, roH: 30, roW: 28, roD: 22, hearthLip: 0, platformH: 0, blower: "none" },
+  { id: "lopi", label: "Lopi", brand: "Lopi", category: "stove", insertOk: false, roH: 30, roW: 28, roD: 22, hearthLip: 0, platformH: 0, blower: "none" },
+  { id: "expedition2", label: "Expedition 2 insert", brand: "", category: "insert", insertOk: true, roH: 24, roW: 32, roD: 16, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "heatilator_ins", label: "Heatilator insert", brand: "Heatilator", category: "insert", insertOk: true, roH: 24, roW: 36, roD: 16, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "fe_ins", label: "FE insert", brand: "Fireplace Xtrordinair", category: "insert", insertOk: true, roH: 24, roW: 36, roD: 16, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "majestic_ins", label: "Majestic insert", brand: "Majestic", category: "insert", insertOk: true, roH: 24, roW: 36, roD: 16, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+  { id: "monessen_ins", label: "Monessen insert", brand: "Monessen", category: "insert", insertOk: true, roH: 24, roW: 36, roD: 16, hearthLip: 0, platformH: 0, blower: "closed_optional" },
+];
+
+const PACKAGE_LABELS = {
+  standard: "Standard (blow + batts)",
+  hybrid_foam_batts: "Hybrid foam + batts",
+  foam_cellulose: "Foam roofline + cellulose",
+  foam_spider: "Foam roofline + spider",
+  total_foam: "Total foam",
+  crawl_encap: "Crawl encapsulation",
+  custom: "Custom mix",
+};
+const ATTIC_RETRO_LABELS = {
+  suck_foam: "Suck out + foam", suck_blow: "Suck out + blow",
+  batt_blow: "Batt removal + blow", batt_foam: "Batt removal + foam", topup_blow: "Top-up blow only",
+};
+const CRAWL_RETRO_LABELS = {
+  remove_replace: "Remove + replace", touchup: "Touch-up (tuck / patch)", remove_encap: "Remove + encapsulation",
+};
+const WALL_KIND_LABELS = {
+  ext_2x4: "2x4 exterior (R-13)", ext_2x6: "2x6 exterior (R-19)",
+  daylight: "Daylight basement (R-19)", concrete: "Concrete basement (R-13)",
+  garage_ext: "Garage exterior", interior: "Interior",
+};
+
+function uid() { return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8); }
+function n(v) { const x = parseFloat(v); return Number.isFinite(x) ? x : 0; }
+function round2(x) { return Math.round(x * 100) / 100; }
+function fmt(q) { return Number.isInteger(q) ? String(q) : String(round2(q)); }
+function pitchFactorFromRise(rise) {
+  if (!Number.isFinite(rise) || rise < 0) return 1;
+  return Math.sqrt(1 + Math.pow(rise / 12, 2));
+}
+function resolvePitchFactor(pitch, customRise) {
+  if (pitch === "custom") return pitchFactorFromRise(n(customRise));
+  return pitchFactorFromRise(n(pitch) || 6);
+}
+function wallInside(oc) { return oc === "16" ? 15 : 24; }
+function wallHeightFt(row) { return row.height === "custom" ? n(row.customHeight) : n(row.height); }
+function wallFactor(row) {
+  const h = wallHeightFt(row);
+  if (h <= 0) return 0;
+  return (12 * wallInside(row.oc) * h) / 144;
+}
+function packageUsesFoamRoof(pkg) {
+  return pkg === "hybrid_foam_batts" || pkg === "foam_cellulose" || pkg === "foam_spider" || pkg === "total_foam";
+}
+function packageIsCrawlEncap(pkg) { return pkg === "crawl_encap"; }
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function findFpModel(id) { return FP_CATALOG.find(m => m.id === id); }
+function clampMargin(m) { return !Number.isFinite(m) ? MARGIN_BASE : Math.max(MARGIN_FLOOR, m); }
+function fmtMoney(x) {
+  const r = (Math.round(x * 100) / 100).toFixed(2).split(".");
+  r[0] = r[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return "$" + r.join(".");
+}
+function wallExcelDesc(row, mode) {
+  const inside = wallInside(row.oc);
+  const h = wallHeightFt(row);
+  const hLabel = h + "'";
+  if (mode === "foam") return '3.5" OC foam / ' + inside + " / " + hLabel;
+  if (mode === "cellulose" || mode === "spider") {
+    const depth = (row.kind === "ext_2x6" || row.kind === "daylight") ? '5.5"' : '3.5"';
+    return (mode === "spider" ? "Spider" : "Cellulose") + " " + depth + " / " + inside + " / " + hLabel;
+  }
+  if (mode === "comfortbat") return "ComfortBat / " + inside + " / " + hLabel;
+  if (mode === "acoustical") return 'AcousticalBat 3" / ' + inside + " / " + hLabel;
+  if (row.kind === "ext_2x4" || row.kind === "concrete") return "R13/" + inside + "/" + hLabel;
+  if (row.kind === "interior") return "Batts / " + inside + " / " + hLabel;
+  return "R19/" + inside + "/" + hLabel;
+}
+function wallProduct(mode, kind) {
+  if (mode === "foam") return "Open-cell spray foam";
+  if (mode === "cellulose") return "Cellulose";
+  if (mode === "spider") return "Spider";
+  if (mode === "comfortbat" || mode === "acoustical") return "Rock wool";
+  if (kind === "ext_2x4" || kind === "concrete") return "R-13 fiberglass batts";
+  if (kind === "interior") return "Fiberglass batts";
+  return "R-19 fiberglass batts";
+}
+function defaultWallMode(pkg, kind) {
+  if (pkg === "total_foam") return "foam";
+  if (pkg === "foam_cellulose") return "cellulose";
+  if (pkg === "foam_spider") return "spider";
+  return "batt";
+}
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).then(() => true, () => false);
+  }
+  return Promise.resolve(false);
+}
+
+function openDb() {
+  return new Promise((resolve, reject) => {
+    if (!indexedDB) { reject(new Error("IndexedDB unavailable")); return; }
+    const req = indexedDB.open(DB_NAME, 3);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(SPEC_STORE)) db.createObjectStore(SPEC_STORE, { keyPath: "modelId" });
+      if (!db.objectStoreNames.contains(PRICE_STORE)) db.createObjectStore(PRICE_STORE, { keyPath: "materialKey" });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error("IDB open failed"));
+  });
+}
+function idbTx(store, mode, fn) {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(store, mode);
+    const os = tx.objectStore(store);
+    const result = fn(os);
+    tx.oncomplete = () => { db.close(); resolve(result); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  }));
+}
+function idbPut(job) { return idbTx(STORE, "readwrite", os => { os.put(job); }); }
+function idbGetAll() {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => { db.close(); resolve(req.result || []); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  }));
+}
+function idbDelete(id) { return idbTx(STORE, "readwrite", os => { os.delete(id); }); }
+function idbPutSpec(spec) { return idbTx(SPEC_STORE, "readwrite", os => { os.put(spec); }); }
+function idbGetAllSpecs() {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(SPEC_STORE, "readonly");
+    const req = tx.objectStore(SPEC_STORE).getAll();
+    req.onsuccess = () => { db.close(); resolve(req.result || []); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  }));
+}
+function idbPutPrice(entry) { return idbTx(PRICE_STORE, "readwrite", os => { os.put(entry); }); }
+function idbGetAllPrices() {
+  return openDb().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(PRICE_STORE, "readonly");
+    const req = tx.objectStore(PRICE_STORE).getAll();
+    req.onsuccess = () => { db.close(); resolve(req.result || []); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  }));
+}
+function mergePriceLibrary(stored) {
+  const map = new Map();
+  DEFAULT_PRICE_KEYS.forEach(d => map.set(d.materialKey, { materialKey: d.materialKey, unitPrice40: "", unit: d.unit }));
+  (stored || []).forEach(s => map.set(s.materialKey, { materialKey: s.materialKey, unitPrice40: s.unitPrice40 || "", unit: s.unit || "SF" }));
+  return Array.from(map.values()).sort((a, b) => a.materialKey.localeCompare(b.materialKey));
+}
+
+const PITCH_OPTIONS = [];
+for (let r = 1; r <= 24; r++) {
+  PITCH_OPTIONS.push({ value: String(r), label: r + "/12 (" + pitchFactorFromRise(r).toFixed(3) + ")" });
+}
+PITCH_OPTIONS.push({ value: "custom", label: "Custom rise/run" });
+
+// —— App state ——
+const S = {
+  jobId: uid(),
+  dateMeasured: todayISO(),
+  owner: "asher",
+  builder: "", city: "", address: "", keywords: "",
+  gasType: "natural",
+  outputView: "excel",
+  jobMode: "new",
+  retroScope: "attic",
+  atticRetro: "suck_blow",
+  crawlRetro: "remove_replace",
+  blowR: "R-38",
+  pkg: "standard",
+  alsoAlt: false,
+  altPkg: "hybrid_foam_batts",
+  airSealed: false,
+  caulkFoam: false,
+  flatSf: "",
+  housePitch: "6",
+  houseCustomRise: "",
+  hasDeadAir: false, hasVaults: false, hasKnees: false, hasBaffles: false,
+  hasRim: false, hasWalls: true, hasGables: false, hasCants: false,
+  hasGarage: false, hasPorch: false, hasBasementWalls: false,
+  hasSubfloor: false, hasDense: false, hasCrawlWalls: false,
+  deadAir: [{ id: uid(), name: "", sf: "" }],
+  vaults: [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }],
+  knees: [{ id: uid(), name: "", height: "8", lf: "", wrap: true }],
+  baffles: "",
+  rims: [{ id: uid(), name: "", lf: "" }],
+  walls: [{ id: uid(), name: "", kind: "ext_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: "batt" }],
+  gables: [{ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false }],
+  cants: [{ id: uid(), name: "", sf: "", material: "r30" }],
+  garageLivingAbove: false, garageCeilingSf: "", garageCeilMat: "r19",
+  garageFoamRoof: false, garageRoofFlat: "", garageRoofPitch: "6", garageRoofCustomRise: "", garageBlockAsGable: false,
+  includePorchRoof: false, porchGabledOff: false, porchRoofFlat: "", porchRoofPitch: "6", porchRoofCustomRise: "",
+  porchCeilingSf: "", porchCeilMat: "r19", porchJoistOc: "16",
+  dense: [{ id: uid(), name: "", sf: "", netting: true }],
+  foamRoofs: [{ id: uid(), name: "House roof", flatSf: "", pitch: "6", customRise: "" }],
+  crawlWalls: [{ id: uid(), name: "Crawl wall", length: "", height: "" }],
+  pouredFloor: false, subfloorOverride: "", touchupPatchSf: "",
+  includeFp: false,
+  fpMode: "nc", fpRetroKind: "tearout", fpOtherDemo: false, fpModelId: "apex42",
+  fpInsertShell: "masonry", fpFuel: "wood",
+  fpFrontW: "", fpBackW: "", fpFrontH: "", fpBackH: "", fpDepth: "",
+  fpPipeCount: "", fpTerm: "roof", fpChimPitch: "6", fpChimCustomRise: "",
+  fpRoofType: "shingle", fpCap: "standard",
+  fpChaseBlocking: false, fpElbows: "", fpAccessNotes: "",
+  fpHearthPlatform: "", fpWoodGasStarter: false, fpBlowerChoice: "none",
+  fpMeasRoH: "", fpMeasRoW: "", fpMeasRoD: "",
+  fpSpecRoH: "", fpSpecRoW: "", fpSpecRoD: "", fpSpecLip: "", fpSpecPlatform: "",
+  fpWall90: false, fpSpecNote: "",
+  showBallpark: false, marginPick: "40", marginCustom: "40",
+  priceLibrary: mergePriceLibrary([]),
+  showPriceLib: false,
+  statusNote: "",
+  archive: [],
+  filterBuilder: "", filterCity: "", filterOwner: "all", filterPkg: "", filterFrom: "", filterTo: "", filterText: "",
+  idbOk: true,
+  draftReady: false,
+  _suppressSave: false,
+};
+
+function flags() {
+  const isNew = S.jobMode === "new";
+  const isAtticRetro = S.jobMode === "retro" && S.retroScope === "attic";
+  const isCrawlRetro = S.jobMode === "retro" && S.retroScope === "crawl";
+  const atticIsFoam = isAtticRetro && (S.atticRetro === "suck_foam" || S.atticRetro === "batt_foam");
+  const atticIsBlow = isAtticRetro && (S.atticRetro === "suck_blow" || S.atticRetro === "batt_blow" || S.atticRetro === "topup_blow");
+  const atticNeedsRemoval = isAtticRetro && S.atticRetro !== "topup_blow";
+  const crawlIsEncap = isCrawlRetro && S.crawlRetro === "remove_encap";
+  const crawlIsTouchup = isCrawlRetro && S.crawlRetro === "touchup";
+  const crawlIsReplace = isCrawlRetro && S.crawlRetro === "remove_replace";
+  const atticBlowR = isNew ? "R-38" : (atticIsBlow ? S.blowR : "R-38");
+  function excludesDeadVaultKnees(p) { return packageUsesFoamRoof(p) || atticIsFoam; }
+  const primaryExcludesDVK = excludesDeadVaultKnees(S.pkg);
+  const showFoamRoofPath = packageUsesFoamRoof(S.pkg) || atticIsFoam;
+  return {
+    isNew, isAtticRetro, isCrawlRetro, atticIsFoam, atticIsBlow, atticNeedsRemoval,
+    crawlIsEncap, crawlIsTouchup, crawlIsReplace, atticBlowR, excludesDeadVaultKnees,
+    primaryExcludesDVK, showFoamRoofPath,
+    canAskDeadVaultKnees: (isNew || (isAtticRetro && !atticIsFoam)) && !primaryExcludesDVK,
+    canAskWalls: isNew,
+    canAskGables: isNew || showFoamRoofPath,
+    canAskCants: isNew,
+    canAskGarage: isNew || showFoamRoofPath,
+    canAskPorch: showFoamRoofPath,
+    canAskSubfloor: (isNew && !packageIsCrawlEncap(S.pkg)) || crawlIsReplace,
+    canAskTouchup: crawlIsTouchup,
+    canAskCrawlEncap: packageIsCrawlEncap(S.pkg) || crawlIsEncap,
+    canAskRim: isNew || crawlIsReplace || crawlIsEncap || packageIsCrawlEncap(S.pkg) || crawlIsEncap,
+    canAskDense: isNew && (S.pkg === "foam_cellulose" || S.pkg === "foam_spider" || S.pkg === "custom" || S.pkg === "standard"),
+  };
+}
+
+function fpModelsForContext(fpMode, retroKind) {
+  return FP_CATALOG.filter(m => {
+    if (fpMode === "retro" && retroKind === "insert") return m.insertOk;
+    if (fpMode === "retro" && retroKind === "wood_stove")
+      return m.category === "stove" || m.category === "sealed_wood" || m.category === "open_wood";
+    if (m.category === "insert") return false;
+    return true;
+  });
+}
+
+function fpSpecPass() {
+  if (!S.includeFp) return null;
+  const plat = n(S.fpHearthPlatform) || n(S.fpSpecPlatform);
+  const needH = n(S.fpSpecRoH) + plat;
+  const needW = n(S.fpSpecRoW);
+  const needD = n(S.fpSpecRoD);
+  const mH = n(S.fpMeasRoH), mW = n(S.fpMeasRoW), mD = n(S.fpMeasRoD);
+  if (!mH && !mW && !mD) return null;
+  return { ok: mH >= needH && mW >= needW && mD >= needD, needH, needW, needD, mH, mW, mD };
+}
+
+function push(lines, partial) { lines.push(Object.assign({ bags: "" }, partial)); }
+
+function buildLinesForPackage(p, tag) {
+  const F = flags();
+  const lines = [];
+  const noteTag = tag ? "[" + tag + "] " : "";
+  const foamRoof = packageUsesFoamRoof(p) || F.atticIsFoam;
+  const excludeDVK = F.excludesDeadVaultKnees(p);
+  const totalFoam = p === "total_foam";
+  const site = S.address.trim() || S.builder.trim() || "Job";
+  const flat = n(S.flatSf);
+  const housePitchFactor = resolvePitchFactor(S.housePitch, S.houseCustomRise);
+
+  if (F.atticNeedsRemoval) {
+    push(lines, { area: site, assembly: "Attic prep", product: "Labor",
+      description: (S.atticRetro === "suck_foam" || S.atticRetro === "suck_blow") ? "Suck-out existing attic" : "Batt removal (attic)",
+      footage: 1, unit: "ea", notes: noteTag + "Prep" });
+  }
+  if (F.crawlIsReplace || F.crawlIsEncap) {
+    push(lines, { area: site, assembly: "Crawl prep", product: "Labor", description: "Remove existing crawl insulation", footage: 1, unit: "ea", notes: noteTag + "Prep" });
+  }
+  if (F.crawlIsTouchup && n(S.touchupPatchSf) > 0) {
+    push(lines, { area: site, assembly: "Crawl touch-up", product: "R-19 fiberglass batts", description: "R19 touch-up / patch", footage: round2(n(S.touchupPatchSf)), unit: "SF", notes: noteTag + "Patched zone SF" });
+  }
+
+  const newUsesBlow = F.isNew && (p === "standard" || p === "custom") && !packageUsesFoamRoof(p);
+  if ((newUsesBlow || F.atticIsBlow) && !foamRoof) {
+    const da = excludeDVK || !S.hasDeadAir ? 0 : S.deadAir.reduce((s, r) => s + n(r.sf), 0);
+    const vf = excludeDVK || !S.hasVaults ? 0 : S.vaults.reduce((s, r) => s + n(r.flatSf), 0);
+    const blow = Math.max(0, flat - da - vf);
+    if (blow > 0) {
+      const rLabel = F.isNew ? "R-38" : F.atticBlowR;
+      push(lines, { area: "Attic", assembly: "Attic blow", product: "Blown fiberglass", description: rLabel.replace("R-", "R") + "/24",
+        footage: round2(blow), unit: "SF", notes: noteTag + "flat−dead−vault (" + fmt(flat) + "−" + fmt(da) + "−" + fmt(vf) + ")" });
+    }
+  }
+
+  if (!excludeDVK && S.hasDeadAir) {
+    S.deadAir.forEach(r => {
+      if (n(r.sf) <= 0) return;
+      push(lines, { area: r.name.trim() || "Dead air", assembly: "Dead air", product: "R-38 fiberglass batts", description: "R38 batts", footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
+    });
+  }
+  if (!excludeDVK && S.hasVaults) {
+    S.vaults.forEach(r => {
+      const flatV = n(r.flatSf); if (flatV <= 0) return;
+      const factor = resolvePitchFactor(r.pitch, r.customRise);
+      const pitched = flatV * factor;
+      if (r.kind === "open") {
+        push(lines, { area: r.name.trim() || "Open vault", assembly: "Vault open", product: "R-38 fiberglass batts", description: "R38 vault", footage: round2(pitched), unit: "SF", notes: noteTag + "×" + factor.toFixed(3) });
+      } else {
+        push(lines, { area: r.name.trim() || "Decked vault", assembly: "Vault decked", product: "R-30 fiberglass batts", description: "R30 vault + poly vent", footage: round2(pitched), unit: "SF", notes: noteTag });
+        push(lines, { area: r.name.trim() || "Decked vault", assembly: "Poly vent", product: "Poly vent", description: "Pitched÷5", footage: round2(pitched / 5), unit: "ea", notes: noteTag });
+      }
+    });
+  }
+  if (!excludeDVK && S.hasKnees) {
+    S.knees.forEach(r => {
+      const sf = n(r.height) * n(r.lf); if (sf <= 0) return;
+      push(lines, { area: r.name.trim() || "Knee wall", assembly: "Knee wall", product: "R-19 fiberglass batts", description: "R19 / " + r.height + "'", footage: round2(sf), unit: "SF", notes: noteTag });
+      if (r.wrap) push(lines, { area: r.name.trim() || "Knee wall", assembly: "Knee wrap", product: "House wrap", description: "Open knee wrap", footage: round2(sf), unit: "SF", notes: noteTag });
+    });
+  }
+  if (S.hasBaffles && n(S.baffles) > 0 && (F.isNew || F.isAtticRetro) && !foamRoof) {
+    push(lines, { area: "Eaves", assembly: "Baffles", product: "Cardboard baffles", description: "Baffle count", footage: round2(n(S.baffles)), unit: "ea", notes: noteTag });
+  }
+
+  if (foamRoof && flat > 0) {
+    let usedExplicit = false;
+    S.foamRoofs.forEach(r => {
+      const f = n(r.flatSf); if (f <= 0) return;
+      usedExplicit = true;
+      const factor = resolvePitchFactor(r.pitch, r.customRise);
+      push(lines, { area: r.name.trim() || "Roof line", assembly: "Roof foam", product: "Open-cell spray foam", description: '5.5" OC roof', footage: round2(f * factor), unit: "SF", notes: noteTag + "flat×" + factor.toFixed(3) });
+    });
+    if (!usedExplicit) {
+      push(lines, { area: "House roof", assembly: "Roof foam", product: "Open-cell spray foam", description: '5.5" OC roof', footage: round2(flat * housePitchFactor), unit: "SF", notes: noteTag + "flat×" + housePitchFactor.toFixed(3) });
+    }
+  }
+
+  if (foamRoof && S.hasPorch && S.includePorchRoof) {
+    const pf = n(S.porchRoofFlat);
+    if (pf > 0) {
+      const factor = resolvePitchFactor(S.porchRoofPitch, S.porchRoofCustomRise);
+      push(lines, { area: "Porch roof", assembly: "Porch roof foam", product: "Open-cell spray foam", description: '5.5" OC porch roof', footage: round2(pf * factor), unit: "SF", notes: noteTag });
+    }
+    if (S.porchGabledOff) {
+      push(lines, { area: "Porch-to-house", assembly: "Porch gable-off", product: "House wrap", description: "Gabled off — no porch ceiling", footage: 1, unit: "ea", notes: noteTag });
+    } else if (n(S.porchCeilingSf) > 0) {
+      push(lines, { area: "Porch ceiling", assembly: "Porch ceiling",
+        product: S.porchCeilMat === "foam5" ? "Spray foam" : S.porchCeilMat === "cellulose" ? "Cellulose" : "R-19 fiberglass batts",
+        description: S.porchCeilMat === "foam5" ? '5" foam' : S.porchCeilMat === "cellulose" ? "Cellulose / " + S.porchJoistOc + " OC" : "R19 / " + S.porchJoistOc + " OC",
+        footage: round2(n(S.porchCeilingSf)), unit: "SF", notes: noteTag + "Not gabled off" });
+    }
+  }
+
+  let subfloorSf = flat;
+  if ((F.canAskCrawlEncap && !F.crawlIsReplace) || (packageIsCrawlEncap(p) && !F.isCrawlRetro)) subfloorSf = 0;
+  if (S.subfloorOverride.trim() !== "") subfloorSf = n(S.subfloorOverride);
+  if (S.hasSubfloor && F.canAskSubfloor && subfloorSf > 0) {
+    push(lines, { area: "Subfloor", assembly: "Subfloor", product: "R-19 fiberglass batts", description: "R19 subfloor", footage: round2(subfloorSf), unit: "SF", notes: noteTag });
+    push(lines, { area: "Crawl floor", assembly: "Poly", product: "6 mil poly", description: "Matches subfloor SF", footage: round2(subfloorSf), unit: "SF", notes: noteTag });
+  }
+
+  if (F.canAskCrawlEncap) {
+    if (!S.pouredFloor && flat > 0) {
+      push(lines, { area: "Crawl floor", assembly: "Encap poly", product: "10 mil poly", description: "Seams taped", footage: round2(flat), unit: "SF", notes: noteTag });
+    }
+    if (S.hasCrawlWalls) {
+      S.crawlWalls.forEach(r => {
+        const sf = n(r.length) * n(r.height); if (sf <= 0) return;
+        push(lines, { area: r.name.trim() || "Crawl wall", assembly: "Crawl wall foam", product: "Closed-cell spray foam", description: '1.5" CC', footage: round2(sf), unit: "SF", notes: noteTag });
+      });
+    }
+    push(lines, { area: "Crawl", assembly: "Dehumidifier", product: "Dehumidifier", description: "Install included", footage: 1, unit: "ea", notes: noteTag });
+  }
+
+  if (S.hasRim && F.canAskRim) {
+    S.rims.forEach(r => {
+      const lf = n(r.lf); if (lf <= 0) return;
+      push(lines, { area: r.name.trim() || "Rim joist", assembly: "Band / rim",
+        product: totalFoam ? "Open-cell spray foam" : "R-19 fiberglass batts",
+        description: totalFoam ? '3.5" OC band ×1.2' : "R19 band ×1.2",
+        footage: round2(lf * 1.2), unit: "LF", notes: noteTag + fmt(lf) + " LF × 1.2" });
+    });
+  }
+
+  if (S.hasWalls && F.canAskWalls) {
+    let nettingTotal = 0;
+    S.walls.forEach(r => {
+      if ((r.kind === "daylight" || r.kind === "concrete") && !S.hasBasementWalls) return;
+      const cavities = n(r.cavities); if (cavities <= 0) return;
+      const factor = wallFactor(r);
+      const sf = factor * cavities; if (sf <= 0) return;
+      let mode = r.materialMode;
+      if (mode === "batt") {
+        if (totalFoam) mode = "foam";
+        else if (p === "foam_cellulose" && r.kind !== "garage_ext") mode = "cellulose";
+        else if (p === "foam_spider" && r.kind !== "garage_ext") mode = "spider";
+      }
+      push(lines, {
+        area: r.name.trim() || WALL_KIND_LABELS[r.kind] || "Wall",
+        assembly: "Wall — " + (WALL_KIND_LABELS[r.kind] || r.kind),
+        product: wallProduct(mode, r.kind), description: wallExcelDesc(r, mode),
+        footage: round2(sf), unit: "SF", notes: noteTag + cavities + " cav × " + round2(factor)
+      });
+      if ((mode === "cellulose" || mode === "spider") && r.kind === "interior") nettingTotal += sf;
+    });
+    if (nettingTotal > 0) push(lines, { area: "Interior", assembly: "Netting", product: "Netting", description: "Matches interior SF", footage: round2(nettingTotal), unit: "SF", notes: noteTag });
+  }
+
+  if (S.hasGables && F.canAskGables) {
+    S.gables.forEach(r => {
+      const L = n(r.length), H = n(r.height); if (L <= 0 || H <= 0) return;
+      const sf = r.shape === "triangle" ? (L * H) / 2 : L * H;
+      push(lines, { area: r.name.trim() || "Gable", assembly: "Gable (" + r.shape + ")",
+        product: foamRoof ? "Open-cell spray foam" : "Fiberglass batts",
+        description: foamRoof ? '3.5" OC gable' : "Gable batts", footage: round2(sf), unit: "SF", notes: noteTag });
+      if (r.wrap) push(lines, { area: r.name.trim() || "Gable", assembly: "Gable wrap", product: "House wrap", description: "W", footage: round2(sf), unit: "SF", notes: noteTag });
+    });
+  }
+
+  if (S.hasCants && F.canAskCants) {
+    S.cants.forEach(r => {
+      if (n(r.sf) <= 0) return;
+      push(lines, { area: r.name.trim() || "Cantilever", assembly: "Cantilever",
+        product: (r.material === "foam55" || totalFoam) ? "Open-cell spray foam" : r.material === "cellulose" ? "Cellulose" : "R-30 fiberglass batts",
+        description: (r.material === "foam55" || totalFoam) ? '5.5" OC' : r.material === "cellulose" ? "Cellulose" : "R30",
+        footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
+    });
+  }
+
+  if (S.hasGarage && F.canAskGarage) {
+    if (S.garageFoamRoof && n(S.garageRoofFlat) > 0) {
+      const factor = resolvePitchFactor(S.garageRoofPitch, S.garageRoofCustomRise);
+      push(lines, { area: S.garageBlockAsGable ? "Garage block" : "Garage roof", assembly: "Garage roof foam", product: "Open-cell spray foam", description: '5.5" OC', footage: round2(n(S.garageRoofFlat) * factor), unit: "SF", notes: noteTag });
+    }
+    if (n(S.garageCeilingSf) > 0) {
+      push(lines, { area: "Garage ceiling", assembly: "Garage ceiling",
+        product: (S.garageCeilMat === "foam5" || totalFoam) ? "Spray foam" : S.garageCeilMat === "cellulose" ? "Cellulose" : "R-19 fiberglass batts",
+        description: (S.garageCeilMat === "foam5" || totalFoam) ? '5" foam' : S.garageCeilMat === "cellulose" ? "Cellulose" : "R19",
+        footage: round2(n(S.garageCeilingSf)), unit: "SF", notes: noteTag });
+    }
+  }
+
+  if (S.hasDense && F.canAskDense) {
+    let denseNet = 0;
+    S.dense.forEach(r => {
+      if (n(r.sf) <= 0) return;
+      push(lines, { area: r.name.trim() || "Dense-pack", assembly: "Floor dense-pack", product: p === "foam_spider" ? "Spider" : "Cellulose", description: "Dense-pack flat SF", footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
+      if (r.netting) denseNet += n(r.sf);
+    });
+    if (denseNet > 0) push(lines, { area: "Dense-pack", assembly: "Netting", product: "Netting", description: "Matches dense-pack", footage: round2(denseNet), unit: "SF", notes: noteTag });
+  }
+
+  if (S.airSealed) push(lines, { area: site, assembly: "Air seal", product: "Air seal", description: "Yes", footage: 1, unit: "ea", notes: noteTag });
+  if (S.caulkFoam) push(lines, { area: site, assembly: "Caulk & foam", product: "Caulk & foam", description: "Yes — base plate / openings / penetrations", footage: 1, unit: "ea", notes: noteTag });
+
+  if (S.gasType === "idk") {
+    push(lines, { area: site, assembly: "Gas type", product: "CONFIRM WITH BUILDER", description: "Gas type unknown — confirm before quoting propane kit", footage: 0, unit: "—", notes: noteTag + "Do NOT auto-add propane conversion kit" });
+  } else if (S.gasType === "propane") {
+    push(lines, { area: site, assembly: "Gas type", product: "Propane", description: "Propane noted (kit not auto-added)", footage: 1, unit: "ea", notes: noteTag });
+  }
+
+  if (S.includeFp) appendFpLines(lines, noteTag);
+  return lines;
+}
+
+function appendFpLines(lines, noteTag) {
+  const model = findFpModel(S.fpModelId);
+  const modelLabel = model ? (model.brand ? model.brand + " " + model.label : model.label) : S.fpModelId;
+  if (S.fpMode === "retro" && S.fpRetroKind === "tearout") {
+    if (S.fpOtherDemo) push(lines, { area: "Fireplace", assembly: "Demo", product: "Other contractor demo", description: "Demo by others — flag only", footage: 1, unit: "ea", notes: noteTag });
+    else push(lines, { area: "Fireplace", assembly: "Tear-out", product: "Fireplace removal / disposal", description: "Complete tear-out", footage: 1, unit: "ea", notes: noteTag });
+  }
+  let desc;
+  if (S.fpMode === "retro" && S.fpRetroKind === "insert")
+    desc = "Insert " + S.fpInsertShell + " / " + S.fpFuel + " · front W" + S.fpFrontW + " H" + S.fpFrontH + " · back W" + S.fpBackW + " H" + S.fpBackH + " · D" + S.fpDepth;
+  else if (S.fpMode === "retro" && S.fpRetroKind === "wood_stove")
+    desc = "Wood stove" + (S.fpWall90 ? " · 90° wall OK" : "");
+  else if (model && model.category === "sealed_wood")
+    desc = "Sealed-face wood (NC/tear-out only — not insert)";
+  else desc = (model && model.category) || "Unit";
+  push(lines, { area: "Fireplace", assembly: S.fpMode === "nc" ? "NC fireplace" : "Retro " + S.fpRetroKind, product: modelLabel, description: desc, footage: 1, unit: "ea", notes: noteTag });
+  if (n(S.fpPipeCount) > 0) {
+    push(lines, { area: "Fireplace", assembly: "Pipe", product: "Vent pipe", description: fmt(n(S.fpPipeCount)) + " sections · term " + S.fpTerm, footage: round2(n(S.fpPipeCount)), unit: "ea", notes: noteTag });
+  }
+  if (S.fpTerm === "chimney") {
+    const pf = resolvePitchFactor(S.fpChimPitch, S.fpChimCustomRise);
+    push(lines, { area: "Fireplace", assembly: "Chimney termination", product: "Chimney", description: S.fpRoofType + " roof · pitch factor " + pf.toFixed(3) + " · cap " + S.fpCap.replace(/_/g, " "), footage: 1, unit: "ea", notes: noteTag });
+  } else {
+    push(lines, { area: "Fireplace", assembly: "Termination", product: S.fpTerm === "roof" ? "Roof termination" : "Wall termination", description: S.fpTerm, footage: 1, unit: "ea", notes: noteTag });
+  }
+  if (S.fpChaseBlocking) push(lines, { area: "Fireplace", assembly: "Chase", product: "Chase blocking", description: "Blocking required", footage: 1, unit: "ea", notes: noteTag });
+  if (n(S.fpElbows) > 0) push(lines, { area: "Fireplace", assembly: "Elbows", product: "Elbows", description: fmt(n(S.fpElbows)) + " elbows", footage: round2(n(S.fpElbows)), unit: "ea", notes: noteTag });
+  if (S.fpAccessNotes.trim()) push(lines, { area: "Fireplace", assembly: "Access", product: "Access notes", description: S.fpAccessNotes.trim(), footage: 1, unit: "ea", notes: noteTag });
+  if (n(S.fpHearthPlatform) > 0 || n(S.fpSpecPlatform) > 0) {
+    push(lines, { area: "Fireplace", assembly: "Hearth platform", product: "Hearth / platform", description: "Height " + (S.fpHearthPlatform || S.fpSpecPlatform) + '"', footage: 1, unit: "ea", notes: noteTag });
+  }
+  if (S.fpWoodGasStarter) push(lines, { area: "Fireplace", assembly: "Gas starter", product: "Wood gas starter", description: "Gas starter for wood unit", footage: 1, unit: "ea", notes: noteTag });
+  if (S.fpFuel === "vf" || (model && (model.category === "vf" || model.category === "outdoor_vf"))) {
+    push(lines, { area: "Fireplace", assembly: "VF gas logs", product: "VF gas logs", description: "Customer pick — note only", footage: 1, unit: "ea", notes: noteTag + "Customer selects logs" });
+  }
+  const blowerRule = (model && model.blower) || "none";
+  if (blowerRule === "a42c_only" && S.fpBlowerChoice === "include")
+    push(lines, { area: "Fireplace", assembly: "Blower", product: "Blower fan", description: "A42 C open wood — fan included", footage: 1, unit: "ea", notes: noteTag });
+  else if (blowerRule === "dv_default" && S.fpBlowerChoice !== "none")
+    push(lines, { area: "Fireplace", assembly: "Blower", product: "DV blower", description: "DV blower (default)", footage: 1, unit: "ea", notes: noteTag });
+  else if (blowerRule === "closed_optional" && S.fpBlowerChoice === "include")
+    push(lines, { area: "Fireplace", assembly: "Blower", product: "Optional blower", description: "Closed-face optional fan — included", footage: 1, unit: "ea", notes: noteTag });
+  const pass = fpSpecPass();
+  if (pass) {
+    push(lines, { area: "Fireplace", assembly: "RO validation", product: pass.ok ? "PASS" : "FAIL",
+      description: "Measured " + pass.mH + "×" + pass.mW + "×" + pass.mD + " vs need " + pass.needH + "×" + pass.needW + "×" + pass.needD + " (spec+platform)",
+      footage: 1, unit: "ea", notes: noteTag });
+  }
+}
+
+function allLines() {
+  const primary = buildLinesForPackage(S.pkg, S.alsoAlt ? "A" : "");
+  const alt = S.alsoAlt ? buildLinesForPackage(S.altPkg, "B") : [];
+  return primary.concat(alt);
+}
+
+function packageLabel() {
+  const F = flags();
+  let base = "";
+  if (F.isNew) base = PACKAGE_LABELS[S.pkg] || S.pkg;
+  else if (F.isAtticRetro) base = "Attic: " + (ATTIC_RETRO_LABELS[S.atticRetro] || S.atticRetro);
+  else base = "Crawl: " + (CRAWL_RETRO_LABELS[S.crawlRetro] || S.crawlRetro);
+  if (S.includeFp) {
+    const m = findFpModel(S.fpModelId);
+    base += " · FP " + (m ? m.label : S.fpModelId);
+  }
+  return base;
+}
+
+function marginPct() {
+  return S.marginPick === "custom" ? clampMargin(n(S.marginCustom)) : clampMargin(n(S.marginPick));
+}
+
+function ballpark() {
+  const scale = marginPct() / MARGIN_BASE;
+  const priceMap = new Map();
+  S.priceLibrary.forEach(p => { const u = n(p.unitPrice40); if (u > 0) priceMap.set(p.materialKey, u); });
+  let total = 0, pricedLines = 0, unpricedLines = 0;
+  const missing = new Set();
+  allLines().forEach(L => {
+    if (L.footage === 0 && L.unit === "—") return;
+    const unit40 = priceMap.get(L.product);
+    if (unit40 === undefined || unit40 <= 0) { unpricedLines++; missing.add(L.product); return; }
+    total += L.footage * unit40 * scale;
+    pricedLines++;
+  });
+  return { total: round2(total), pricedLines, unpricedLines, missing: Array.from(missing).sort() };
+}
+
+function buildExcelCsv() {
+  const esc = s => {
+    s = String(s == null ? "" : s);
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  };
+  const rows = ["Product,Description,Footage,Bags"];
+  allLines().forEach(L => {
+    rows.push([L.product, L.description, (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), L.bags].map(esc).join(","));
+  });
+  return rows.join("\n");
+}
+
+// —— DOM helpers ——
+function $(id) { return document.getElementById(id); }
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html != null) e.innerHTML = html;
+  return e;
+}
+function setSwitch(btn, on) {
+  if (!btn) return;
+  btn.classList.toggle("on", !!on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+function bindSeg(containerId, get, set) {
+  const box = $(containerId);
+  if (!box) return;
+  box.querySelectorAll("button").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.v === get());
+    btn.onclick = () => { set(btn.dataset.v); render(); };
+  });
+}
+function toggleField(id, show) {
+  const e = $(id);
+  if (e) e.classList.toggle("hidden", !show);
+}
+
+function renderGates() {
+  const F = flags();
+  const box = $("gates");
+  box.innerHTML = "";
+  function addToggle(label, key, show) {
+    if (!show) return;
+    const row = el("div", "toggle-row");
+    row.appendChild(el("span", null, label));
+    const sw = el("button", "switch" + (S[key] ? " on" : ""));
+    sw.type = "button";
+    sw.onclick = () => { S[key] = !S[key]; render(); };
+    row.appendChild(sw);
+    box.appendChild(row);
+  }
+  if (F.canAskDeadVaultKnees) {
+    addToggle("Dead air?", "hasDeadAir", true);
+    addToggle("Vaults?", "hasVaults", true);
+    addToggle("Knee walls?", "hasKnees", true);
+    addToggle("Baffles?", "hasBaffles", true);
+  } else if (F.primaryExcludesDVK) {
+    const c = el("div", "callout", "<strong>Foam roofline</strong>Dead air, vaults, knees excluded.");
+    box.appendChild(c);
+  }
+  addToggle("Rim / band?", "hasRim", F.canAskRim);
+  addToggle("Walls?", "hasWalls", F.canAskWalls);
+  addToggle("Basement walls?", "hasBasementWalls", F.canAskWalls);
+  addToggle("Gables?", "hasGables", F.canAskGables);
+  addToggle("Cantilevers?", "hasCants", F.canAskCants);
+  addToggle("Garage?", "hasGarage", F.canAskGarage);
+  addToggle("Porch?", "hasPorch", F.canAskPorch);
+  addToggle("Subfloor / crawl?", "hasSubfloor", F.canAskSubfloor);
+  addToggle("Crawl walls to foam?", "hasCrawlWalls", F.canAskCrawlEncap);
+  addToggle("Dense-pack floors?", "hasDense", F.canAskDense);
+  addToggle("Poured floor (skip poly)", "pouredFloor", F.canAskCrawlEncap);
+}
+
+function pitchSelectHtml(selected) {
+  return PITCH_OPTIONS.map(o => '<option value="' + o.value + '"' + (o.value === selected ? " selected" : "") + ">" + o.label + "</option>").join("");
+}
+
+function renderAssemblyEditors() {
+  const F = flags();
+  const box = $("assemblyEditors");
+  box.innerHTML = "";
+
+  function addBtn(label, fn) {
+    const b = el("button", "btn btn-secondary btn-sm");
+    b.type = "button"; b.textContent = label; b.onclick = fn;
+    return b;
+  }
+
+  if (F.canAskDeadVaultKnees && S.hasDeadAir) {
+    S.deadAir.forEach((r, idx) => {
+      const card = el("div", "row-card");
+      card.innerHTML = '<div class="row-title">Dead air #' + (idx+1) + '</div>';
+      card.appendChild(fieldInput("Area", r.name, v => { r.name = v; schedule(); }));
+      card.appendChild(fieldInput("SF", r.sf, v => { r.sf = v; schedule(); }, "number"));
+      box.appendChild(card);
+    });
+    box.appendChild(addBtn("Add dead air", () => { S.deadAir.push({ id: uid(), name: "", sf: "" }); render(); }));
+  }
+  if (F.canAskDeadVaultKnees && S.hasVaults) {
+    S.vaults.forEach((r, idx) => {
+      const card = el("div", "row-card");
+      card.innerHTML = '<div class="row-title">Vault #' + (idx+1) + '</div>';
+      card.appendChild(fieldInput("Area", r.name, v => { r.name = v; schedule(); }));
+      card.appendChild(fieldSelect("Type", r.kind, [["open","Open R38"],["decked","Decked R30"]], v => { r.kind = v; render(); }));
+      card.appendChild(fieldInput("Flat SF", r.flatSf, v => { r.flatSf = v; schedule(); }, "number"));
+      card.appendChild(fieldSelect("Pitch", r.pitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { r.pitch = v; render(); }));
+      box.appendChild(card);
+    });
+    box.appendChild(addBtn("Add vault", () => { S.vaults.push({ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }); render(); }));
+  }
+  if (F.canAskDeadVaultKnees && S.hasKnees) {
+    S.knees.forEach((r, idx) => {
+      const card = el("div", "row-card");
+      card.innerHTML = '<div class="row-title">Knee #' + (idx+1) + '</div>';
+      card.appendChild(fieldInput("Area", r.name, v => { r.name = v; schedule(); }));
+      card.appendChild(fieldInput("Height ft", r.height, v => { r.height = v; schedule(); }, "number"));
+      card.appendChild(fieldInput("LF", r.lf, v => { r.lf = v; schedule(); }, "number"));
+      const wrapRow = el("div", "toggle-row");
+      wrapRow.appendChild(el("span", null, "Wrap"));
+      const sw = el("button", "switch" + (r.wrap ? " on" : "")); sw.type = "button";
+      sw.onclick = () => { r.wrap = !r.wrap; render(); };
+      wrapRow.appendChild(sw); card.appendChild(wrapRow);
+      box.appendChild(card);
+    });
+    box.appendChild(addBtn("Add knee", () => { S.knees.push({ id: uid(), name: "", height: "8", lf: "", wrap: true }); render(); }));
+  }
+  if (S.hasBaffles && F.canAskDeadVaultKnees) {
+    box.appendChild(fieldInput("Baffle count", S.baffles, v => { S.baffles = v; schedule(); }, "number"));
+  }
+  if (S.hasRim && F.canAskRim) {
+    S.rims.forEach((r, idx) => {
+      const card = el("div", "row-card");
+      card.innerHTML = '<div class="row-title">Rim #' + (idx+1) + ' · ×1.2 → ' + fmt(n(r.lf)*1.2) + '</div>';
+      card.appendChild(fieldInput("Area", r.name, v => { r.name = v; schedule(); }));
+      card.appendChild(fieldInput("LF", r.lf, v => { r.lf = v; schedule(); }, "number"));
+      box.appendChild(card);
+    });
+    box.appendChild(addBtn("Add rim", () => { S.rims.push({ id: uid(), name: "", lf: "" }); render(); }));
+  }
+  if (S.hasWalls && F.canAskWalls) {
+    const h = el("div", "divider"); box.appendChild(h);
+    box.appendChild(el("p", "cap", "Walls — each area own Excel row. 16 OC = 12×15×h÷144 · 24 OC = 12×24×h÷144"));
+    S.walls.forEach((r, idx) => {
+      const card = el("div", "row-card");
+      const sf = round2(wallFactor(r) * n(r.cavities));
+      card.innerHTML = '<div class="row-title">Wall #' + (idx+1) + ' · ' + wallExcelDesc(r, r.materialMode) + ' → ' + fmt(sf) + ' SF</div>';
+      card.appendChild(fieldInput("Area name", r.name, v => { r.name = v; schedule(); }));
+      card.appendChild(fieldSelect("Kind", r.kind, Object.keys(WALL_KIND_LABELS).map(k => [k, WALL_KIND_LABELS[k]]), v => { r.kind = v; render(); }));
+      card.appendChild(fieldSelect("OC", r.oc, [["16","16 OC"],["24","24 OC"]], v => { r.oc = v; render(); }));
+      card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
+      if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
+      card.appendChild(fieldInput("Cavities", r.cavities, v => { r.cavities = v; schedule(); }, "number"));
+      card.appendChild(fieldSelect("Material mode", r.materialMode, [["batt","Batt"],["foam","Foam"],["cellulose","Cellulose"],["spider","Spider"],["comfortbat","ComfortBat"],["acoustical","Acoustical"]], v => { r.materialMode = v; render(); }));
+      box.appendChild(card);
+    });
+    box.appendChild(addBtn("Add wall area", () => {
+      S.walls.push({ id: uid(), name: "", kind: "ext_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: defaultWallMode(S.pkg, "ext_2x4") });
+      render();
+    }));
+  }
+  if (S.hasGables && F.canAskGables) {
+    S.gables.forEach((r, idx) => {
+      const card = el("div", "row-card");
+      card.innerHTML = '<div class="row-title">Gable #' + (idx+1) + '</div>';
+      card.appendChild(fieldInput("Name", r.name, v => { r.name = v; schedule(); }));
+      card.appendChild(fieldSelect("Shape", r.shape, [["triangle","Triangle"],["rectangle","Rectangle"]], v => { r.shape = v; render(); }));
+      card.appendChild(fieldInput("Length", r.length, v => { r.length = v; schedule(); }, "number"));
+      card.appendChild(fieldInput("Height", r.height, v => { r.height = v; schedule(); }, "number"));
+      const wrapRow = el("div", "toggle-row"); wrapRow.appendChild(el("span", null, "Wrap W"));
+      const sw = el("button", "switch" + (r.wrap ? " on" : "")); sw.type = "button";
+      sw.onclick = () => { r.wrap = !r.wrap; render(); }; wrapRow.appendChild(sw); card.appendChild(wrapRow);
+      box.appendChild(card);
+    });
+    box.appendChild(addBtn("Add gable", () => { S.gables.push({ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false }); render(); }));
+  }
+  if (S.hasCants && F.canAskCants) {
+    S.cants.forEach((r, idx) => {
+      const card = el("div", "row-card");
+      card.innerHTML = '<div class="row-title">Cantilever #' + (idx+1) + '</div>';
+      card.appendChild(fieldInput("Name", r.name, v => { r.name = v; schedule(); }));
+      card.appendChild(fieldInput("SF", r.sf, v => { r.sf = v; schedule(); }, "number"));
+      card.appendChild(fieldSelect("Material", r.material, [["r30","R30"],["foam55",'5.5" foam'],["cellulose","Cellulose"]], v => { r.material = v; render(); }));
+      box.appendChild(card);
+    });
+    box.appendChild(addBtn("Add cantilever", () => { S.cants.push({ id: uid(), name: "", sf: "", material: "r30" }); render(); }));
+  }
+  if (S.hasGarage && F.canAskGarage) {
+    const card = el("div", "row-card");
+    card.innerHTML = '<div class="row-title">Garage</div>';
+    card.appendChild(fieldInput("Garage ceiling SF", S.garageCeilingSf, v => { S.garageCeilingSf = v; schedule(); }, "number"));
+    card.appendChild(fieldSelect("Ceiling mat", S.garageCeilMat, [["r19","R19"],["foam5",'5" foam'],["cellulose","Cellulose"]], v => { S.garageCeilMat = v; render(); }));
+    const fr = el("div", "toggle-row"); fr.appendChild(el("span", null, "Foam garage roof"));
+    const sw = el("button", "switch" + (S.garageFoamRoof ? " on" : "")); sw.type = "button";
+    sw.onclick = () => { S.garageFoamRoof = !S.garageFoamRoof; render(); }; fr.appendChild(sw); card.appendChild(fr);
+    if (S.garageFoamRoof) {
+      card.appendChild(fieldInput("Garage roof flat SF", S.garageRoofFlat, v => { S.garageRoofFlat = v; schedule(); }, "number"));
+      card.appendChild(fieldSelect("Garage roof pitch", S.garageRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.garageRoofPitch = v; render(); }));
+    }
+    box.appendChild(card);
+  }
+  if (S.hasPorch && F.canAskPorch) {
+    const card = el("div", "row-card");
+    card.innerHTML = '<div class="row-title">Porch</div>';
+    const inc = el("div", "toggle-row"); inc.appendChild(el("span", null, "Include porch roofline?"));
+    const sw1 = el("button", "switch" + (S.includePorchRoof ? " on" : "")); sw1.type = "button";
+    sw1.onclick = () => { S.includePorchRoof = !S.includePorchRoof; render(); }; inc.appendChild(sw1); card.appendChild(inc);
+    if (S.includePorchRoof) {
+      card.appendChild(fieldInput("Porch roof flat SF", S.porchRoofFlat, v => { S.porchRoofFlat = v; schedule(); }, "number"));
+      card.appendChild(fieldSelect("Porch pitch", S.porchRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.porchRoofPitch = v; render(); }));
+      const go = el("div", "toggle-row"); go.appendChild(el("span", null, "Gabled off with house wrap?"));
+      const sw2 = el("button", "switch" + (S.porchGabledOff ? " on" : "")); sw2.type = "button";
+      sw2.onclick = () => { S.porchGabledOff = !S.porchGabledOff; render(); }; go.appendChild(sw2); card.appendChild(go);
+      if (!S.porchGabledOff) {
+        card.appendChild(fieldInput("Porch ceiling SF", S.porchCeilingSf, v => { S.porchCeilingSf = v; schedule(); }, "number"));
+        card.appendChild(fieldSelect("Ceiling mat", S.porchCeilMat, [["r19","R19"],["foam5",'5" foam'],["cellulose","Cellulose"]], v => { S.porchCeilMat = v; render(); }));
+      }
+    }
+    box.appendChild(card);
+  }
+  if (S.hasSubfloor && F.canAskSubfloor) {
+    box.appendChild(fieldInput("Override subfloor SF (blank = flat)", S.subfloorOverride, v => { S.subfloorOverride = v; schedule(); }, "number"));
+  }
+  if (F.canAskCrawlEncap && S.hasCrawlWalls) {
+    S.crawlWalls.forEach((r, idx) => {
+      const card = el("div", "row-card");
+      card.innerHTML = '<div class="row-title">Crawl wall #' + (idx+1) + '</div>';
+      card.appendChild(fieldInput("Name", r.name, v => { r.name = v; schedule(); }));
+      card.appendChild(fieldInput("Length", r.length, v => { r.length = v; schedule(); }, "number"));
+      card.appendChild(fieldInput("Height", r.height, v => { r.height = v; schedule(); }, "number"));
+      box.appendChild(card);
+    });
+    box.appendChild(addBtn("Add crawl wall", () => { S.crawlWalls.push({ id: uid(), name: "", length: "", height: "" }); render(); }));
+  }
+  if (S.hasDense && F.canAskDense) {
+    S.dense.forEach((r, idx) => {
+      const card = el("div", "row-card");
+      card.innerHTML = '<div class="row-title">Dense-pack #' + (idx+1) + '</div>';
+      card.appendChild(fieldInput("Area", r.name, v => { r.name = v; schedule(); }));
+      card.appendChild(fieldInput("Flat SF", r.sf, v => { r.sf = v; schedule(); }, "number"));
+      box.appendChild(card);
+    });
+  }
+  if (F.showFoamRoofPath) {
+    const card = el("div", "row-card");
+    card.innerHTML = '<div class="row-title">Extra foam roof lines (optional — blank uses flat×pitch)</div>';
+    S.foamRoofs.forEach((r, idx) => {
+      card.appendChild(fieldInput("Name #" + (idx+1), r.name, v => { r.name = v; schedule(); }));
+      card.appendChild(fieldInput("Flat SF", r.flatSf, v => { r.flatSf = v; schedule(); }, "number"));
+      card.appendChild(fieldSelect("Pitch", r.pitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { r.pitch = v; render(); }));
+    });
+    card.appendChild(addBtn("Add foam roof line", () => { S.foamRoofs.push({ id: uid(), name: "", flatSf: "", pitch: "6", customRise: "" }); render(); }));
+    box.appendChild(card);
+  }
+}
+
+function fieldInput(label, value, onChange, type) {
+  const f = el("div", "field");
+  f.innerHTML = "<label>" + label + "</label>";
+  const inp = document.createElement("input");
+  if (type) inp.type = type;
+  if (type === "number") inp.inputMode = "decimal";
+  inp.value = value == null ? "" : value;
+  inp.oninput = () => onChange(inp.value);
+  f.appendChild(inp);
+  return f;
+}
+function fieldSelect(label, value, options, onChange) {
+  const f = el("div", "field");
+  f.innerHTML = "<label>" + label + "</label>";
+  const sel = document.createElement("select");
+  options.forEach(o => {
+    const opt = document.createElement("option");
+    opt.value = o[0]; opt.textContent = o[1];
+    if (String(o[0]) === String(value)) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.onchange = () => onChange(sel.value);
+  f.appendChild(sel);
+  return f;
+}
+
+let _sched = null;
+function schedule() {
+  if (_sched) clearTimeout(_sched);
+  _sched = setTimeout(() => { _sched = null; renderLiveOnly(); saveDraft(); }, 120);
+}
+
+function renderFireplace() {
+  const body = $("fpBody");
+  body.classList.toggle("hidden", !S.includeFp);
+  setSwitch($("includeFp"), S.includeFp);
+  if (!S.includeFp) { body.innerHTML = ""; return; }
+  body.innerHTML = "";
+  const models = fpModelsForContext(S.fpMode, S.fpRetroKind);
+  if (models.length && !models.some(m => m.id === S.fpModelId)) S.fpModelId = models[0].id;
+  const model = findFpModel(S.fpModelId);
+
+  body.appendChild(el("div", "field", "<label>Fireplace job type</label>"));
+  const seg = el("div", "seg");
+  [["nc","New construction"],["retro","Retrofit"]].forEach(([v,l]) => {
+    const b = el("button", S.fpMode === v ? "active" : ""); b.type = "button"; b.textContent = l;
+    b.onclick = () => { S.fpMode = v; loadFpSpecs(); render(); };
+    seg.appendChild(b);
+  });
+  body.appendChild(seg);
+
+  if (S.fpMode === "retro") {
+    body.appendChild(fieldSelect("Retrofit path", S.fpRetroKind, [
+      ["tearout","Complete tear-out → NC-style spec"],["wood_stove","Wood stove (90° wall OK)"],["insert","Insert"]
+    ], v => { S.fpRetroKind = v; loadFpSpecs(); render(); }));
+    if (S.fpRetroKind === "tearout") {
+      const row = el("div", "toggle-row"); row.appendChild(el("span", null, "Demo by other contractor?"));
+      const sw = el("button", "switch" + (S.fpOtherDemo ? " on" : "")); sw.type = "button";
+      sw.onclick = () => { S.fpOtherDemo = !S.fpOtherDemo; render(); }; row.appendChild(sw); body.appendChild(row);
+    }
+    if (S.fpRetroKind === "wood_stove") {
+      const row = el("div", "toggle-row"); row.appendChild(el("span", null, "90° wall clearance OK"));
+      const sw = el("button", "switch" + (S.fpWall90 ? " on" : "")); sw.type = "button";
+      sw.onclick = () => { S.fpWall90 = !S.fpWall90; render(); }; row.appendChild(sw); body.appendChild(row);
+    }
+    if (S.fpRetroKind === "insert") {
+      body.appendChild(fieldSelect("Existing shell", S.fpInsertShell, [["masonry","Masonry"],["prefab","Prefab"]], v => { S.fpInsertShell = v; render(); }));
+      body.appendChild(fieldSelect("Insert fuel", S.fpFuel, [["wood","Wood"],["dv","Direct vent (DV)"],["vf","Vent-free (VF)"]], v => { S.fpFuel = v; render(); }));
+      const g = el("div", "grid2");
+      g.appendChild(fieldInput("Front width", S.fpFrontW, v => { S.fpFrontW = v; schedule(); }, "number"));
+      g.appendChild(fieldInput("Back width", S.fpBackW, v => { S.fpBackW = v; schedule(); }, "number"));
+      g.appendChild(fieldInput("Front height", S.fpFrontH, v => { S.fpFrontH = v; schedule(); }, "number"));
+      g.appendChild(fieldInput("Back height", S.fpBackH, v => { S.fpBackH = v; schedule(); }, "number"));
+      body.appendChild(g);
+      body.appendChild(fieldInput("Depth", S.fpDepth, v => { S.fpDepth = v; schedule(); }, "number"));
+    }
+  }
+
+  body.appendChild(fieldSelect("Model / catalog", S.fpModelId, models.map(m => [m.id, m.brand ? m.brand + " " + m.label : m.label]), v => {
+    S.fpModelId = v; loadFpSpecs(); render();
+  }));
+  if (model && model.category === "sealed_wood") {
+    body.appendChild(el("div", "callout", "<strong>Sealed-face wood</strong>Tear-out or new construction only — not sold as an insert."));
+  }
+
+  body.appendChild(el("div", "divider"));
+  body.appendChild(el("p", "cap", "Pipe, termination, chase"));
+  body.appendChild(fieldInput("Pipe count (sections)", S.fpPipeCount, v => { S.fpPipeCount = v; schedule(); }, "number"));
+  body.appendChild(fieldSelect("Termination", S.fpTerm, [["roof","Roof"],["wall","Wall"],["chimney","Chimney"]], v => { S.fpTerm = v; render(); }));
+  if (S.fpTerm === "chimney") {
+    body.appendChild(fieldSelect("Chimney / roof pitch", S.fpChimPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.fpChimPitch = v; render(); }));
+    if (S.fpChimPitch === "custom") body.appendChild(fieldInput("Custom rise", S.fpChimCustomRise, v => { S.fpChimCustomRise = v; schedule(); }, "number"));
+    body.appendChild(fieldSelect("Roof type", S.fpRoofType, [["shingle","Shingle"],["metal","Metal"]], v => { S.fpRoofType = v; render(); }));
+    body.appendChild(fieldSelect("Chimney cap / shroud", S.fpCap, [
+      ["standard","Standard"],["concave","Concave"],["step_out","Step-out"],["masonry_hip","Masonry hip"],["flat_shroud","Flat shroud"]
+    ], v => { S.fpCap = v; render(); }));
+  }
+  const chase = el("div", "toggle-row"); chase.appendChild(el("span", null, "Chase blocking needed?"));
+  const swc = el("button", "switch" + (S.fpChaseBlocking ? " on" : "")); swc.type = "button";
+  swc.onclick = () => { S.fpChaseBlocking = !S.fpChaseBlocking; render(); }; chase.appendChild(swc); body.appendChild(chase);
+  body.appendChild(fieldInput("Elbow count", S.fpElbows, v => { S.fpElbows = v; schedule(); }, "number"));
+  body.appendChild(fieldInput("Access notes", S.fpAccessNotes, v => { S.fpAccessNotes = v; schedule(); }));
+  body.appendChild(fieldInput("Hearth platform height (in)", S.fpHearthPlatform, v => { S.fpHearthPlatform = v; schedule(); }, "number"));
+  const gasS = el("div", "toggle-row"); gasS.appendChild(el("span", null, "Wood gas starter?"));
+  const swg = el("button", "switch" + (S.fpWoodGasStarter ? " on" : "")); swg.type = "button";
+  swg.onclick = () => { S.fpWoodGasStarter = !S.fpWoodGasStarter; render(); }; gasS.appendChild(swg); body.appendChild(gasS);
+
+  body.appendChild(el("div", "divider"));
+  body.appendChild(el("p", "cap", "Blower"));
+  const blower = model ? model.blower : "none";
+  if (blower === "vf_none") body.appendChild(el("div", "callout", "<strong>VF</strong>No fan on vent-free."));
+  else if (blower === "a42c_only") {
+    const row = el("div", "toggle-row"); row.appendChild(el("span", null, "Include A42 C open-wood fan"));
+    const sw = el("button", "switch" + (S.fpBlowerChoice === "include" ? " on" : "")); sw.type = "button";
+    sw.onclick = () => { S.fpBlowerChoice = S.fpBlowerChoice === "include" ? "none" : "include"; render(); };
+    row.appendChild(sw); body.appendChild(row);
+  } else if (blower === "dv_default") {
+    const row = el("div", "toggle-row"); row.appendChild(el("span", null, "DV blower (default on)"));
+    const sw = el("button", "switch" + (S.fpBlowerChoice !== "none" ? " on" : "")); sw.type = "button";
+    sw.onclick = () => { S.fpBlowerChoice = S.fpBlowerChoice === "none" ? "include" : "none"; render(); };
+    row.appendChild(sw); body.appendChild(row);
+  } else if (blower === "closed_optional") {
+    const row = el("div", "toggle-row"); row.appendChild(el("span", null, "Include optional closed-face blower"));
+    const sw = el("button", "switch" + (S.fpBlowerChoice === "include" ? " on" : "")); sw.type = "button";
+    sw.onclick = () => { S.fpBlowerChoice = S.fpBlowerChoice === "include" ? "optional_skip" : "include"; render(); };
+    row.appendChild(sw); body.appendChild(row);
+  } else body.appendChild(el("p", "status", "No blower for this model."));
+
+  body.appendChild(el("div", "divider"));
+  body.appendChild(el("p", "cap", "Spec library (editable RO) — save persists to IndexedDB"));
+  const g2 = el("div", "grid2");
+  g2.appendChild(fieldInput("Spec RO height", S.fpSpecRoH, v => { S.fpSpecRoH = v; schedule(); }, "number"));
+  g2.appendChild(fieldInput("Spec RO width", S.fpSpecRoW, v => { S.fpSpecRoW = v; schedule(); }, "number"));
+  g2.appendChild(fieldInput("Spec RO depth", S.fpSpecRoD, v => { S.fpSpecRoD = v; schedule(); }, "number"));
+  g2.appendChild(fieldInput("Hearth lip", S.fpSpecLip, v => { S.fpSpecLip = v; schedule(); }, "number"));
+  body.appendChild(g2);
+  body.appendChild(fieldInput("Spec platform height", S.fpSpecPlatform, v => { S.fpSpecPlatform = v; schedule(); }, "number"));
+  const saveSpec = el("button", "btn btn-secondary btn-block"); saveSpec.type = "button"; saveSpec.textContent = "Save specs for this model";
+  saveSpec.onclick = () => {
+    idbPutSpec({ modelId: S.fpModelId, roH: S.fpSpecRoH, roW: S.fpSpecRoW, roD: S.fpSpecRoD, hearthLip: S.fpSpecLip, platformH: S.fpSpecPlatform })
+      .then(() => { S.fpSpecNote = "Specs saved to IndexedDB."; renderFireplace(); })
+      .catch(() => { S.fpSpecNote = "Spec save failed."; renderFireplace(); });
+  };
+  body.appendChild(saveSpec);
+  if (S.fpSpecNote) body.appendChild(el("p", "status", S.fpSpecNote));
+
+  body.appendChild(el("p", "cap", "Measured RO (validate vs spec + platform)"));
+  const g3 = el("div", "grid3");
+  g3.appendChild(fieldInput("Measured H", S.fpMeasRoH, v => { S.fpMeasRoH = v; schedule(); }, "number"));
+  g3.appendChild(fieldInput("Measured W", S.fpMeasRoW, v => { S.fpMeasRoW = v; schedule(); }, "number"));
+  g3.appendChild(fieldInput("Measured D", S.fpMeasRoD, v => { S.fpMeasRoD = v; schedule(); }, "number"));
+  body.appendChild(g3);
+  const pass = fpSpecPass();
+  if (pass) {
+    body.appendChild(el("div", "callout " + (pass.ok ? "ok" : "danger"),
+      "<strong class='" + (pass.ok ? "pass" : "fail") + "'>" + (pass.ok ? "PASS" : "FAIL") + "</strong>Need " +
+      pass.needH + "×" + pass.needW + "×" + pass.needD + " (spec+platform). Measured " + pass.mH + "×" + pass.mW + "×" + pass.mD + "."));
+  }
+}
+
+function loadFpSpecs() {
+  const m = findFpModel(S.fpModelId);
+  if (!m) return;
+  if (m.blower === "dv_default") S.fpBlowerChoice = "include";
+  else if (m.blower === "vf_none") S.fpBlowerChoice = "none";
+  else if (m.blower === "a42c_only") S.fpBlowerChoice = "include";
+  else if (m.blower === "closed_optional") S.fpBlowerChoice = "optional_skip";
+  else S.fpBlowerChoice = "none";
+  idbGetAllSpecs().then(specs => {
+    const o = specs.find(s => s.modelId === S.fpModelId);
+    S.fpSpecRoH = (o && o.roH) || String(m.roH);
+    S.fpSpecRoW = (o && o.roW) || String(m.roW);
+    S.fpSpecRoD = (o && o.roD) || String(m.roD);
+    S.fpSpecLip = (o && o.hearthLip) || String(m.hearthLip);
+    S.fpSpecPlatform = (o && o.platformH) || String(m.platformH);
+    renderLiveOnly();
+  }).catch(() => {
+    S.fpSpecRoH = String(m.roH); S.fpSpecRoW = String(m.roW); S.fpSpecRoD = String(m.roD);
+    S.fpSpecLip = String(m.hearthLip); S.fpSpecPlatform = String(m.platformH);
+  });
+}
+
+function renderOutput() {
+  const lines = allLines();
+  const hint = $("outputHint");
+  const pricedCount = S.priceLibrary.filter(p => n(p.unitPrice40) > 0).length;
+  let extra = "";
+  if (S.showBallpark) {
+    if (pricedCount === 0) extra = " · Ballpark: add 40% prices in Pricing";
+    else { const b = ballpark(); extra = " · Ballpark " + fmtMoney(b.total) + " @ " + marginPct() + "% (not final invoice)"; }
+  }
+  hint.innerHTML = lines.length + " rows · Bags blank until bag-yield · Caulk/foam & gas flags · Owner: " +
+    (S.owner === "asher" ? "Asher" : "Sky") + extra;
+
+  const wrap = $("outputTable");
+  if (!lines.length) { wrap.innerHTML = "<p class='status'>Enter measurements — Excel rows appear here.</p>"; return; }
+  if (S.outputView === "excel") {
+    let html = "<table><thead><tr><th>Product</th><th>Description</th><th>Footage</th><th>Bags</th></tr></thead><tbody>";
+    lines.forEach(L => {
+      html += "<tr><td>" + escHtml(L.product) + "</td><td>" + escHtml(L.description) + "</td><td class='num'>" +
+        ((L.footage === 0 && L.unit === "—") ? "" : escHtml(fmt(L.footage))) + "</td><td class='num'>" + escHtml(L.bags) + "</td></tr>";
+    });
+    html += "</tbody></table>";
+    wrap.innerHTML = html;
+  } else {
+    let html = "<table><thead><tr><th>Area</th><th>Assembly</th><th>Material</th><th>Qty</th><th>Unit</th><th>Notes</th></tr></thead><tbody>";
+    lines.forEach(L => {
+      html += "<tr><td>" + escHtml(L.area) + "</td><td>" + escHtml(L.assembly) + "</td><td>" + escHtml(L.product + " — " + L.description) +
+        "</td><td class='num'>" + escHtml(fmt(L.footage)) + "</td><td>" + escHtml(L.unit) + "</td><td>" + escHtml(L.notes) + "</td></tr>";
+    });
+    html += "</tbody></table>";
+    wrap.innerHTML = html;
+  }
+}
+
+function escHtml(s) {
+  return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function renderArchive() {
+  const q = (S.filterText || "").trim().toLowerCase();
+  const filtered = S.archive.filter(j => {
+    if (S.filterOwner !== "all" && j.owner !== S.filterOwner) return false;
+    if (S.filterBuilder && !(j.builder || "").toLowerCase().includes(S.filterBuilder.toLowerCase())) return false;
+    if (S.filterCity && !(j.city || "").toLowerCase().includes(S.filterCity.toLowerCase())) return false;
+    if (S.filterPkg && !(j.packageLabel || "").toLowerCase().includes(S.filterPkg.toLowerCase())) return false;
+    if (S.filterFrom && j.dateMeasured < S.filterFrom) return false;
+    if (S.filterTo && j.dateMeasured > S.filterTo) return false;
+    if (q) {
+      const blob = [j.builder, j.city, j.address, j.packageLabel, j.owner, j.dateMeasured, j.keywords].join(" ").toLowerCase();
+      if (!blob.includes(q)) return false;
+    }
+    return true;
+  });
+  $("archiveCount").textContent = filtered.length + " saved job(s)";
+  const list = $("archiveList");
+  list.innerHTML = "";
+  if (!filtered.length) {
+    list.innerHTML = "<p class='status'>No archived jobs match — save from the wizard to build the archive.</p>";
+    return;
+  }
+  filtered.forEach(j => {
+    const card = el("div", "archive-card");
+    card.innerHTML = '<div class="meta">' + escHtml(j.dateMeasured) + " · " + (j.owner === "asher" ? "Asher" : "Sky") +
+      " · " + escHtml(j.builder || "—") + " · " + escHtml(j.city || "—") + '</div>' +
+      '<div class="title">' + escHtml(j.address || "(no address)") + '</div>' +
+      '<div class="meta">' + escHtml(j.packageLabel) + '</div>';
+    const actions = el("div", "archive-actions");
+    const open = el("button", "btn btn-primary btn-sm"); open.type = "button"; open.textContent = "Open";
+    open.onclick = () => openArchiveJob(j.id);
+    const del = el("button", "btn btn-danger btn-sm"); del.type = "button"; del.textContent = "Delete";
+    del.onclick = () => {
+      if (!confirm("Delete this archived takeoff?")) return;
+      idbDelete(j.id).then(() => { setStatus("Deleted from archive."); refreshArchive(); }).catch(() => setStatus("Delete failed."));
+    };
+    actions.appendChild(open); actions.appendChild(del); card.appendChild(actions); list.appendChild(card);
+  });
+}
+
+function renderPricing() {
+  setSwitch($("showBallpark"), S.showBallpark);
+  setSwitch($("showPriceLib"), S.showPriceLib);
+  toggleField("ballparkBody", S.showBallpark);
+  toggleField("priceLibBody", S.showPriceLib);
+  toggleField("marginCustomField", S.marginPick === "custom");
+  bindSeg("seg-margin", () => S.marginPick, v => { S.marginPick = v; render(); });
+  const pricedCount = S.priceLibrary.filter(p => n(p.unitPrice40) > 0).length;
+  const callout = $("ballparkCallout");
+  if (S.showBallpark) {
+    if (pricedCount === 0) callout.innerHTML = "<strong>Ballpark — not final invoice</strong>Price library is empty. Add 40% unit prices below.";
+    else {
+      const b = ballpark();
+      callout.innerHTML = "<strong>Ballpark — not final invoice</strong>" + fmtMoney(b.total) + " @ " + marginPct() +
+        "% · " + b.pricedLines + " priced line(s)" + (b.unpricedLines ? " · " + b.unpricedLines + " unpriced" : "") +
+        (b.missing.length ? "<br><em>Missing: " + escHtml(b.missing.join(", ")) + "</em>" : "");
+    }
+  }
+  if (!S.showPriceLib) return;
+  const list = $("priceLibList");
+  list.innerHTML = "";
+  list.appendChild(el("p", "status", pricedCount + " of " + S.priceLibrary.length + " materials priced"));
+  S.priceLibrary.forEach(p => {
+    const row = el("div", "row-card");
+    row.innerHTML = '<div class="row-title">' + escHtml(p.materialKey) + " (/" + escHtml(p.unit) + ")</div>";
+    const inpWrap = fieldInput("$/unit @ 40%", p.unitPrice40, v => { p.unitPrice40 = v; }, "number");
+    row.appendChild(inpWrap);
+    const save = el("button", "btn btn-primary btn-sm"); save.type = "button"; save.textContent = "Save";
+    save.onclick = () => {
+      idbPutPrice(p).then(() => { $("priceLibNote").textContent = "Saved " + p.materialKey; }).catch(() => { $("priceLibNote").textContent = "Price save failed."; });
+    };
+    row.appendChild(save);
+    list.appendChild(row);
+  });
+}
+
+function renderLiveOnly() {
+  const F = flags();
+  const flat = n(S.flatSf);
+  const da = (!F.canAskDeadVaultKnees || !S.hasDeadAir) ? 0 : S.deadAir.reduce((s, r) => s + n(r.sf), 0);
+  const vf = (!F.canAskDeadVaultKnees || !S.hasVaults) ? 0 : S.vaults.reduce((s, r) => s + n(r.flatSf), 0);
+  const atticBlow = Math.max(0, flat - da - vf);
+  const foam = flat * resolvePitchFactor(S.housePitch, S.houseCustomRise);
+  $("atticBlowLive").textContent = fmt(atticBlow) + " SF";
+  $("foamRoofLive").textContent = fmt(foam) + " SF";
+  const lines = allLines();
+  const pricedCount = S.priceLibrary.filter(p => n(p.unitPrice40) > 0).length;
+  let ball = "";
+  if (S.showBallpark) {
+    if (pricedCount === 0) ball = '<span class="pill">Ballpark: add prices</span>';
+    else ball = '<span class="pill">' + fmtMoney(ballpark().total) + " @ " + marginPct() + "%</span>";
+  }
+  $("liveBar").innerHTML = '<span class="pill">' + (S.owner === "asher" ? "Asher" : "Sky") + "</span>" +
+    '<span class="pill">' + lines.length + " rows</span>" +
+    '<span class="pill">' + fmt(flat) + " SF</span>" + ball;
+  renderOutput();
+  if (S.showBallpark || S.showPriceLib) renderPricing();
+  const pass = fpSpecPass();
+  // update RO callout if fireplace open without full re-render when typing measures — skip for simplicity
+}
+
+function setStatus(msg) {
+  S.statusNote = msg;
+  const e = $("statusNote");
+  if (e) e.textContent = msg || "";
+}
+
+function render() {
+  const F = flags();
+  // header fields
+  $("builder").value = S.builder;
+  $("city").value = S.city;
+  $("address").value = S.address;
+  $("dateMeasured").value = S.dateMeasured;
+  $("keywords").value = S.keywords;
+  $("gasType").value = S.gasType;
+  $("pkg").value = S.pkg;
+  $("altPkg").value = S.altPkg;
+  $("atticRetro").value = S.atticRetro;
+  $("crawlRetro").value = S.crawlRetro;
+  $("blowR").value = S.blowR;
+  $("flatSf").value = S.flatSf;
+  $("touchupPatchSf").value = S.touchupPatchSf;
+  $("marginCustom").value = S.marginCustom;
+
+  bindSeg("seg-owner", () => S.owner, v => { S.owner = v; S.outputView = v === "sky" ? "excel" : "fg"; render(); });
+  bindSeg("seg-mode", () => S.jobMode, v => { S.jobMode = v; render(); });
+  bindSeg("seg-retroScope", () => S.retroScope, v => { S.retroScope = v; render(); });
+  bindSeg("seg-outputView", () => S.outputView, v => { S.outputView = v; render(); });
+
+  $("ownerHint").textContent = S.owner === "sky" ? "Sky → Excel handoff primary" : "Asher → FG-style secondary view default (Excel CSV still primary handoff)";
+  toggleField("gasIdk", S.gasType === "idk");
+  toggleField("retroBlock", S.jobMode === "retro");
+  toggleField("pkgField", S.jobMode === "new");
+  toggleField("atticRetroFields", S.jobMode === "retro" && S.retroScope === "attic");
+  toggleField("crawlRetroFields", S.jobMode === "retro" && S.retroScope === "crawl");
+  toggleField("blowRField", F.atticIsBlow);
+  toggleField("altPkgField", S.alsoAlt);
+  toggleField("pitchBlock", F.showFoamRoofPath);
+  toggleField("blowLiveBlock", !F.showFoamRoofPath);
+  toggleField("touchupField", F.canAskTouchup);
+  toggleField("houseCustomRiseField", S.housePitch === "custom");
+
+  setSwitch($("airSealed"), S.airSealed);
+  setSwitch($("caulkFoam"), S.caulkFoam);
+  setSwitch($("alsoAlt"), S.alsoAlt);
+
+  // pitch select
+  const hp = $("housePitch");
+  if (hp && !hp.options.length) {
+    PITCH_OPTIONS.forEach(o => {
+      const opt = document.createElement("option");
+      opt.value = o.value; opt.textContent = o.label; hp.appendChild(opt);
+    });
+  }
+  if (hp) hp.value = S.housePitch;
+
+  renderGates();
+  renderAssemblyEditors();
+  renderFireplace();
+  renderLiveOnly();
+  renderArchive();
+  renderPricing();
+  setStatus(S.statusNote);
+  saveDraft();
+}
+
+function draftPayload() {
+  const copy = {};
+  Object.keys(S).forEach(k => {
+    if (k === "archive" || k === "draftReady" || k === "_suppressSave" || k === "statusNote" || k === "idbOk") return;
+    if (k.startsWith("filter")) return;
+    copy[k] = S[k];
+  });
+  return copy;
+}
+
+function saveDraft() {
+  if (!S.draftReady || S._suppressSave) return;
+  lsSet(DRAFT_KEY, JSON.stringify(draftPayload()));
+}
+
+function restoreDraft() {
+  const raw = lsGet(DRAFT_KEY);
+  if (!raw) { S.draftReady = true; return; }
+  try {
+    const d = JSON.parse(raw);
+    Object.keys(d).forEach(k => {
+      if (k in S && k !== "archive" && k !== "priceLibrary") S[k] = d[k];
+    });
+  } catch (e) {}
+  S.draftReady = true;
+}
+
+function refreshArchive() {
+  idbGetAll().then(jobs => {
+    S.idbOk = true;
+    S.archive = jobs.sort((a, b) => b.dateMeasured.localeCompare(a.dateMeasured)).map(j => ({
+      id: j.id, dateMeasured: j.dateMeasured, owner: j.owner, builder: j.builder,
+      city: j.city, address: j.address, packageLabel: j.packageLabel, keywords: j.keywords || ""
+    }));
+    S._fullJobs = jobs;
+    renderArchive();
+  }).catch(() => { S.idbOk = false; S.archive = []; renderArchive(); });
+}
+
+function savePermanent() {
+  const lines = allLines();
+  const snap = {
+    id: S.jobId,
+    dateMeasured: S.dateMeasured || todayISO(),
+    owner: S.owner,
+    builder: (S.builder || "").trim(),
+    city: (S.city || "").trim(),
+    address: (S.address || "").trim(),
+    packageLabel: packageLabel(),
+    packageType: S.pkg,
+    jobMode: S.jobMode,
+    gasType: S.gasType,
+    keywords: (S.keywords || "").trim(),
+    airSealed: S.airSealed,
+    caulkFoam: S.caulkFoam,
+    flatSf: S.flatSf,
+    excelRows: lines.map(L => ({ product: L.product, description: L.description, footage: (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), bags: L.bags })),
+    fgRows: lines.map(L => ({ area: L.area, assembly: L.assembly, material: L.product + " — " + L.description, qty: fmt(L.footage), unit: L.unit, notes: L.notes })),
+    draft: draftPayload()
+  };
+  idbPut(snap).then(() => { setStatus("Saved permanently to archive."); refreshArchive(); })
+    .catch(() => { S.idbOk = false; setStatus("Archive save failed (IndexedDB blocked). Draft still autosaved."); });
+}
+
+function openArchiveJob(id) {
+  const jobs = S._fullJobs || [];
+  const find = () => {
+    const job = jobs.find(j => j.id === id);
+    if (!job) {
+      idbGetAll().then(all => {
+        S._fullJobs = all;
+        const j = all.find(x => x.id === id);
+        if (j) applySnapshot(j);
+        else setStatus("Could not open job from archive.");
+      });
+      return;
+    }
+    applySnapshot(job);
+  };
+  find();
+}
+
+function applySnapshot(job) {
+  S._suppressSave = true;
+  const d = job.draft || {};
+  Object.keys(d).forEach(k => { if (k in S && k !== "priceLibrary" && k !== "archive") S[k] = d[k]; });
+  S.jobId = job.id;
+  S.dateMeasured = job.dateMeasured;
+  S.owner = job.owner;
+  S.builder = job.builder;
+  S.city = job.city;
+  S.address = job.address;
+  S.keywords = job.keywords || "";
+  S.gasType = job.gasType || "natural";
+  S.pkg = job.packageType;
+  S.jobMode = job.jobMode;
+  S.airSealed = job.airSealed;
+  S.caulkFoam = job.caulkFoam;
+  S.outputView = job.owner === "sky" ? "excel" : "fg";
+  S._suppressSave = false;
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === "wizard"));
+  document.querySelectorAll(".tabs-panel").forEach(p => p.classList.toggle("active", p.id === "tab-wizard"));
+  setStatus("Opened " + (job.address || job.builder) + " (" + job.dateMeasured + ")");
+  render();
+}
+
+function newJob() {
+  S.jobId = uid();
+  S.dateMeasured = todayISO();
+  S.builder = ""; S.city = ""; S.address = ""; S.keywords = "";
+  S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard";
+  S.alsoAlt = false; S.airSealed = false; S.caulkFoam = false;
+  S.flatSf = ""; S.housePitch = "6";
+  S.hasDeadAir = false; S.hasVaults = false; S.hasKnees = false; S.hasBaffles = false;
+  S.hasRim = false; S.hasWalls = true; S.hasGables = false; S.hasCants = false;
+  S.hasGarage = false; S.hasPorch = false; S.hasBasementWalls = false;
+  S.hasSubfloor = false; S.hasDense = false; S.hasCrawlWalls = false;
+  S.deadAir = [{ id: uid(), name: "", sf: "" }];
+  S.vaults = [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }];
+  S.knees = [{ id: uid(), name: "", height: "8", lf: "", wrap: true }];
+  S.baffles = "";
+  S.rims = [{ id: uid(), name: "", lf: "" }];
+  S.walls = [{ id: uid(), name: "", kind: "ext_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: "batt" }];
+  S.gables = [{ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false }];
+  S.cants = [{ id: uid(), name: "", sf: "", material: "r30" }];
+  S.touchupPatchSf = ""; S.includePorchRoof = false; S.porchGabledOff = false;
+  S.includeFp = false; S.fpMode = "nc"; S.fpRetroKind = "tearout"; S.fpOtherDemo = false;
+  S.fpModelId = "apex42"; S.fpPipeCount = ""; S.fpTerm = "roof"; S.fpAccessNotes = "";
+  S.fpHearthPlatform = ""; S.fpWoodGasStarter = false; S.fpMeasRoH = ""; S.fpMeasRoW = ""; S.fpMeasRoD = "";
+  S.fpWall90 = false;
+  setStatus("New job started (draft autosaves).");
+  render();
+}
+
+function wireInputs() {
+  const map = {
+    builder: "builder", city: "city", address: "address", dateMeasured: "dateMeasured",
+    keywords: "keywords", gasType: "gasType", pkg: "pkg", altPkg: "altPkg",
+    atticRetro: "atticRetro", crawlRetro: "crawlRetro", blowR: "blowR",
+    flatSf: "flatSf", housePitch: "housePitch", houseCustomRise: "houseCustomRise",
+    touchupPatchSf: "touchupPatchSf", marginCustom: "marginCustom",
+    filterText: "filterText", filterBuilder: "filterBuilder", filterCity: "filterCity",
+    filterOwner: "filterOwner", filterPkg: "filterPkg", filterFrom: "filterFrom", filterTo: "filterTo"
+  };
+  Object.keys(map).forEach(id => {
+    const e = $(id); if (!e) return;
+    const key = map[id];
+    const handler = () => {
+      S[key] = e.value;
+      if (id === "gasType" || id === "pkg" || id === "atticRetro" || id === "crawlRetro" || id === "housePitch" || id === "blowR" || id.indexOf("filter") === 0)
+        render();
+      else schedule();
+    };
+    e.addEventListener("input", handler);
+    e.addEventListener("change", handler);
+  });
+
+  $("airSealed").onclick = () => { S.airSealed = !S.airSealed; render(); };
+  $("caulkFoam").onclick = () => { S.caulkFoam = !S.caulkFoam; render(); };
+  $("alsoAlt").onclick = () => { S.alsoAlt = !S.alsoAlt; render(); };
+  $("includeFp").onclick = () => { S.includeFp = !S.includeFp; if (S.includeFp) loadFpSpecs(); render(); };
+  $("showBallpark").onclick = () => { S.showBallpark = !S.showBallpark; render(); };
+  $("showPriceLib").onclick = () => { S.showPriceLib = !S.showPriceLib; render(); };
+
+  $("btnSaveArchive").onclick = savePermanent;
+  $("btnSaveArchive2").onclick = savePermanent;
+  $("btnNewJob").onclick = newJob;
+  $("btnCopyCsv").onclick = () => {
+    const text = buildExcelCsv();
+    $("csvText").value = text;
+    $("csvField").classList.remove("hidden");
+    copyText(text).then(ok => setStatus(ok ? "Excel CSV copied." : "Select CSV below and copy."));
+  };
+  $("btnAddPrice").onclick = () => {
+    const key = ($("newPriceKey").value || "").trim();
+    if (!key) return;
+    if (S.priceLibrary.some(r => r.materialKey === key)) { $("priceLibNote").textContent = "Already in library."; return; }
+    const entry = { materialKey: key, unitPrice40: "", unit: $("newPriceUnit").value };
+    S.priceLibrary = mergePriceLibrary(S.priceLibrary.concat([entry]));
+    idbPutPrice(entry).then(() => { $("newPriceKey").value = ""; $("priceLibNote").textContent = "Added " + key; renderPricing(); })
+      .catch(() => { $("priceLibNote").textContent = "Add failed."; });
+  };
+  $("btnSaveAllPrices").onclick = () => {
+    const filled = S.priceLibrary.filter(r => (r.unitPrice40 || "").trim() !== "");
+    Promise.all(filled.map(r => idbPutPrice(r)))
+      .then(() => { $("priceLibNote").textContent = "Saved " + filled.length + " price(s) to IndexedDB."; })
+      .catch(() => { $("priceLibNote").textContent = "Bulk save failed."; });
+  };
+
+  document.querySelectorAll(".nav-btn").forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b === btn));
+      document.querySelectorAll(".tabs-panel").forEach(p => p.classList.toggle("active", p.id === "tab-" + btn.dataset.tab));
+      if (btn.dataset.tab === "archive") refreshArchive();
+      if (btn.dataset.tab === "output") renderOutput();
+      if (btn.dataset.tab === "pricing") renderPricing();
+    };
+  });
+}
+
+function init() {
+  restoreDraft();
+  if (!$("dateMeasured").value) S.dateMeasured = todayISO();
+  wireInputs();
+  idbGetAllPrices().then(stored => { S.priceLibrary = mergePriceLibrary(stored); render(); })
+    .catch(() => { S.priceLibrary = mergePriceLibrary([]); render(); });
+  refreshArchive();
+  if (S.includeFp) loadFpSpecs();
+  render();
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+else init();
+
+})();
+</script>
+</body>
+</html>
