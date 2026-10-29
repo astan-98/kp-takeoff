@@ -971,6 +971,26 @@ function fmtMoney(x) {
   r[0] = r[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return "$" + r.join(".");
 }
+// Roofline open-cell foam depth: default comes from the job site city/state/zip (code), job + line picks override.
+const ROOF_DEPTH_CHOICES = ["5.5", "6", "7", "8", "9", "10", "11", "12"];
+function roofDepthAuto() {
+  const city = String(S.city || "").trim().toLowerCase().replace(/[.,]/g, "").replace(/\s+/g, " ");
+  const st = String(S.siteState || "").trim().toLowerCase().replace(/\./g, "");
+  const zip = String(S.siteZip || "").trim().slice(0, 5);
+  const addr = String(S.address || "").toLowerCase();
+  const isGA = !st || st === "ga" || st === "georgia", isNC = !st || st === "nc" || st === "north carolina";
+  if ((isNC && /^highlands( nc| north carolina)?$/.test(city)) || zip === "28741") return { depth: "10", why: "Highlands, NC" };
+  if ((isGA && /^(athens|athens-clarke|athens clarke|winterville)( ga| georgia)?$/.test(city)) || (isGA && /\bclarke( county| co)?\b/.test(city + " " + addr))
+      || (!city && /^3060[1-9]$/.test(zip))) return { depth: "8", why: "Athens-Clarke County" };
+  return { depth: "5.5", why: "" };
+}
+function roofDepthJob() { return S.roofFoamDepth || roofDepthAuto().depth; }
+function roofDepthFor(lineDepth) { return lineDepth || roofDepthJob(); }
+function roofDepthSelect(label, value, onChange, jobLevel) {
+  const a = roofDepthAuto();
+  const first = jobLevel ? ["", "Auto from address — " + a.depth + '"' + (a.why ? " (" + a.why + ")" : "")] : ["", "Job default — " + roofDepthJob() + '"'];
+  return fieldSelect(label, value || "", [first].concat(ROOF_DEPTH_CHOICES.map(d => [d, d + '"'])), onChange);
+}
 function kraftToggle(r) {
   const kr = el("div", "toggle-row"); kr.appendChild(el("span", null, "Kraft faced (default unfaced)"));
   const ks = el("button", "switch" + (r.kraft ? " on" : "")); ks.type = "button";
@@ -1173,6 +1193,7 @@ const S = {
   gables: [{ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false }],
   cants: [{ id: uid(), name: "", sf: "", material: "r30" }],
   garageLivingAbove: false, garageCeilingSf: "", garageCeilMat: "r19", garageCeilOc: "16", garageCeils: [],
+  roofFoamDepth: "", porchRoofDepth: "", garageRoofDepth: "",
   garageFoamRoof: false, garageRoofFlat: "", garageRoofPitch: "6", garageRoofCustomRise: "", garageBlockAsGable: false,
   includePorchRoof: true, porchGabledOff: false, porchRoofFlat: "", porchRoofPitch: "6", porchRoofCustomRise: "",
   porchCeilingSf: "", porchCeilMat: "batt_r19", porchJoistOc: "16", porchCeilOc: "16", touchupOc: "16",
@@ -1927,10 +1948,10 @@ function buildLinesForPackage(p, tag) {
       const f = n(r.flatSf); if (f <= 0) return;
       usedExplicit = true;
       const factor = resolvePitchFactor(r.pitch, r.customRise);
-      push(lines, { area: "Roof line", assembly: "Roof foam", product: "Open-cell spray foam", description: '5.5" OC roof', footage: round2(f * factor), unit: "SF", notes: noteTag + "flat×" + factor.toFixed(3) });
+      push(lines, { area: "Roof line", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthFor(r.depth) + '" OC roof', footage: round2(f * factor), unit: "SF", notes: noteTag + "flat×" + factor.toFixed(3) });
     });
     if (!usedExplicit && flat > 0 && (!customAttic || PR.onlyAttic)) {
-      push(lines, { area: "House roof", assembly: "Roof foam", product: "Open-cell spray foam", description: '5.5" OC roof', footage: round2(flat * housePitchFactor), unit: "SF", notes: noteTag + "flat×" + housePitchFactor.toFixed(3) });
+      push(lines, { area: "House roof", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthJob() + '" OC roof', footage: round2(flat * housePitchFactor), unit: "SF", notes: noteTag + "flat×" + housePitchFactor.toFixed(3) });
     }
   }
 
@@ -1938,7 +1959,7 @@ function buildLinesForPackage(p, tag) {
     const pf = n(S.porchFlat);
     if (S.includePorchRoof && pf > 0) {
       const factor = resolvePitchFactor(S.porchRoofPitch, S.porchRoofCustomRise);
-      push(lines, { area: "Porch roof", assembly: "Porch roof foam", product: "Open-cell spray foam", description: '5.5" OC porch roof', footage: round2(pf * factor), unit: "SF", notes: noteTag + "flat " + fmt(pf) + " ×" + factor.toFixed(3) });
+      push(lines, { area: "Porch roof", assembly: "Porch roof foam", product: "Open-cell spray foam", description: roofDepthFor(S.porchRoofDepth) + '" OC porch roof', footage: round2(pf * factor), unit: "SF", notes: noteTag + "flat " + fmt(pf) + " ×" + factor.toFixed(3) });
     }
     if (S.includePorchCeiling) {
       const m = PORCH_CEIL_MATS[S.porchCeilMat] || PORCH_CEIL_MATS.batt_r19;
@@ -2058,7 +2079,7 @@ function buildLinesForPackage(p, tag) {
   if (S.hasGarage && F.canAskGarage) {
     if (S.garageFoamRoof && F.showFoamRoofPath && n(S.garageRoofFlat) > 0) {
       const factor = resolvePitchFactor(S.garageRoofPitch, S.garageRoofCustomRise);
-      push(lines, { area: S.garageBlockAsGable ? "Garage block" : "Garage roof", assembly: "Garage roof foam", product: "Open-cell spray foam", description: '5.5" OC', footage: round2(n(S.garageRoofFlat) * factor), unit: "SF", notes: noteTag });
+      push(lines, { area: S.garageBlockAsGable ? "Garage block" : "Garage roof", assembly: "Garage roof foam", product: "Open-cell spray foam", description: (S.garageBlockAsGable ? "5.5" : roofDepthFor(S.garageRoofDepth)) + '" OC', footage: round2(n(S.garageRoofFlat) * factor), unit: "SF", notes: noteTag });
     }
     [{ sf: S.garageCeilingSf, mat: S.garageCeilMat, oc: S.garageCeilOc }].concat(Array.isArray(S.garageCeils) ? S.garageCeils : []).forEach(g => {
       if (!(n(g.sf) > 0)) return;
@@ -2627,6 +2648,7 @@ function renderAssemblyEditors() {
     if (S.garageFoamRoof) {
       card.appendChild(fieldInput("Garage roof flat SF", S.garageRoofFlat, v => { S.garageRoofFlat = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Garage roof pitch", S.garageRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.garageRoofPitch = v; render(); }));
+      if (!S.garageBlockAsGable) card.appendChild(roofDepthSelect("Garage roof foam depth", S.garageRoofDepth, v => { S.garageRoofDepth = v; render(); }));
     }
     }
     box.appendChild(card);
@@ -2648,6 +2670,7 @@ function renderAssemblyEditors() {
     card.appendChild(fieldInput("Porch flat SF", S.porchFlat, v => { S.porchFlat = v; showPorch(); schedule(); }, "number"));
     sw("Porch roofline (foam)?", "includePorchRoof");
     if (S.includePorchRoof) card.appendChild(fieldSelect("Porch roof pitch", S.porchRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.porchRoofPitch = v; render(); }));
+    if (S.includePorchRoof) card.appendChild(roofDepthSelect("Porch roof foam depth", S.porchRoofDepth, v => { S.porchRoofDepth = v; render(); }));
     if (S.includePorchRoof && S.porchRoofPitch === "custom") card.appendChild(fieldInput("Custom rise", S.porchRoofCustomRise, v => { S.porchRoofCustomRise = v; showPorch(); schedule(); }, "number"));
     sw("Porch ceiling?", "includePorchCeiling");
     if (S.includePorchCeiling) card.appendChild(fieldSelect("Ceiling material", S.porchCeilMat, Object.keys(PORCH_CEIL_MATS).map(k => [k, PORCH_CEIL_MATS[k][0]]), v => { S.porchCeilMat = v; render(); }));
@@ -2714,9 +2737,12 @@ function renderAssemblyEditors() {
   if (F.showFoamRoofPath) {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">' + (F.customAttic && !pkgProfile(S.pkg).onlyAttic ? "Foam roofline areas (flat SF × pitch)" : "Extra foam roof lines (optional — blank uses flat×pitch)") + '</div>';
+    card.appendChild(roofDepthSelect("Roofline foam depth (job)", S.roofFoamDepth, v => { S.roofFoamDepth = v; render(); }, true));
+    card.appendChild(el("p", "cap", 'Fills in from the job site address: Athens-Clarke County 8", Highlands NC 10", everywhere else 5.5". Pick a depth to override.'));
     S.foamRoofs.forEach((r, idx) => {
       card.appendChild(fieldInput("Flat SF #" + (idx+1), r.flatSf, v => { r.flatSf = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Pitch", r.pitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { r.pitch = v; render(); }));
+      card.appendChild(roofDepthSelect("Foam depth #" + (idx+1), r.depth, v => { r.depth = v; render(); }));
     });
     card.appendChild(addBtn("Add foam roof line", () => { S.foamRoofs.push({ id: uid(), name: "", flatSf: "", pitch: "6", customRise: "" }); render(); }));
     box.appendChild(card);
@@ -3305,6 +3331,7 @@ function migrateState(d) {
   if (!Array.isArray(S.interiorWalls) || !S.interiorWalls.length) S.interiorWalls = [newInteriorWall()];
   if (!Array.isArray(S.misc) || !S.misc.length) S.misc = [newMiscItem()];
   if (typeof S.hasMisc !== "boolean") S.hasMisc = false;
+  ["roofFoamDepth", "porchRoofDepth", "garageRoofDepth"].forEach(k => { if (typeof S[k] !== "string") S[k] = ""; });
   if (!("hasMisc" in d)) { S.hasMisc = false; S.misc = [newMiscItem()]; }
   if (S.fpBlowerChoice === "optional_skip") S.fpBlowerChoice = "none";
   if (Array.isArray(S.vaults)) S.vaults.forEach(v => { if (v.kind !== "open" && v.kind !== "decked") v.kind = "open"; });
@@ -3481,7 +3508,7 @@ function newJob() {
   S.walls = [{ id: uid(), name: "", kind: "ext_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: "batt" }];
   S.gables = [{ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false }];
   S.cants = [{ id: uid(), name: "", sf: "", material: "r30" }];
-  S.touchupPatchSf = ""; S.includePorchRoof = true; S.porchGabledOff = false;
+  S.touchupPatchSf = ""; S.roofFoamDepth = ""; S.porchRoofDepth = ""; S.garageRoofDepth = ""; S.includePorchRoof = true; S.porchGabledOff = false;
   S.includeFp = false; S.fpMode = "nc"; S.fpRetroKind = "tearout"; S.fpOtherDemo = false;
   S.fpModelId = "apex42"; S.fpPipeFt = ""; S.fpTerm = "roof"; S.fpAccessNotes = "";
   S.fpChaseClear = true; S.fpChaseNote = "";
@@ -3513,6 +3540,7 @@ function wireInputs() {
       const pkgChange = id === "pkg" && S[key] !== e.value;
       S[key] = e.value;
       if (pkgChange) applyPkgDefaults();
+      if (id === "city" || id === "siteState" || id === "siteZip") { clearTimeout(wireInputs._rt); wireInputs._rt = setTimeout(() => { if (!e.matches(":focus")) render(); }, 50); }
       if (id === "gasType" || id === "pkg" || id === "atticRetro" || id === "crawlRetro" || id === "housePitch" || id === "blowR" || id.indexOf("filter") === 0)
         render();
       else schedule();
@@ -3586,7 +3614,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29z";
+const APP_BUILD = "2026-10-29aa";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
