@@ -163,6 +163,18 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pass { color: var(--ok); font-weight: 800; }
 .fail { color: var(--danger); font-weight: 800; }
 .csv-box { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; white-space: pre-wrap; word-break: break-all; }
+body.xl-open { overflow: hidden; }
+.xl-modal { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column;
+  padding-top: var(--safe-t); padding-bottom: var(--safe-b); }
+.xl-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg2); }
+.xl-title { flex: 1; min-width: 0; font-size: .78rem; font-weight: 700; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xl-scroll { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; padding: 8px; background: #8e8e93; }
+.xl-foot { padding: 10px 12px calc(10px + var(--safe-b)); border-top: 1px solid var(--border); background: var(--bg2); }
+.xl-page { background: #fff; color: #000; padding: 16px 20px 28px; box-shadow: 0 2px 10px rgba(0,0,0,.3); margin: 0 auto;
+  font-family: Calibri, Carlito, "Helvetica Neue", Arial, sans-serif; font-weight: 700; }
+.xl-head { text-align: center; font-size: 18.7px; margin-bottom: 14px; }
+table.xl { border-collapse: collapse; table-layout: fixed; background: #fff; color: #000; font-size: 18.7px; }
+table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidden; vertical-align: middle; line-height: 1.1; font-weight: 700; color: #000; background: #fff; }
 </style>
 </head>
 <body>
@@ -2306,7 +2318,8 @@ function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").
 function colL(c) { return String.fromCharCode(65 + c); }
 function excelSerial(d) { return Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(1899, 11, 30)) / 864e5); }
 
-function buildSheetXml(o, sh, S) {
+/* One layout model drives both the xlsx writer and the on-screen preview. */
+function sheetLayout(o, sh) {
   var R = 36, C = 11; // A..K
   var cells = {}; // "r,c" -> {v, t:'s'|'n', st:{}}
   var merges = [], regions = [];
@@ -2357,8 +2370,14 @@ function buildSheetXml(o, sh, S) {
       cells[rr + "," + cc] = { v: (rr === g.r1 && cc === g.c1) ? g.v : "", st: st };
     }
   });
-  var rowsXml = [];
   var HT = { 1: 19.5, 2: 19.5, 3: 19.5, 4: 19.5, 5: 19.5, 6: 19.5, 7: 19.5, 8: 19.5, 30: 15, 36: 19.5 };
+  return { R: R, C: C, cells: cells, merges: merges, regions: regions, HT: HT, DEF_HT: 18.75,
+    COLW: [9.140625, 9.42578125, 9.140625, 9.140625, 9.140625, 9.140625, 9.85546875, 9.140625, 9.140625, 9.140625, 9.140625],
+    header: "KEITH PORTER INSULATION & FIREPLACE" };
+}
+function buildSheetXml(o, sh, S) {
+  var L = sheetLayout(o, sh), R = L.R, C = L.C, cells = L.cells, merges = L.merges, HT = L.HT, r;
+  var rowsXml = [];
   for (r = 1; r <= R; r++) {
     var cx = [];
     for (var c = 0; c < C; c++) {
@@ -2368,11 +2387,9 @@ function buildSheetXml(o, sh, S) {
       else if (v !== "" && v != null) cx.push('<c r="' + ref + '" s="' + sid + '" t="s"><v>' + S.str(String(v)) + "</v></c>");
       else cx.push('<c r="' + ref + '" s="' + sid + '"/>');
     }
-    rowsXml.push('<row r="' + r + '" spans="1:11"' + (' ht="' + (HT[r] || 18.75) + '" customHeight="1"') + ">" + cx.join("") + "</row>");
+    rowsXml.push('<row r="' + r + '" spans="1:11"' + (' ht="' + (HT[r] || L.DEF_HT) + '" customHeight="1"') + ">" + cx.join("") + "</row>");
   }
-  var cols = '<cols><col min="1" max="1" width="9.140625" customWidth="1"/><col min="2" max="2" width="9.42578125" customWidth="1"/>' +
-    '<col min="3" max="6" width="9.140625" customWidth="1"/><col min="7" max="7" width="9.85546875" customWidth="1"/>' +
-    '<col min="8" max="11" width="9.140625" customWidth="1"/></cols>';
+  var cols = "<cols>" + L.COLW.map(function (w, i) { return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>'; }).join("") + "</cols>";
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
     '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:K36"/><sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews>' +
@@ -2455,6 +2472,41 @@ function buildXlsx(o, cats) { // cats: ["attic"] or ["walls"] or both
   files.push({ name: "xl/styles.xml", data: S.stylesXml() });
   files.push({ name: "xl/sharedStrings.xml", data: S.sstXml() });
   return zipStore(files);
+}
+
+
+/* ---------- HTML preview (same layout model as the xlsx) ---------- */
+function fmtCell(v, st) {
+  if (v && typeof v === "object" && "n" in v) {
+    if (st.fmt === "date") { var d = new Date(Date.UTC(1899, 11, 30) + v.n * 864e5); return String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0") + "-" + String(d.getUTCFullYear()).slice(-2); }
+    if (st.fmt === "int") return String(Math.round(v.n));
+    return String(v.n);
+  }
+  return v == null ? "" : String(v);
+}
+function previewHtml(o, cat) {
+  var sh = o.sheets[cat]; if (!sh) return "";
+  var L = sheetLayout(o, sh), PX = { b10: 13.3, b12: 16, b14: 18.7 };
+  function bw(v) { return v === "medium" ? "2px solid #000" : v === "thin" ? "1px solid #000" : "none"; }
+  var colpx = L.COLW.map(function (w) { return Math.round(w * 7 + 5); }), total = colpx.reduce(function (a, b) { return a + b; }, 0);
+  var start = {}; L.regions.forEach(function (g) { start[g.r1 + "," + g.c1] = g; });
+  var covered = {}; L.regions.forEach(function (g) { for (var r = g.r1; r <= g.r2; r++) for (var c = g.c1; c <= g.c2; c++) if (r !== g.r1 || c !== g.c1) covered[r + "," + c] = 1; });
+  var html = '<div class="xl-page" style="width:' + (total + 40) + 'px"><div class="xl-head">' + esc(L.header) + '</div><table class="xl" style="width:' + total + 'px"><colgroup>' +
+    colpx.map(function (w) { return '<col style="width:' + w + 'px">'; }).join("") + "</colgroup><tbody>";
+  for (var r = 1; r <= L.R; r++) {
+    html += '<tr style="height:' + Math.round((L.HT[r] || L.DEF_HT) * 4 / 3) + 'px">';
+    for (var c = 0; c < L.C; c++) {
+      var key = r + "," + c; if (covered[key]) continue;
+      var g = start[key], cell = L.cells[key]; if (!cell) { html += "<td></td>"; continue; }
+      var c2 = g ? g.c2 : c, r2 = g ? g.r2 : r, st = cell.st;
+      var bl = cell.st.b.l, br = L.cells[r + "," + c2].st.b.r, bt = cell.st.b.t, bb = L.cells[r2 + "," + c].st.b.b;
+      html += "<td" + (c2 > c ? ' colspan="' + (c2 - c + 1) + '"' : "") + (r2 > r ? ' rowspan="' + (r2 - r + 1) + '"' : "") +
+        ' style="border-left:' + bw(bl) + ";border-right:" + bw(br) + ";border-top:" + bw(bt) + ";border-bottom:" + bw(bb) +
+        ";font-size:" + (PX[st.font] || 18.7) + "px;text-align:" + (st.h || "left") + (st.wrap ? ";white-space:normal;line-height:1.05" : "") + '">' + esc(fmtCell(cell.v, st)) + "</td>";
+    }
+    html += "</tr>";
+  }
+  return html + "</tbody></table></div>";
 }
 
 /* ---------- zip reader + xlsx/csv import ---------- */
@@ -2557,7 +2609,7 @@ return {
   DATA: DATA, KNOWN_CITIES: KNOWN_CITIES, parseRequest: parseRequest, extractDate: extractDate, buildOrder: buildOrder,
   buildXlsx: buildXlsx, fileNameFor: fileNameFor, planInfo: planInfo, subDisplay: subDisplay, subPhase: subPhase,
   subdivisions: subdivisions, cityFor: cityFor, fmtDate: fmtDate, unzip: unzip, xlsxRows: xlsxRows, csvRows: csvRows,
-  rowsToLots: rowsToLots, normLot: normLot, crc32: crc32, zipStore: zipStore, canonPlan: canonPlan
+  rowsToLots: rowsToLots, previewHtml: previewHtml, sheetLayout: sheetLayout, normLot: normLot, crc32: crc32, zipStore: zipStore, canonPlan: canonPlan
 };
 })();
 
@@ -2743,11 +2795,42 @@ function sheetCard(o, cat, label, who) {
   });
   t.appendChild(tb); tw.appendChild(t); s.appendChild(tw);
   var nf = el("div", "field"), nt = el("textarea"); nf.appendChild(el("label", null, "Notes (up to 6 lines)")); nt.rows = 2; nt.value = sh.notes || ""; nt.oninput = function () { sh.notes = nt.value; }; nf.appendChild(nt); s.appendChild(nf);
+  s.appendChild(btn("Preview " + (cat === "attic" ? "Attic" : sh.kind) + " sheet", "btn-secondary", function () { openPreview(cat); }));
   return s;
 }
 
+/* ---- preview modal (same layout model as the xlsx writer) ---- */
+function openPreview(cat) {
+  var o = WO.order; if (!o || !o.sheets[cat]) return;
+  closePreview();
+  var who = cat === "attic" ? "Josh" : "Sky", sh = o.sheets[cat];
+  var m = el("div", "xl-modal"); m.id = "woPreview";
+  m.innerHTML = '<div class="xl-bar"><button type="button" class="btn btn-secondary btn-sm" id="xlClose">Close</button>' +
+    '<div class="xl-title">' + h(K.fileNameFor(o, cat).replace(/\.xlsx$/, "")) + '</div>' +
+    '<button type="button" class="btn btn-secondary btn-sm" id="xlZoom">100%</button></div>' +
+    '<div class="xl-scroll" id="xlScroll"><div class="xl-zoom" id="xlZoomBox">' + K.previewHtml(o, cat) + '</div></div>' +
+    '<div class="xl-foot"><button type="button" class="btn btn-primary btn-block" id="xlShare">Share this file to ' + who + '</button>' +
+    '<p class="status" id="xlMsg" style="text-align:center"></p></div>';
+  document.body.appendChild(m); document.body.classList.add("xl-open");
+  var fit = true, box = $("xlZoomBox");
+  function apply() {
+    var page = box.firstChild, w = page.offsetWidth || 806, avail = $("xlScroll").clientWidth - 16;
+    box.style.zoom = fit ? Math.min(1, avail / w) : 1;
+    $("xlZoom").textContent = fit ? "100%" : "Fit";
+  }
+  apply(); window.addEventListener("resize", apply); m._apply = apply;
+  $("xlZoom").onclick = function () { fit = !fit; apply(); };
+  $("xlClose").onclick = closePreview;
+  $("xlShare").onclick = function () { exportFiles([cat], $("xlMsg")); };
+}
+function closePreview() {
+  var m = $("woPreview"); if (!m) return;
+  if (m._apply) window.removeEventListener("resize", m._apply);
+  m.remove(); document.body.classList.remove("xl-open");
+}
+
 /* ---- export ---- */
-function exportFiles(cats) {
+function exportFiles(cats, msgEl) {
   var o = WO.order; if (!o) return;
   var files = [];
   cats.forEach(function (cat) {
@@ -2757,7 +2840,7 @@ function exportFiles(cats) {
   });
   if (!files.length) return;
   saveRecent(o, cats);
-  var m = $("woExportMsg");
+  var m = msgEl || $("woExportMsg");
   var data = { files: files, title: files.length > 1 ? "Chafin work orders" : files[0].name };
   if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) {
     navigator.share(data).then(function () { m.textContent = "Shared " + files.map(function (f) { return f.name; }).join(" and ") + "."; })
