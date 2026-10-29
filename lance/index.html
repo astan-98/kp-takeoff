@@ -1703,7 +1703,7 @@ function twoFileName(o) { return ("WO - " + o.jobSite).replace(/[\\/:*?"<>|]+/g,
 function twoShareText(o) {
   const who = twoWho("walls").name, where = [o.jobSite, (S.city || "").trim()].filter(Boolean).join(", ");
   return { title: "WO - " + o.jobSite,
-    text: who + ", attached is the work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + ". - " + ownerName() };
+    text: who + ", attached is the work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + "." };
 }
 function twoRecipient(cat) {
   const c = twoWho(cat), d = el("div", "wo-recip");
@@ -3571,7 +3571,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29u";
+const APP_BUILD = "2026-10-29v";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
