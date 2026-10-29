@@ -1032,9 +1032,10 @@ function wallExcelDesc(row, mode) {
   }
   if (mode === "comfortbat") return "ComfortBat / " + inside + " / " + hLabel;
   if (mode === "acoustical") return 'AcousticalBat 3" / ' + inside + " / " + hLabel;
-  if (row.kind === "ext_2x4" || row.kind === "concrete") return "R13/" + inside + "/" + hLabel;
+  const kf = row.kraft ? " Kraft" : "";
+  if (row.kind === "ext_2x4" || row.kind === "concrete") return "R13/" + inside + kf + "/" + hLabel;
   if (row.kind === "interior") return "Batts / " + inside + " / " + hLabel;
-  return "R19/" + inside + "/" + hLabel;
+  return "R19/" + inside + kf + "/" + hLabel;
 }
 // Height only splits R-13 batt walls (pre-cut lengths). Everything else merges across heights within its wall type.
 function wallHeightSplits(kind, mode) {
@@ -1385,8 +1386,8 @@ const FG_RULES = [
   ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r + "_retro", label: "Blown fiberglass R-" + r + " (retro / Add Attic Blow)", key: "Blown fiberglass R-" + r + " (retro)", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool" + OC], rv: "key", conf: "sure", note: "Same item as new; FG showed 'R38 Retro Blow: Knauf Jet Stream…' so retro is set by the estimate, not the item." })),
   ...["30", "38"].map(r => ({ id: "blow_cel_r" + r, label: "Blown cellulose R" + r, key: "Blown cellulose R" + r, sec: "*", items: ["Blown Cellulose Insulation for Open Attics" + OC], rv: "key", conf: "sure", note: "Alt: GreenFiber Cellulose." })),
   // —— batts: walls ——
-  { id: "wall_r13", label: "R-13 batts — exterior / concrete / garage walls", key: "R-13 fiberglass batts", sec: WALL_SECS, items: ["R13/{w}/{h}' KRAFT" + OC, "R13/{W} KRAFT" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Kraft-faced; 16 OC→15\", 24 OC→23\" (19 OC: no R13 19\" item → 16\" item, flagged); 8'/9' precuts, other heights → R13/16 KRAFT roll (24 OC → R13/24 UF, no kraft 24\" roll)." },
-  { id: "wall_r19", label: "R-19 batts — 2x6 / daylight / garage walls", key: "R-19 fiberglass batts", sec: WALL_SECS, items: ["R19/{w}/{h}' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "guess", note: "Kraft-faced; 8'/9' precuts else R19/16 or R19/24 KRAFT. Mixed-height merged lines use the roll." },
+  { id: "wall_r13", label: "R-13 batts — exterior / concrete / garage walls", key: "R-13 fiberglass batts", sec: WALL_SECS, items: ["R13/{w}/{h}' UF" + OC, "R13/{W} UF" + OC], kraftItems: ["R13/{w}/{h}' KRAFT" + OC, "R13/{W} KRAFT" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Unfaced (UF) by default; Kraft only when the wall row is marked Kraft faced. 16 OC→15\", 24 OC→23\" (19 OC: no R13 19\" item → 16\" item, flagged); 8'/9' precuts, other heights → R13/16 roll (24 OC → R13/24 UF; no kraft 24\" roll)." },
+  { id: "wall_r19", label: "R-19 batts — 2x6 / daylight / garage walls", key: "R-19 fiberglass batts", sec: WALL_SECS, items: ["R19/{w}/{h}' UF" + OC, "R19/{W} UF" + OC], kraftItems: ["R19/{w}/{h}' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "guess", note: "Unfaced (UF) by default; Kraft only when the wall row is marked Kraft faced. 16 OC→15\", 24 OC→23\"; 8'/9' precuts else R19/16, R19/19 or R19/24 roll. Mixed-height merged lines use the roll." },
   { id: "int_r13", label: "R-13 sound batts — interior walls", key: "R-13 fiberglass batts", sec: INT_SECS, items: ["R13/{w}/{h}' UF" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Unfaced for sound walls." },
   { id: "knee_r19", label: "R-19 batts — knee walls", key: "R-19 fiberglass batts", sec: ["Knee wall"], items: ["R19/{w}/8' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "guess", note: "Kraft 8' precut by OC. Work area 2/4 Knee Walls (alt Bonus Room Knee Walls)." },
   { id: "gable_batts", label: "Gable batts (non-foam)", key: "R-13 fiberglass batts", sec: ["Gable"], items: ["R13/{W} KRAFT" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Width picker (default 16\"); 24\" → R13/24 UF (no kraft); 19\" → no item, flagged." },
@@ -1464,7 +1465,8 @@ function fgResolve(L) {
   }
   const key = L.dollars != null ? L.product : priceKeyFor(L), v = fgVars(L, key), ov = fgOverrides()[rule.id] || {};
   let item = (ov.item || "").trim(), flag = "";
-  const pick = vv => { for (const t of rule.items) {
+  const list = (rule.kraftItems && /\bkraft\b/i.test(String(L.description || ""))) ? rule.kraftItems : rule.items;
+  const pick = vv => { for (const t of list) {
       if (t.indexOf("{h}") >= 0 && !vv.h) continue;
       const s = t.replace(/\{w\}/g, vv.w).replace(/\{W\}/g, vv.W).replace(/\{h\}/g, vv.h || "").replace(/\{r\}/g, vv.r);
       if (FG_ITEM_SET.has(s)) return s;
@@ -1476,7 +1478,7 @@ function fgResolve(L) {
     if (item) flag = "19 OC → no 19\" FG item for " + (L.description || L.product) + "; used " + item;
   }
   if (!item) return null;
-  if (!flag && !ov.item && /KRAFT/.test(rule.items[0]) && / UF /.test(item + " ") && rule.items.some(t => / UF/.test(t)))
+  if (!flag && !ov.item && /KRAFT/.test(list[0]) && / UF /.test(item + " ") && list.some(t => / UF/.test(t)))
     flag = "No kraft-faced " + v.W + "\" FG item for " + (L.description || L.product) + "; used " + item;
   let area = (ov.area || "").trim() || rule.area || "";
   if (!area && rule.id === "netting") area = FG_NET_AREA[String(L.area || "").replace(/\s*#\d+$/, "")] || FG_AREA_BY_SECTION[sec] || "";
@@ -2562,6 +2564,12 @@ function renderAssemblyEditors() {
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
       card.appendChild(fieldInput("Cavities", r.cavities, v => { r.cavities = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Material mode", r.materialMode, wallModeOptions(), v => { r.materialMode = v; render(); }));
+      if ((r.materialMode || "batt") === "batt" && r.kind !== "interior") {
+        const kr = el("div", "toggle-row"); kr.appendChild(el("span", null, "Kraft faced (default unfaced)"));
+        const ks = el("button", "switch" + (r.kraft ? " on" : "")); ks.type = "button";
+        ks.onclick = () => { r.kraft = !r.kraft; render(); };
+        kr.appendChild(ks); card.appendChild(kr);
+      }
       box.appendChild(card);
     });
     box.appendChild(addBtn("Add wall area", () => {
@@ -3621,7 +3629,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29v";
+const APP_BUILD = "2026-10-29w";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
