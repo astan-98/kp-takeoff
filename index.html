@@ -188,6 +188,13 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .nav-btn .ico { font-size: 1.2rem; line-height: 1; }
 .nav-btn.active { color: var(--accent); }
 .hidden { display: none !important; }
+/* 29as: Save to archive pinned above the bottom nav on the Wizard + Excel tabs (safe-area aware; body gets matching padding) */
+.save-dock {
+  position: fixed; left: 0; right: 0; bottom: calc(var(--nav-h) + var(--safe-b)); z-index: 49; padding: 8px 16px;
+  background: color-mix(in srgb, var(--bg2) 92%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid var(--border); transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform;
+}
+body.has-save-dock { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 72px); }
 .divider { height: 1px; background: var(--border); margin: 14px 0; }
 .status { font-size: .82rem; color: var(--text2); margin-top: 8px; }
 .pass { color: var(--ok); font-weight: 800; }
@@ -287,6 +294,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <div id="pkgField" class="field"><label>Package type</label>
         <select id="pkg">
           <option value="standard">Standard (blow + batts)</option>
+          <option value="total_bat">Total Bat (R38 batts, no blow)</option>
           <option value="hybrid_foam_batts">Foam Roofline + Batt Walls</option>
           <option value="foam_cellulose">Foam Roofline + Cellulose Walls</option>
           <option value="foam_spider">Foam Roofline + Spider Walls</option>
@@ -295,13 +303,21 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
           <option value="custom">Custom mix</option>
         </select>
       </div>
-      <div id="totalBatField" class="hidden">
-        <div class="toggle-row"><span>Total Bat (R38 batts instead of blow — one truck)</span><button type="button" class="switch" id="totalBat"></button></div>
+      <div id="foundationField" class="field"><label>Foundation</label>
+        <select id="foundation">
+          <option value="">— Pick foundation —</option>
+          <option value="slab">Slab</option>
+          <option value="crawl">Crawl space</option>
+          <option value="unfinished">Unfinished basement</option>
+          <option value="finished">Finished basement (walls being done)</option>
+        </select>
+        <div class="callout warn hidden" id="foundationAsk"><strong>Pick the foundation</strong>Nothing is hidden until you do — slab hides basement + crawl cards, crawl hides basement cards.</div>
+        <div class="toggle-row hidden" id="basementCrawlRow"><span>House also has a crawl space</span><button type="button" class="switch" id="basementCrawl"></button></div>
       </div>
       <div id="optionsBlock">
         <div class="toggle-row"><span>Compare packages (2–3 options)?</span><button type="button" class="switch" id="compareOn"></button></div>
         <div id="optionChipsWrap" class="hidden">
-          <div class="field"><label>Options to price (pick 2–3)</label><div class="seg" id="optionChips"><button type="button" data-v="standard">Standard</button><button type="button" data-v="hybrid_foam_batts">Foam Roofline + Batt Walls</button><button type="button" data-v="foam_cellulose">Foam Roofline + Cellulose Walls</button><button type="button" data-v="foam_spider">Foam Roofline + Spider Walls</button><button type="button" data-v="total_foam">Total foam</button><button type="button" data-v="crawl_encap">Crawl encapsulation</button><button type="button" data-v="custom">Custom mix</button></div></div>
+          <div class="field"><label>Options to price (pick 2–3)</label><div class="seg" id="optionChips"><button type="button" data-v="standard">Standard</button><button type="button" data-v="total_bat">Total Bat</button><button type="button" data-v="hybrid_foam_batts">Foam Roofline + Batt Walls</button><button type="button" data-v="foam_cellulose">Foam Roofline + Cellulose Walls</button><button type="button" data-v="foam_spider">Foam Roofline + Spider Walls</button><button type="button" data-v="total_foam">Total foam</button><button type="button" data-v="crawl_encap">Crawl encapsulation</button><button type="button" data-v="custom">Custom mix</button></div></div>
           <p class="cap">Measure once. Every area any option needs is shown; the Excel tab sorts lines into a separate sheet per option (walls use each option's material).</p>
         </div>
       </div>
@@ -635,6 +651,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
   </section>
 </main>
 
+<div class="save-dock hidden" id="saveDock"><button type="button" class="btn btn-primary btn-block" id="btnSaveDock">Save to archive</button></div>
 <nav class="bottom-nav">
   <button type="button" class="nav-btn active" data-tab="wizard"><span class="ico">📋</span>Wizard</button>
   <button type="button" class="nav-btn" data-tab="output"><span class="ico">📊</span>Excel</button>
@@ -1013,7 +1030,11 @@ function packageUsesFoamRoof(pkg) {
 }
 function packageIsCrawlEncap(pkg) { return pkg === "crawl_encap"; }
 // 29ao: Total Bat — Standard package on new construction, attic blow area goes in as R38 dead-air batts (no blow truck).
-function totalBatOn(pkg) { return S.jobMode === "new" && !!S.totalBat && pkg === "standard"; }
+// 29as: Total Bat is its own package ("total_bat") — Standard base, attic blow area → R38 dead air, no blow; the old toggle is gone.
+function totalBatOn(pkg) { return S.jobMode === "new" && pkg === "total_bat"; }
+const FOUNDATION_LABELS = { slab: "Slab", crawl: "Crawl space", unfinished: "Unfinished basement", finished: "Finished basement (walls being done)" };
+function foundationOf() { return FOUNDATION_LABELS[S.foundation] ? S.foundation : ""; }
+function pkgLabel(k) { return k === "total_bat" ? "Total Bat (R38 batts, no blow)" : (PACKAGE_LABELS[k] || k); }
 // 29al: "Foam band/rim joist" option — new-construction foam roofline packages that don't already foam the band (not total foam).
 function rimFoamAllowed(pkg) { if (S.jobMode !== "new" || pkg == null) return false; const pr = pkgProfile(pkg); return !!pr.foamRoof && !pr.totalFoam; }
 const CUSTOM_ROOF_KEYS = ["blow", "foam", "batts"], CUSTOM_WALL_KEYS = ["batt", "foam", "cellulose", "spider"];
@@ -1021,6 +1042,7 @@ function customRoofs() { const a = (Array.isArray(S.customRoofs) ? S.customRoofs
 function customWallList() { const a = (Array.isArray(S.customWallList) ? S.customWallList : []).filter(k => CUSTOM_WALL_KEYS.includes(k)); return a.length ? a : ["batt"]; }
 // What a package means for the wizard. Custom mix = union of its picks (single picks behave like the matching preset).
 function pkgProfile(pkg) {
+  if (pkg === "total_bat") return Object.assign(pkgProfile("standard"), { totalBat: true }); // 29as: Standard base
   if (pkg === "custom") {
     const r = customRoofs(), w = customWallList();
     const foam = r.includes("foam"), blow = r.includes("blow"), batts = r.includes("batts");
@@ -1047,14 +1069,14 @@ function pkgProfile(pkg) {
     crawlEncap: packageIsCrawlEncap(pkg),
   };
 }
-const OPTION_KEYS = ["standard", "hybrid_foam_batts", "foam_cellulose", "foam_spider", "total_foam", "crawl_encap", "custom"];
+const OPTION_KEYS = ["standard", "total_bat", "hybrid_foam_batts", "foam_cellulose", "foam_spider", "total_foam", "crawl_encap", "custom"];
 function optionsOn() { return S.jobMode === "new" && !!S.compareOn && optionPkgs().length >= 2; }
 function optionPkgs() {
   const a = (Array.isArray(S.optionPkgs) ? S.optionPkgs : []).filter((k, i, arr) => OPTION_KEYS.includes(k) && arr.indexOf(k) === i);
   return a.slice(0, 3);
 }
 function optionLetter(i) { return String.fromCharCode(65 + i); }
-function optionTitle(i) { const k = optionPkgs()[i]; return "Option " + optionLetter(i) + " " + (PACKAGE_LABELS[k] || k); }
+function optionTitle(i) { const k = optionPkgs()[i]; return "Option " + optionLetter(i) + " " + pkgLabel(k); }
 // Union of what the picked options need (for the wizard: which areas to ask).
 function unionProfile() {
   const ps = optionPkgs().map(pkgProfile);
@@ -1366,7 +1388,7 @@ const S = {
   crawlRetro: "remove_replace",
   blowR: "R-38",
   pkg: "standard",
-  totalBat: false, // 29ao: Standard sub-option — attic blow area becomes R38 dead-air batts
+  foundation: "", basementCrawl: false, // 29as: foundation type ("" = unanswered) + basement house that also has a crawl space
   compareOn: false, optionPkgs: ["standard", "hybrid_foam_batts"], optionView: 0,
   customRoofs: ["blow"], customWallList: ["batt"], customBlowSf: "", customBlowR: "R-38", customBattSf: "", customAtticBattR: "R-38", customAtticBattOc: "24",
   airSealed: false, airSealAddon: "", extraLabor: "", extraLaborNote: "", ccDepth: "1.5",
@@ -1439,7 +1461,19 @@ function flags(pkgArg) {
   function excludesDeadVaultKnees(p) { return pkgProfile(p).excludeDVK || atticIsFoam; }
   const primaryExcludesDVK = PR.excludeDVK || atticIsFoam;
   const showFoamRoofPath = PR.foamRoof || atticIsFoam;
+  // 29as: foundation type (new construction). "" = unanswered → everything shows as before.
+  const fdn = isNew ? foundationOf() : "";
+  const isBasementFdn = fdn === "unfinished" || fdn === "finished";
+  const showCrawl = !fdn || fdn === "crawl" || (isBasementFdn && !!S.basementCrawl);
+  const showBasement = !fdn || isBasementFdn;
+  // daylight/concrete lines: finished = always; unfinished / unanswered = the (now hidden) Basement walls switch, set when one is picked; slab/crawl = never
+  const basementWalls = fdn === "finished" || ((!fdn || fdn === "unfinished") && !!S.hasBasementWalls);
   return {
+    foundation: fdn, showCrawl, showBasement, basementWalls,
+    // finished basement (or the old Basement walls switch on an unanswered job): daylight/concrete get their own cards
+    basementSections: fdn === "finished" || (!fdn && !!S.hasBasementWalls),
+    // slab / crawl: daylight + concrete never offered in the walls Type dropdown
+    noBasementKinds: fdn === "slab" || fdn === "crawl",
     isNew, isAtticRetro, isCrawlRetro, atticIsFoam, atticIsBlow, atticNeedsRemoval,
     crawlIsEncap, crawlIsTouchup, crawlIsReplace, crawlIsNewBatts, atticBlowR, excludesDeadVaultKnees,
     primaryExcludesDVK, showFoamRoofPath,
@@ -1454,12 +1488,12 @@ function flags(pkgArg) {
     canAskCants: isNew,
     canAskGarage: isNew || showFoamRoofPath,
     canAskPorch: showFoamRoofPath,
-    canAskSubfloor: (isNew && !PR.crawlEncap) || crawlIsReplace,
+    canAskSubfloor: (isNew && !PR.crawlEncap && showCrawl) || crawlIsReplace,
     customAttic: isNew && PR.custom,
     canAskBetweenFloors: isNew,
-    canAskUfbc: isNew,
+    canAskUfbc: isNew && showBasement,
     canAskTouchup: crawlIsTouchup,
-    canAskCrawlEncap: PR.crawlEncap || crawlIsEncap,
+    canAskCrawlEncap: (PR.crawlEncap && (!isNew || showCrawl)) || crawlIsEncap,
     canAskRim: isNew || crawlIsReplace || crawlIsEncap || PR.crawlEncap || crawlIsNewBatts,
     canAskDense: isNew && PR.dense,
   };
@@ -1671,7 +1705,7 @@ function fgEstimateType(pkg) {
     if (F.isAtticRetro) return /foam/.test(S.atticRetro) ? "Spray Foam - Retrofit" : "Attic Blow";
     return S.crawlRetro === "remove_encap" ? "Crawl Encapsulation" : "Retrofit Application";
   }
-  if (pkg === "standard") return "Fiberglass";
+  if (pkg === "standard" || pkg === "total_bat") return "Fiberglass";
   if (pkg === "total_foam") return "Spray Foam - New Construction";
   if (pkg === "crawl_encap") return "Crawl Encapsulation";
   if (pkg === "custom") { const p = pkgProfile("custom"); if (p.totalFoam && p.onlyAttic) return "Spray Foam - New Construction"; return p.foamRoof ? "Hybrid - Foam Roofline/Fiberglass Walls" : "Fiberglass"; }
@@ -1695,7 +1729,7 @@ function fgBuildRows(foamChoice) {
     const sfx = v ? " - " + FOAM_OPT_LABEL[v] : "", run = fn => v ? withFoam(v, fn) : fn();
     if (optionsOn()) optionPkgs().forEach((k, i) => ests.push({ name: project + " - " + optionTitle(i) + sfx, type: fgEstimateType(k), lines: run(() => optionLines(i)) }));
     else {
-      const lbl = S.jobMode === "retro" ? packageLabel().replace(/ · FP .*$/, "") : (PACKAGE_LABELS[S.pkg] || S.pkg);
+      const lbl = S.jobMode === "retro" ? packageLabel().replace(/ · FP .*$/, "") : pkgLabel(S.pkg);
       ests.push({ name: project + " - " + lbl + sfx, type: fgEstimateType(S.pkg), lines: run(allLines) });
     }
   });
@@ -2268,7 +2302,7 @@ function buildLinesForPackage(p, tag) {
   if (S.hasWalls && F.canAskWalls) {
     let nettingTotal = 0;
     S.walls.forEach(r => {
-      if ((r.kind === "daylight" || r.kind === "concrete") && !S.hasBasementWalls) return;
+      if ((r.kind === "daylight" || r.kind === "concrete") && !F.basementWalls) return;
       const cavities = n(r.cavities); if (cavities <= 0) return;
       const factor = wallFactor(r);
       const sf = factor * cavities; if (sf <= 0) return;
@@ -2507,8 +2541,8 @@ function optionLines(i) { if (foamCompareOn() && FOAM_VIEW == null) return withF
 function packageLabel() {
   const F = flags();
   let base = "";
-  if (F.isNew && optionsOn()) base = "Options: " + optionPkgs().map((k, i) => optionLetter(i) + ") " + (PACKAGE_LABELS[k] || k)).join(" / ");
-  else if (F.isNew) base = (PACKAGE_LABELS[S.pkg] || S.pkg) + (S.pkg === "custom" ? " (" + customRoofs().map(k => CUSTOM_ROOF_LABELS[k] + (k === "blow" ? " " + S.customBlowR : k === "batts" ? " " + S.customAtticBattR : "")).join(" + ") +
+  if (F.isNew && optionsOn()) base = "Options: " + optionPkgs().map((k, i) => optionLetter(i) + ") " + pkgLabel(k)).join(" / ");
+  else if (F.isNew) base = pkgLabel(S.pkg) + (S.pkg === "custom" ? " (" + customRoofs().map(k => CUSTOM_ROOF_LABELS[k] + (k === "blow" ? " " + S.customBlowR : k === "batts" ? " " + S.customAtticBattR : "")).join(" + ") +
     " · " + customWallList().map(k => CUSTOM_WALL_LABELS[k]).join(" + ") + ")" : "");
   else if (F.isAtticRetro) base = "Attic: " + (ATTIC_RETRO_LABELS[S.atticRetro] || S.atticRetro);
   else base = "Crawl: " + (CRAWL_RETRO_LABELS[S.crawlRetro] || S.crawlRetro);
@@ -2764,7 +2798,7 @@ function renderGates() {
   addToggle("Walls", "hasWalls", F.canAskWalls);
   addToggle("Interior walls", "hasInteriorWalls", F.canAskWalls);
   addToggle("Between floors (sound)", "hasBetweenFloors", F.canAskBetweenFloors);
-  addToggle("Basement walls", "hasBasementWalls", F.canAskWalls);
+  addToggle("Basement walls", "hasBasementWalls", F.canAskWalls && !F.foundation); // 29as: the foundation picker drives it once answered
   addToggle("Gables", "hasGables", F.canAskGables);
   addToggle("Cantilevers", "hasCants", F.canAskCants);
   addToggle("Garage", "hasGarage", F.canAskGarage);
@@ -2785,6 +2819,10 @@ function renderAssemblyEditors() {
   const F = flags();
   const box = $("assemblyEditors");
   box.innerHTML = "";
+  // 29as: cards follow Asher's measuring routine — every block sets SEC, cards are sorted by it at the end.
+  // UI order only: Excel / Sky / FieldGroove line order comes from buildLinesForPackage and is unchanged.
+  let SEC = 0; const _append = c => Node.prototype.appendChild.call(box, c);
+  box.appendChild = c => { if (c && c.nodeType === 1) c.dataset.ord = String(SEC); return _append(c); };
 
   function addBtn(label, fn) {
     const b = el("button", "btn btn-secondary btn-sm");
@@ -2792,6 +2830,7 @@ function renderAssemblyEditors() {
     return b;
   }
 
+  SEC = 5;
   if (F.customAttic) {
     const pr = pkgProfile(S.pkg);
     const only = pr.onlyAttic;
@@ -2826,6 +2865,7 @@ function renderAssemblyEditors() {
   // Job-level spray foam type (open cell default) — shown whenever this job has a spray foam line.
   let jobHasFoam = false;
   try { jobHasFoam = S.foamType === "cc" || S.foamType === "both" || allLines().some(L => /spray foam/i.test(L.product) && L.assembly !== "Crawl wall foam"); } catch (e) {}
+  SEC = 2;
   if (jobHasFoam) {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">Spray foam type (job)</div>';
@@ -2837,12 +2877,14 @@ function renderAssemblyEditors() {
     if (foamCompareOn()) { try { const d = el("div", "table-wrap"); d.innerHTML = foamCompareTotalsHtml(foamCompare()); card.appendChild(d); } catch (e) {} }
     box.appendChild(card);
   }
+  SEC = 85;
   if (F.crawlIsTouchup) {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">Crawl touch-up batts</div>';
     card.appendChild(fieldSelect("Batt width (R19)", battW(S.touchupOc, "16"), BATT_W_CHOICES, v => { S.touchupOc = v; render(); }));
     box.appendChild(card);
   }
+  SEC = 12;
   if (F.canAskDeadVaultKnees && S.hasDeadAir) {
     S.deadAir.forEach((r, idx) => {
       const card = el("div", "row-card");
@@ -2853,6 +2895,7 @@ function renderAssemblyEditors() {
     });
     box.appendChild(addBtn("Add dead air", () => { S.deadAir.push({ id: uid(), name: "", sf: "", oc: "24" }); render(); }));
   }
+  SEC = 13;
   if (F.canAskDeadVaultKnees && S.hasVaults) {
     S.vaults.forEach((r, idx) => {
       const card = el("div", "row-card");
@@ -2866,6 +2909,7 @@ function renderAssemblyEditors() {
     });
     box.appendChild(addBtn("Add vault", () => { S.vaults.push({ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "", oc: "16" }); render(); }));
   }
+  SEC = 14;
   if (F.canAskDeadVaultKnees && S.hasKnees) {
     S.knees.forEach((r, idx) => {
       const card = el("div", "row-card");
@@ -2887,11 +2931,13 @@ function renderAssemblyEditors() {
     });
     box.appendChild(addBtn("Add knee", () => { S.knees.push({ id: uid(), name: "", height: "8", lf: "", oc: "16", shape: "rectangle", wrap: true }); render(); }));
   }
+  SEC = 50;
   if (F.bafflesOn) {
     if (F.bafflesRequired && !(n(S.baffles) > 0)) box.appendChild(el("div", "callout warn", "<strong>Baffles required</strong>Every new construction job gets baffles — enter the baffle count."));
     box.appendChild(fieldInput("Baffle count", S.baffles, v => { S.baffles = v; schedule(); }, "number"));
     box.appendChild(fieldSelect("Baffle width", S.baffleW || "24", [["16", '16"'], ["24", '24"']], v => { S.baffleW = v; render(); }));
   }
+  SEC = 99;
   if (S.hasRim && F.canAskRim) {
     S.rims.forEach((r, idx) => {
       const card = el("div", "row-card");
@@ -2912,15 +2958,24 @@ function renderAssemblyEditors() {
     });
     box.appendChild(addBtn("Add rim", () => { const f0 = S.rims[0] || {}; S.rims.push({ id: uid(), name: "", lf: "", oc: "16", foam: !!f0.foam, foamType: f0.foamType || "", ccDepth: f0.ccDepth || "" }); render(); }));
   }
+  SEC = 60;
   if (S.hasWalls && F.canAskWalls) {
-    const h = el("div", "divider"); box.appendChild(h);
-    box.appendChild(el("p", "cap", "Walls — matching walls of the same type combine into one Excel row (R-13 batts stay split by height). 16 OC = 12×15×h÷144 · 19 OC = 12×18×h÷144 · 24 OC = 12×24×h÷144"));
-    S.walls.forEach((r, idx) => {
+    // 29as: one walls section, Type dropdown. Slab/crawl: no daylight/concrete. Finished basement (or the old Basement walls switch):
+    // daylight + concrete get their own cards in the basement sequence. Same S.walls rows either way — nothing moves, no line lost/duplicated.
+    const isBase = k => k === "daylight" || k === "concrete";
+    const ownBase = F.basementSections;
+    const hideBaseRows = ownBase || F.noBasementKinds || (F.foundation === "unfinished" && !F.basementWalls);
+    const genKinds = Object.keys(WALL_KIND_LABELS).filter(k => !isBase(k) || !(ownBase || F.noBasementKinds));
+    const wallCard = (r, title, kinds) => {
       const card = el("div", "row-card");
       const sf = round2(wallFactor(r) * n(r.cavities));
       const tl = applyFoamType({ product: wallProduct(r.materialMode, r.kind), description: wallExcelDesc(r, r.materialMode) }, r, "wall", r.kind === "concrete", r.kind === "concrete" ? "1" : "");
-      card.innerHTML = '<div class="row-title">Wall #' + (idx+1) + ' · ' + foamWordsLine(tl).description + ' → ' + fmt(sf) + ' SF</div>';
-      card.appendChild(fieldSelect("Kind", r.kind, Object.keys(WALL_KIND_LABELS).map(k => [k, WALL_KIND_LABELS[k]]), v => { r.kind = v; render(); }));
+      card.innerHTML = '<div class="row-title">' + title + ' · ' + foamWordsLine(tl).description + ' → ' + fmt(sf) + ' SF</div>';
+      if (kinds) card.appendChild(fieldSelect("Type", r.kind, kinds.concat(kinds.includes(r.kind) ? [] : [r.kind]).map(k => [k, WALL_KIND_LABELS[k] || k]), v => {
+        r.kind = v;
+        if (isBase(v) && F.foundation === "unfinished") S.hasBasementWalls = true; // unfinished basement: picking one turns its lines on
+        render();
+      }));
       card.appendChild(fieldSelect("Stud spacing", r.oc, WALL_W_CHOICES, v => { r.oc = v; render(); }));
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
@@ -2934,12 +2989,26 @@ function renderAssemblyEditors() {
       }
       if (r.materialMode === "foam" || ((r.materialMode || "batt") === "batt" && anyTotalFoam)) foamTypeControls(card, r, "foamType", "ccDepth", r.kind === "concrete", r.kind === "concrete" ? "1" : "");
       box.appendChild(card);
-    });
+    };
+    const h = el("div", "divider"); box.appendChild(h);
+    box.appendChild(el("p", "cap", "Walls — matching walls of the same type combine into one Excel row (R-13 batts stay split by height). 16 OC = 12×15×h÷144 · 19 OC = 12×18×h÷144 · 24 OC = 12×24×h÷144"));
+    S.walls.filter(r => !(hideBaseRows && isBase(r.kind))).forEach((r, idx) => wallCard(r, "Wall #" + (idx + 1), genKinds));
     box.appendChild(addBtn("Add wall area", () => {
       S.walls.push({ id: uid(), name: "", kind: "ext_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: defaultWallMode(S.pkg, "ext_2x4") });
       render();
     }));
+    if (ownBase) [["daylight", "Daylight walls", "Daylight wall", 80], ["concrete", "Concrete walls", "Concrete wall", 81]].forEach(([kind, head, one, ord]) => {
+      SEC = ord;
+      box.appendChild(el("div", "divider"));
+      box.appendChild(el("p", "cap", head + " (basement) — " + WALL_KIND_LABELS[kind] + (kind === "concrete" ? ' · if spray foam: locked 1" closed cell' : "")));
+      S.walls.filter(r => r.kind === kind).forEach((r, idx) => wallCard(r, one + " #" + (idx + 1), null));
+      box.appendChild(addBtn("Add " + one.toLowerCase(), () => {
+        S.walls.push({ id: uid(), name: "", kind, oc: "16", height: "8", customHeight: "", cavities: "", materialMode: defaultWallMode(S.pkg, kind) });
+        render();
+      }));
+    });
   }
+  SEC = 62;
   if (S.hasInteriorWalls && F.canAskWalls) {
     box.appendChild(el("div", "divider"));
     box.appendChild(el("p", "cap", "Interior walls — enter cavities (or linear feet → cavities = LF×12÷OC). 16 OC = 12×15×h÷144 · 19 OC = 12×18×h÷144 · 24 OC = 12×24×h÷144"));
@@ -2966,6 +3035,7 @@ function renderAssemblyEditors() {
     });
     box.appendChild(addBtn("Add interior wall area", () => { S.interiorWalls.push(newInteriorWall()); render(); }));
   }
+  SEC = 64;
   if (S.hasBetweenFloors && F.canAskBetweenFloors) {
     box.appendChild(el("div", "divider"));
     box.appendChild(el("p", "cap", "Between floors (sound) — floor SF between levels."));
@@ -2982,6 +3052,7 @@ function renderAssemblyEditors() {
     });
     box.appendChild(addBtn("Add between-floors area", () => { S.betweenFloors.push(newBetweenFloor()); render(); }));
   }
+  SEC = 40;
   if (S.hasGables && F.canAskGables) {
     S.gables.forEach((r, idx) => {
       const card = el("div", "row-card");
@@ -2998,6 +3069,7 @@ function renderAssemblyEditors() {
     });
     box.appendChild(addBtn("Add gable", () => { S.gables.push({ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false, oc: "16" }); render(); }));
   }
+  SEC = 35;
   if (S.hasCants && F.canAskCants) {
     S.cants.forEach((r, idx) => {
       const card = el("div", "row-card");
@@ -3010,9 +3082,10 @@ function renderAssemblyEditors() {
     });
     box.appendChild(addBtn("Add cantilever", () => { S.cants.push({ id: uid(), name: "", sf: "", material: "r30", oc: "16" }); render(); }));
   }
+  SEC = 30;
   if (S.hasGarage && F.canAskGarage) {
     const card = el("div", "row-card");
-    card.innerHTML = '<div class="row-title">Garage</div>';
+    card.innerHTML = '<div class="row-title">Garage ceiling</div>';
     if (!Array.isArray(S.garageCeils)) S.garageCeils = [];
     const multi = S.garageCeils.length > 0;
     const gcMatOpts = Object.keys(GARAGE_CEIL_MATS).map(k => [k, GARAGE_CEIL_MATS[k][0]]);
@@ -3036,19 +3109,23 @@ function renderAssemblyEditors() {
       card.appendChild(addBtn("Remove area", () => { S.garageCeils.splice(idx, 1); render(); }));
     });
     card.appendChild(addBtn("Add area", () => { S.garageCeils.push({ id: uid(), sf: "", mat: GARAGE_CEIL_MATS[S.garageCeilMat] ? S.garageCeilMat : "r19", oc: "16" }); render(); }));
+    let rc = null;
     if (F.showFoamRoofPath) {
+    rc = el("div", "row-card"); rc.innerHTML = '<div class="row-title">Garage roofline</div>';
     const fr = el("div", "toggle-row"); fr.appendChild(el("span", null, "Foam garage roofline"));
     const sw = el("button", "switch" + (S.garageFoamRoof ? " on" : "")); sw.type = "button";
-    sw.onclick = () => { S.garageFoamRoof = !S.garageFoamRoof; render(); }; fr.appendChild(sw); card.appendChild(fr);
+    sw.onclick = () => { S.garageFoamRoof = !S.garageFoamRoof; render(); }; fr.appendChild(sw); rc.appendChild(fr);
     if (S.garageFoamRoof) {
-      card.appendChild(fieldInput("Garage roofline flat SF", S.garageRoofFlat, v => { S.garageRoofFlat = v; schedule(); }, "number"));
-      card.appendChild(fieldSelect("Garage roofline pitch", S.garageRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.garageRoofPitch = v; render(); }));
-      foamTypeControls(card, S, "garageRoofFoam", "garageRoofCc");
-      if (foamTypeFor(S.garageRoofFoam) !== "cc") card.appendChild(roofDepthSelect("Garage roofline foam depth", S.garageRoofDepth, v => { S.garageRoofDepth = v; render(); }));
+      rc.appendChild(fieldInput("Garage roofline flat SF", S.garageRoofFlat, v => { S.garageRoofFlat = v; schedule(); }, "number"));
+      rc.appendChild(fieldSelect("Garage roofline pitch", S.garageRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.garageRoofPitch = v; render(); }));
+      foamTypeControls(rc, S, "garageRoofFoam", "garageRoofCc");
+      if (foamTypeFor(S.garageRoofFoam) !== "cc") rc.appendChild(roofDepthSelect("Garage roofline foam depth", S.garageRoofDepth, v => { S.garageRoofDepth = v; render(); }));
     }
     }
-    box.appendChild(card);
+    if (rc) { SEC = 20; box.appendChild(rc); } // garage roofline before garage ceiling
+    SEC = 30; box.appendChild(card);
   }
+  SEC = 32;
   if (S.hasPorch && F.canAskPorch) {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">Porch</div>';
@@ -3077,6 +3154,7 @@ function renderAssemblyEditors() {
     showPorch(); card.appendChild(out);
     box.appendChild(card);
   }
+  SEC = 84;
   if (F.crawlIsNewBatts) {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">Crawl – new batts (no removal)</div>';
@@ -3097,15 +3175,17 @@ function renderAssemblyEditors() {
     }
     box.appendChild(card);
   }
+  SEC = 86;
   if (S.hasSubfloor && F.canAskSubfloor) {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">Crawl</div>';
     card.appendChild(fieldInput("Crawl SF (blank = flat)", S.subfloorOverride, v => { S.subfloorOverride = v; schedule(); }, "number"));
-    card.appendChild(fieldSelect("Material", S.crawlSubR || "R-19", [["R-19","R19 batts"],["R-13","R13 batts"],["R-30","R30 batts"],["foam",'Spray foam — 5.5" open cell']], v => { S.crawlSubR = v; render(); }));
+    card.appendChild(fieldSelect("Material", S.crawlSubR || "R-19", [["R-19","R-19 fiberglass (default)"],["R-13","R-13 fiberglass"],["R-30","R-30 fiberglass"],["foam",'Spray foam — 5.5" open cell']], v => { S.crawlSubR = v; render(); }));
     if (S.crawlSubR === "foam") foamTypeControls(card, S, "crawlSubFoam", "crawlSubCc"); // 29as: Crawl Space Subfloor foam
     else card.appendChild(fieldSelect("Batt width", battW(S.crawlSubOc, "16"), BATT_W_CHOICES, v => { S.crawlSubOc = v; render(); }));
     box.appendChild(card);
   }
+  SEC = 82;
   if (S.hasUfbc && F.canAskUfbc) {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">UFBC (unfinished basement ceiling)</div>';
@@ -3114,6 +3194,7 @@ function renderAssemblyEditors() {
     card.appendChild(fieldSelect("Batt width", battW(S.ufbcOc, "16"), BATT_W_CHOICES, v => { S.ufbcOc = v; render(); }));
     box.appendChild(card);
   }
+  SEC = 87;
   if (F.canAskCrawlEncap && S.hasCrawlWalls) {
     box.appendChild(fieldSelect("Closed-cell depth", ccValid(S.ccDepth) ? String(S.ccDepth) : "1.5", CC_DEPTH_CHOICES.map(d => [d, d + '"' + (d === "1.5" ? " (default)" : "")]), v => { S.ccDepth = v; render(); }));
     S.crawlWalls.forEach((r, idx) => {
@@ -3125,6 +3206,7 @@ function renderAssemblyEditors() {
     });
     box.appendChild(addBtn("Add crawl wall", () => { S.crawlWalls.push({ id: uid(), name: "", length: "", height: "" }); render(); }));
   }
+  SEC = 66;
   if (S.hasDense && F.canAskDense) {
     S.dense.forEach((r, idx) => {
       const card = el("div", "row-card");
@@ -3133,6 +3215,7 @@ function renderAssemblyEditors() {
       box.appendChild(card);
     });
   }
+  SEC = 10;
   if (F.showFoamRoofPath) {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">' + (F.customAttic && !pkgProfile(S.pkg).onlyAttic ? "Foam roofline areas (flat SF × pitch)" : "Extra roofline areas (optional — blank uses flat×pitch)") + '</div>';
@@ -3151,6 +3234,7 @@ function renderAssemblyEditors() {
     card.appendChild(addBtn("Add roofline area", () => { S.foamRoofs.push({ id: uid(), name: "", flatSf: "", pitch: "6", customRise: "" }); render(); }));
     box.appendChild(card);
   }
+  SEC = 95;
   if (S.hasMisc) {
     box.appendChild(el("div", "divider"));
     box.appendChild(el("p", "cap", "Miscellaneous — anything out of the ordinary. Each item with a material becomes an Excel line (identical items combine). Price looks up the material name in the price library."));
@@ -3172,6 +3256,8 @@ function renderAssemblyEditors() {
     });
     box.appendChild(addBtn("Add item", () => { S.misc.push(newMiscItem()); render(); }));
   }
+  delete box.appendChild;
+  Array.from(box.children).map((c, i) => [Number(c.dataset.ord) || 0, i, c]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).forEach(x => box.appendChild(x[2]));
 }
 
 function fieldInput(label, value, onChange, type) {
@@ -3376,7 +3462,7 @@ function renderOptionBar() {
   const sw = $("optionSwitch"); sw.innerHTML = "";
   ks.forEach((k, i) => {
     const b = el("button", i === S.optionView ? "active" : ""); b.type = "button";
-    b.textContent = optionLetter(i) + " · " + (PACKAGE_LABELS[k] || k);
+    b.textContent = optionLetter(i) + " · " + pkgLabel(k);
     b.onclick = () => { S.optionView = i; render(); };
     sw.appendChild(b);
   });
@@ -3893,14 +3979,17 @@ function render() {
   toggleField("optionsBlock", S.jobMode === "new");
   toggleField("optionChipsWrap", S.jobMode === "new" && !!S.compareOn);
   setSwitch($("compareOn"), !!S.compareOn);
-  toggleField("totalBatField", S.jobMode === "new" && (S.compareOn ? optionPkgs().includes("standard") : S.pkg === "standard"));
-  setSwitch($("totalBat"), !!S.totalBat);
+  toggleField("foundationField", S.jobMode === "new");
+  $("foundation").value = foundationOf();
+  toggleField("foundationAsk", S.jobMode === "new" && !foundationOf());
+  toggleField("basementCrawlRow", S.jobMode === "new" && (foundationOf() === "unfinished" || foundationOf() === "finished"));
+  setSwitch($("basementCrawl"), !!S.basementCrawl);
   {
     const cur = optionPkgs();
     $("optionChips").querySelectorAll("button").forEach(btn => {
       const k = cur.indexOf(btn.dataset.v);
       btn.classList.toggle("active", k >= 0);
-      btn.textContent = (k >= 0 ? optionLetter(k) + " · " : "") + (PACKAGE_LABELS[btn.dataset.v] || btn.dataset.v);
+      btn.textContent = (k >= 0 ? optionLetter(k) + " · " : "") + pkgLabel(btn.dataset.v);
       btn.onclick = () => {
         const a = optionPkgs(), at = a.indexOf(btn.dataset.v);
         if (at >= 0) a.splice(at, 1);
@@ -3981,7 +4070,20 @@ function migrateState(d) {
   ["woRep", "woDate", "woNotes"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
   if (!OWNER_LABELS[S.owner]) S.owner = APP_EDITION === "lance" ? "lance" : "asher";
   if (d.caulkFoam) S.airSealed = true;
-  if (typeof S.totalBat !== "boolean" || !("totalBat" in d)) S.totalBat = false; // 29ao: old jobs default Total Bat off
+  // 29as: Total Bat toggle → its own package. Standard + Total Bat on (29ao) loads as the Total Bat package.
+  if (d.totalBat === true) {
+    if (S.pkg === "standard") S.pkg = "total_bat";
+    if (Array.isArray(S.optionPkgs) && !S.optionPkgs.includes("total_bat")) S.optionPkgs = S.optionPkgs.map(k => k === "standard" ? "total_bat" : k);
+  }
+  delete S.totalBat;
+  // 29as: foundation — infer for old jobs (basement walls on → finished; crawl data → crawl; both → basement + crawl box; else unanswered)
+  if (!("foundation" in d)) {
+    const crawlData = !!(d.hasSubfloor || d.hasCrawlWalls), bw = !!d.hasBasementWalls, uf = !!d.hasUfbc;
+    S.foundation = bw ? "finished" : (crawlData && uf) ? "unfinished" : crawlData ? "crawl" : "";
+    S.basementCrawl = !!((bw || uf) && crawlData);
+  }
+  if (!FOUNDATION_LABELS[S.foundation]) S.foundation = "";
+  if (typeof S.basementCrawl !== "boolean") S.basementCrawl = false;
   if (S.jobMode === "new") S.hasBaffles = true; // 29an: old new-construction jobs saved with baffles off still get baffles
   if (S.fpModelId && FP_LEGACY_IDS[S.fpModelId]) S.fpModelId = FP_LEGACY_IDS[S.fpModelId];
   if (typeof S.fpChaseClear !== "boolean") S.fpChaseClear = true;
@@ -4158,7 +4260,7 @@ function applySnapshot(job) {
   S.outputView = job.owner === "sky" ? "excel" : "fg";
   S._suppressSave = false;
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === "wizard"));
-  document.querySelectorAll(".tabs-panel").forEach(p => p.classList.toggle("active", p.id === "tab-wizard"));
+  document.querySelectorAll(".tabs-panel").forEach(p => p.classList.toggle("active", p.id === "tab-wizard")); syncSaveDock();
   setStatus("Opened " + (job.address || job.builder) + " (" + job.dateMeasured + ")");
   render();
 }
@@ -4170,7 +4272,7 @@ function newJob() {
   resetCustomer(); S.woRep = ""; S.woDate = ""; S.woNotes = "";
   photoForget(S.photos.map(x => x.id)); S.photos = [];
   S.accessScaffold = "no"; S.accessScaffoldNote = ""; S.accessDriveway = ""; S.accessDrivewayNote = ""; S.accessGate = ""; S.accessGateCode = "";
-  S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard"; S.totalBat = false;
+  S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard"; S.foundation = ""; S.basementCrawl = false;
   S.compareOn = false; S.optionPkgs = ["standard", "hybrid_foam_batts"]; S.optionView = 0;
   S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38"; S.customAtticBattOc = "24"; S.garageCeilOc = "16"; S.porchCeilOc = "16"; S.touchupOc = "16";
   S.porchFlat = ""; S.includePorchCeiling = true; S.porchCeilMat = "batt_r19"; S.porchRoofPitch = "6";
@@ -4236,7 +4338,8 @@ function wireInputs() {
   });
 
   $("airSealed").onclick = () => { S.airSealed = !S.airSealed; render(); };
-  $("totalBat").onclick = () => { S.totalBat = !S.totalBat; render(); };
+  $("foundation").onchange = e => { S.foundation = e.target.value; if (S.foundation === "unfinished" || S.foundation === "finished") { S.hasBasementWalls = true; S.hasWalls = true; } render(); };
+  $("basementCrawl").onclick = () => { S.basementCrawl = !S.basementCrawl; render(); };
   $("compareOn").onclick = () => {
     S.compareOn = !S.compareOn;
     if (S.compareOn) {
@@ -4265,6 +4368,8 @@ function wireInputs() {
   $("btnSaveArchive").onclick = savePermanent;
   $("btnSaveArchive2").onclick = savePermanent;
   $("btnSaveArchive3").onclick = savePermanent;
+  $("btnSaveDock").onclick = savePermanent; // 29as: pinned copy, same action
+  syncSaveDock();
   $("btnGoOutput").onclick = () => {
     const b = document.querySelector('.nav-btn[data-tab="output"]'); if (b) b.click();
     window.scrollTo(0, 0);
@@ -4299,10 +4404,17 @@ function wireInputs() {
       if (btn.dataset.tab === "archive") refreshArchive();
       if (btn.dataset.tab === "output") renderOutput();
       if (btn.dataset.tab === "pricing") renderPricing();
+      syncSaveDock();
     };
   });
 }
 
+// 29as: the pinned Save to archive bar only where saving the open job makes sense (Wizard + Excel tabs, not Archive / Pricing).
+function syncSaveDock() {
+  const a = document.querySelector(".tabs-panel.active"), on = !!a && (a.id === "tab-wizard" || a.id === "tab-output");
+  const d = $("saveDock"); if (d) d.classList.toggle("hidden", !on);
+  document.body.classList.toggle("has-save-dock", on);
+}
 /* ---------- Build stamp + pull-to-refresh ---------- */
 const APP_BUILD = "2026-10-29as";
 function showVersion() {
@@ -4326,6 +4438,7 @@ const PTR_THRESHOLD = 70, PTR_MAX = 120;
     let off = 0;
     if (vv && !typing() && Math.abs(vv.scale - 1) < 0.01) off = Math.round(window.innerHeight - (vv.height + vv.offsetTop));
     nav.style.transform = off ? "translate3d(0," + (-off) + "px,0)" : "translateZ(0)";
+    const dock = document.getElementById("saveDock"); if (dock) dock.style.transform = nav.style.transform; // 29as: dock rides with the nav
   };
   const schedulePin = () => { if (!raf) raf = requestAnimationFrame(pin); };
   let t = null;
