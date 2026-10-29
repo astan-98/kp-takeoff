@@ -163,6 +163,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pass { color: var(--ok); font-weight: 800; }
 .fail { color: var(--danger); font-weight: 800; }
 .csv-box { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; white-space: pre-wrap; word-break: break-all; }
+.fp-spec-t{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px}.fp-spec-t th{text-align:left;font-weight:600;padding:3px 6px 3px 0;vertical-align:top;white-space:nowrap;width:1%}.fp-spec-t td{padding:3px 0;word-break:break-word}.fp-spec .status{margin:6px 0 0}
 body.xl-open { overflow: hidden; }
 .xl-modal { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column;
   padding-top: var(--safe-t); padding-bottom: var(--safe-b); }
@@ -508,6 +509,204 @@ const FP_CATALOG = [
   { id: "majestic_ins", label: "Majestic insert", brand: "Majestic", category: "insert", insertOk: true, roH: 24, roW: 36, roD: 16, hearthLip: 0, platformH: 0, blower: "closed_optional" },
   { id: "monessen_ins", label: "Monessen insert", brand: "Monessen", category: "insert", insertOk: true, roH: 24, roW: 36, roD: 16, hearthLip: 0, platformH: 0, blower: "closed_optional" },
 ];
+/* ---- Manufacturer spec library (built from brochures Asher sent, Oct 2026). Values exactly as printed; blank = not on the sheet. ---- */
+function fpFrac(s) {
+  if (s == null || s === "") return null;
+  const m = String(s).trim().match(/^(\d+)(?:[-\s]+(\d+)\/(\d+))?$|^(\d+)\/(\d+)$/);
+  if (!m) { const x = parseFloat(s); return Number.isFinite(x) ? x : null; }
+  if (m[4]) return +m[4] / +m[5];
+  return +m[1] + (m[2] ? +m[2] / +m[3] : 0);
+}
+const FP_TYPE_LABELS = {
+  open_wood: "Open-hearth wood", sealed_wood: "High-efficiency (sealed) wood", dv: "Direct vent gas",
+  vf: "Vent-free gas", outdoor_vf: "Outdoor vent-free gas", outdoor_gas: "Outdoor gas", outdoor_wood: "Outdoor wood",
+  outdoor_electric: "Outdoor electric", stove: "Wood stove", insert: "Insert",
+};
+const SRC_1118 = "Heatilator Wood-Burning Product Guide (HTL-1118)";
+const SRC_1091 = "Heatilator Novus / Novus nXt brochure (HTL-1091U)";
+const SRC_1111 = "Heatilator Caliber / CaliberX brochure (HTL-1111U)";
+const SRC_1344 = "Hearth & Home Outdoor Fireplace Guide (HHT-1344)";
+const SRC_PB = "Fireplace Xtrordinair ProBuilder Clean Face catalog (98800875)";
+const SRC_LOPI = "Lopi Wood Burning Stoves catalog (98800729)";
+const SRC_INS = "Lopi / FPX Wood Insert catalog (98801038)";
+const SRC_QMIL = "Quadra-Fire Millennium Series brochure (QDF-1076)";
+const SRC_QEXP = "Quadra-Fire Expedition Series brochure (QDF-1080)";
+/* hh(): Hearth & Home comparison-table row: unit/framing front width, back width, height, depth + firebox opening */
+function hh(id, label, brand, category, src, u, f, firebox, extra) {
+  return Object.assign({ id, label, brand, category, insertOk: false, hearthLip: 0, platformH: 0,
+    blower: category === "dv" ? "dv_default" : (category === "outdoor_vf" || category === "vf") ? "vf_none" : "none",
+    spec: { src, unit: { fw: u[0], bw: u[1], h: u[2], d: u[3] }, frame: { fw: f[0], bw: f[1], h: f[2], d: f[3] }, firebox: firebox || "" } }, extra || {});
+}
+function addSpec(m, add) { m.spec = Object.assign(m.spec || {}, add); return m; }
+const FP_SHEET_MODELS = [
+  /* Heatilator open-hearth wood (HTL-1118 p.15) */
+  hh("birmingham36", "Birmingham 36", "Heatilator", "open_wood", SRC_1118, ["46-7/8","31-1/8","74-1/8","27-1/2"], ["47-7/8","47-7/8","74-1/4","28-1/2"], '36" x 38"'),
+  hh("birmingham", "Birmingham 42", "Heatilator", "open_wood", SRC_1118, ["52-7/8","37-1/8","74-1/8","27-1/2"], ["53-7/8","53-7/8","74-1/2","28-1/2"], '42" x 38"'),
+  hh("birmingham50", "Birmingham 50", "Heatilator", "open_wood", SRC_1118, ["60-7/8","45-1/8","74-1/8","27-1/2"], ["61-7/8","61-7/8","74-1/2","28-1/2"], '50" x 38"'),
+  hh("icon36", "Icon 36", "Heatilator", "open_wood", SRC_1118, ["44-1/2","28-5/8","59-1/4","27-1/2"], ["45-1/2","45-1/2","59-3/4","28"], '36" x 28-1/2"'),
+  hh("icon42", "Icon 42", "Heatilator", "open_wood", SRC_1118, ["50-1/2","34-1/2","59-1/4","27-1/2"], ["51-1/2","51-1/2","59-3/4","28-1/2"], '42" x 28-1/2"'),
+  hh("icon50", "Icon 50", "Heatilator", "open_wood", SRC_1118, ["60-5/8","41-5/8","70-1/2","29-1/2"], ["61-5/8","61-5/8","71","30-1/2"], '50" x 33"'),
+  hh("accel36", "Accelerator 36", "Heatilator", "open_wood", SRC_1118, ["42","28-1/4","41-3/8","22-3/4"], ["43","43","41-1/2","23"], '36" x 23-3/8"'),
+  hh("accel42", "Accelerator 42", "Heatilator", "open_wood", SRC_1118, ["48","30-7/8","41-3/8","22-3/4"], ["49","49","41-1/2","23"], '42" x 23-3/8"'),
+  hh("element36", "Element 36", "Heatilator", "open_wood", SRC_1118, ["41","23-3/4","39-1/2","21-3/8"], ["42","42","39-3/4","21-1/2"], '36" x 21"'),
+  hh("element42", "Element 42", "Heatilator", "open_wood", SRC_1118, ["47","29-3/4","39-1/2","21-3/8"], ["48","48","39-3/4","21-1/2"], '42" x 21"'),
+  hh("multiside42", "Multi-Side 42", "Heatilator", "open_wood", SRC_1118, ["47","47","58-7/8","28"], ["48","48","39-1/8","27"], '42" x 23"',
+    { specNote: "As printed: framing height 39-1/8\" and depth 27\" are smaller than the unit 58-7/8\" / 28\" — confirm in the install manual." }),
+  /* Heatilator high-efficiency wood (HTL-1118 p.23) */
+  hh("pioneer3", "Pioneer III", "Heatilator", "sealed_wood", SRC_1118, ["47-7/8","47-7/8","47-1/4","23-1/2"], ["51","51","63-1/4","24-1/2"], 'Arched 28-1/8" x 19-1/8"; Rectangular 28-1/8" x 18-1/8"', { fan: "Optional Heat Zone kit" }),
+  hh("pioneer2", "Pioneer II", "Heatilator", "sealed_wood", SRC_1118, ["40","40","40-1/2","23-1/2"], ["42-1/2","42-1/2","56-3/4","24"], 'Arched & Rectangular 27-3/8" x 16-3/4"', { fan: "Optional Heat Zone kit" }),
+  hh("constitution", "Constitution", "Heatilator", "sealed_wood", SRC_1118, ["40","40","40-1/2","23-1/2"], ["42-1/2","42-1/2","56-3/4","24"], '29-1/4" x 16-3/4"',
+    { fan: "Optional Heat Zone kit", specNote: "EPA tested. Framing depth 24\": if inside of chase will be drywalled, add the drywall thickness." }),
+  /* Heatilator Novus direct vent (HTL-1091U p.4) — unit has no separate framing back width */
+  ...[["NDV3630I-B","35","8-5/8",'30"',"14,000 - 20,000","36"],["NDV3933I-B","38","11-5/8",'33"',"15,000 - 22,000","39"],
+      ["NDV4236I-B","41","14-5/8",'36"',"17,000 - 25,000","42"],["NDV4842I-B","47","20-5/8",'42"',"19,500 - 27,500","48"],
+      ["NNXT33-IFT","38","11-5/8",'33"',"16,000 - 29,000","39"],["NNXT36-IFT","41","14-5/8",'36"',"18,500 - 31,000","42"]].map(r => {
+    const nx = r[0].indexOf("NNXT") === 0;
+    return hh(r[0].toLowerCase().replace(/[^a-z0-9]/g, ""), (nx ? "Novus nXt " : "Novus ") + r[0], "Heatilator", "dv", SRC_1091,
+      [r[1], r[2], "35-1/4", "19-1/8"], [r[5], "", "34-7/8", "19-5/8"], "Opening " + r[3],
+      { specVent: "Direct vent — DVP or SLP pipe. Pipe rough opening (D): DVP 10\", SLP 9\"", specBtu: r[4] + " BTU/hr (NG)" });
+  }),
+  /* Heatilator Caliber (HTL-1111U) */
+  ...[["cal36","Caliber 36","16,000 - 30,000 NG · 17,000 - 28,000 LP","Fan optional"],["calx36","CaliberX 36","22,000 - 40,000 NG · 21,000 - 40,000 LP","Variable-speed fan standard"]].map(r =>
+    hh(r[0], r[1], "Heatilator", "dv", SRC_1111, ["41","28-3/8","40-7/8","21-7/16"], ["42","42","40-1/8","22"], 'Viewing area 34-1/4" x 24-3/4"', { specVent: "Direct vent", specBtu: r[2], fan: r[3] })),
+  ...[["cal42","Caliber 42","19,000 - 35,000 NG · 17,000 - 34,000 LP","Fan optional"],["calx42","CaliberX 42","23,000 - 44,000 NG · 23,000 - 44,000 LP","Variable-speed fan standard"]].map(r =>
+    hh(r[0], r[1], "Heatilator", "dv", SRC_1111, ["48-1/16","35-3/8","42-7/8","21-7/16"], ["49","49","42-1/8","22"], 'Viewing area 41-1/4" x 26-11/16"', { specVent: "Direct vent", specBtu: r[2], fan: r[3] })),
+  /* Outdoor (HHT-1344 p.13) */
+  ...[["48","52-1/8","52-3/4","47-7/8\" x 17\"","55,000"],["60","64-1/8","64-3/4","60\" x 17\"","65,000"],["72","76-1/8","76-3/4","72\" x 17\"","65,000"]].map(r =>
+    hh("lanai" + r[0], "Lanai " + r[0] + " (outdoor)", "Heatilator", "outdoor_gas", SRC_1344, [r[1], r[1], "39-1/2", "13-3/8"], [r[2], r[2], "39-3/4", "13-3/8"], r[3], { specBtu: r[4] + " BTU", specNote: "Outdoor gas linear open hearth, stainless steel." })),
+  ...[["48","52-1/8","52-3/4","47-7/8\" x 17\"","55,000"],["60","64-1/8","64-3/4","60\" x 17\"","65,000"]].map(r =>
+    hh("lanaids" + r[0], "Lanai Double Sided " + r[0] + " (outdoor)", "Heatilator", "outdoor_gas", SRC_1344, [r[1], r[1], "39-1/2", "13"], [r[2], r[2], "39-3/4", "11-3/8"], r[3], { specBtu: r[4] + " BTU", specNote: "Outdoor gas linear, double-sided." })),
+  hh("courtyard36", "Courtyard 36 (outdoor)", "Heatilator", "outdoor_vf", SRC_1344, ["36","31-1/4","34","20"], ["42-1/2","42-1/2","34-1/4","20-1/4"], '36" x 30"', { specBtu: "55,000 BTU", specVent: "Vent-free (outdoor)" }),
+  hh("courtyard42", "Courtyard 42 (outdoor)", "Heatilator", "outdoor_vf", SRC_1344, ["42","37-1/4","34","20"], ["48-1/2","48-1/2","34-1/4","20-1/4"], '42" x 30"', { specBtu: "55,000 BTU", specVent: "Vent-free (outdoor)" }),
+  hh("vesper", "Vesper 36 (outdoor VF)", "Heatilator", "outdoor_vf", SRC_1344, ["42","31-1/4","34","20"], ["42-1/2","42-1/2","34-1/4","19-3/4"], '36" x 27"', { specBtu: "50,000 BTU", specVent: "Vent-free (outdoor)" }),
+  hh("vesper42", "Vesper 42 (outdoor VF)", "Heatilator", "outdoor_vf", SRC_1344, ["48","37-1/4","34","20"], ["48-1/2","48-1/2","34-1/4","19-3/4"], '42" x 27"', { specBtu: "50,000 BTU", specVent: "Vent-free (outdoor)" }),
+  hh("castlewood42", "Castlewood 42 (outdoor)", "Heatilator", "outdoor_wood", SRC_1344, ["52-7/8","37-1/8","74-1/8","27-1/2"], ["53-7/8","53-7/8","74-1/2","28-1/2"], '42" x 38"', { specNote: "Outdoor wood; accepts a gas log set." }),
+  hh("castlewood50", "Castlewood 50 (outdoor)", "Heatilator", "outdoor_wood", SRC_1344, ["60-7/8","45-1/8","74-1/8","27-1/2"], ["61-7/8","61-7/8","74-1/2","28-1/2"], '50" x 38"', { specNote: "Outdoor wood; accepts a gas log set." }),
+  hh("cottagewood36", "Cottagewood 36 (outdoor)", "Heatilator", "outdoor_wood", SRC_1344, ["44-1/2","28-5/8","59-1/4","27-1/2"], ["45-1/2","45-1/2","59-3/4","28"], '36" x 28-1/2"', { specNote: "Outdoor wood; accepts a gas log set." }),
+  hh("cottagewood42", "Cottagewood 42 (outdoor)", "Heatilator", "outdoor_wood", SRC_1344, ["50-1/2","34-1/2","59-1/4","27-1/2"], ["51-1/2","51-1/2","59-3/4","28-1/2"], '42" x 28-1/2"', { specNote: "Outdoor wood; accepts a gas log set." }),
+  hh("cottagewood50", "Cottagewood 50 (outdoor)", "Heatilator", "outdoor_wood", SRC_1344, ["60-5/8","41-5/8","70-1/2","29-1/2"], ["61-5/8","61-5/8","71","30-1/2"], '50" x 33"', { specNote: "Outdoor wood; accepts a gas log set." }),
+  hh("villawood36", "Villawood 36 (outdoor)", "Heatilator", "outdoor_wood", SRC_1344, ["41","23-3/4","39-1/2","21-3/8"], ["42","42","39-3/4","21-1/2"], '36" x 21"', { specNote: "Outdoor wood; accepts a gas log set." }),
+  hh("villawood42", "Villawood 42 (outdoor)", "Heatilator", "outdoor_wood", SRC_1344, ["47","29-3/4","39-1/2","21-3/8"], ["48","48","39-3/4","21-1/2"], '42" x 21"', { specNote: "Outdoor wood; accepts a gas log set." }),
+  hh("forum43", "Forum 43 (outdoor electric)", "Heatilator", "outdoor_electric", SRC_1344, ["46","","18-1/8","8-1/4"], ["46","","18-1/8","8-1/4"], '43-1/2" x 15-7/16"', { specNote: "Table gives one width/height/depth for unit and framing." }),
+  hh("forum55", "Forum 55 (outdoor electric)", "Heatilator", "outdoor_electric", SRC_1344, ["58","","18-1/8","8-1/4"], ["58","","18-1/8","8-1/4"], '55-1/2" x 15-7/16"', { specNote: "Table gives one width/height/depth for unit and framing." }),
+  /* Travis Industries — Fireplace Xtrordinair (FPX) */
+  hh("probuilder36", "ProBuilder 36 Clean Face", "Travis FPX", "dv", SRC_PB, ["36-5/8","","41","15-1/4"], ["37-1/8","","41","15-3/4"], 'Glass 30-1/8" W x 26-1/8" H',
+    { specVent: "Top vent direct vent", specBtu: "MV/GSB 13,000-25,000 NG · Deluxe 5,000-25,000 NG", fan: "180 CFM fan (Deluxe / optional)",
+      specNote: "Unit dims include standoffs; unit top depth 24-1/2\". Min. enclosure height 61-7/8\", max header depth 3\". 170 lb." }),
+  hh("probuilder36st", "ProBuilder 36 Clean Face See-Thru", "Travis FPX", "dv", SRC_PB, ["41-1/2","","43-3/4","20"], ["42","","44","20"], "",
+    { specVent: "8\" diameter vent, top", fan: "",
+      specNote: "Framing width 47-1/8\" with centering brackets (42\" without); unit 46-5/8\" with brackets. Framing depth 20\" standard / 19\" extended install. Min. enclosure height 61-7/8\", max header depth 3\". 300 lb." }),
+  hh("probuilder42", "ProBuilder 42 Clean Face", "Travis FPX", "dv", SRC_PB, ["42-1/2","","46","16-3/4"], ["43","","46-1/4","17-1/4"], "",
+    { specVent: "Top vent direct vent", fan: "180 CFM fan (Deluxe / optional)",
+      specNote: "Unit dims include standoffs; unit top depth 28-1/4\". Min. enclosure height 68\", max header depth 3\". 240 lb." }),
+  hh("fe864", "864 TV 40K Deluxe", "Travis FPX", "dv", "FPX 864 TV 40K Deluxe spec sheet (SPF_86440K_533)", ["41","","38-1/4","20-3/4"], [null, null, null, null], "Glass 758.8 sq in",
+    { specVent: "Direct vent, top vent (no rear vent). 8\" flue", specBtu: "40,000 - 11,000 NG · 40,000 - 12,000 LP", fan: "180 CFM convection fan",
+      specNote: "Height includes standoffs. Combustible mantel 40-3/4\"–48-3/4\" from base. Hearth: none required. Framing not on the sheet — see install manual.", placeholderRO: { roH: 40, roW: 42, roD: 24 } }),
+  hh("apex42", "42 Apex NexGen-Hybrid", "Travis FPX", "sealed_wood", "FPX 42 Apex NexGen-Hybrid spec sheet (SPF_42ApexNG_682)", ["","","",""], [null, null, null, null], 'Glass 25-5/8" W x 12-7/8" H · 3.5 cu ft',
+    { specBtu: "7,660 - 40,275 BTU/hr (EPA)", fan: "Standard fan (in-wall control)", specNote: "Wood. Max log 24\", 670 lb. No dimensions/framing on the sheet — see install manual.", placeholderRO: { roH: 40, roW: 42, roD: 24 } }),
+  hh("apex44elite", "44 Elite NexGen-Hybrid", "Travis FPX", "sealed_wood", "FPX 44 Elite NexGen-Hybrid spec sheet (98801098)", ["","","",""], [null, null, null, null], 'Double door 14-3/8" W x 18-1/4" H each · 4.2 cu ft',
+    { specBtu: "12,016 - 54,510 (crib) · 12,500 - 78,000 (cord)", specNote: "Wood. Max log 32\". No dimensions/framing on the sheet — see install manual.", placeholderRO: { roH: 42, roW: 44, roD: 24 } }),
+];
+/* Wood stoves: no framing — dims + clearances + hearth protection */
+function stove(id, label, brand, src, dims, flue, clear, hearth, extra) {
+  return Object.assign({ id, label, brand, category: "stove", insertOk: false, roH: null, roW: null, roD: null, hearthLip: 0, platformH: 0, blower: "none",
+    spec: { src, dims, vent: flue ? flue + " flue" : "", clear, hearth } }, extra || {});
+}
+const QF_CLR = "F back wall→flue ctr, G back wall→stove, H side wall→flue ctr, I side wall→stove, J corner→stove, K corner→flue ctr, L stove top→ceiling";
+FP_SHEET_MODELS.push(
+  stove("qf4300m", "4300 Millennium", "Quadra-Fire", SRC_QMIL, [["Width (A)",'26-1/4"'],["Height (B)",'30-1/2"'],["Base width (C)",'21"'],["Depth (D)",'28-5/8"'],["Base depth (E)",'19-3/4"'],["Flue height (F)",'32-1/4"']], "",
+    [["Single wall F/G/H/I/J/K/L",'18-1/2 / 11-3/4 / 27-1/2 / 14-1/2 / 8 / 20-1/2 / 53-1/2"'],["Double wall F/G/H/I/J/K/L",'12 / 5-1/4 / 27-1/2 / 14-1/2 / 8 / 20-1/2 / 53-1/2"']],
+    'Min. floor protection 31-5/8" W x 41" D', { spec2: QF_CLR, fan: "Optional 160 CFM fan kit", specBtu: "61,700 peak BTU/hr" }),
+  stove("qf3100m", "3100 Millennium", "Quadra-Fire", SRC_QMIL, [["Width (A)",'25-1/2"'],["Height (B)",'29-1/2"'],["Base width (C)",'21"'],["Depth (D)",'26-5/8"'],["Base depth (E)",'19-3/4"'],["Flue height (F)",'31-3/8"']], "",
+    [["Single wall F/G/H/I/J/K/L",'18-1/4 / 11-3/4 / 28-1/2 / 16 / 8 / 20 / 48"'],["Double wall F/G/H/I/J/K/L",'13-1/2 / 6-1/2 / 25 / 13 / 6-1/2 / 18-1/2 / 48"']],
+    'Min. floor protection 31-5/8" W x 39" D', { spec2: QF_CLR, fan: "Optional 160 CFM fan kit", specBtu: "51,000 peak BTU/hr" }),
+  stove("qf2100m", "2100 Millennium", "Quadra-Fire", SRC_QMIL, [["Width (A)",'23-5/8"'],["Height (B)",'27-1/2"'],["Base width (C)",'21"'],["Depth (D)",'26-5/8"'],["Base depth (E)",'19-3/4"'],["Flue height (F)",'29-3/8"']], "",
+    [["Single wall F/G/H/I/J/K/L",'18 / 11 / 24-1/2 / 13 / 8-1/2 / 20 / 56"'],["Double wall F/G/H/I/J/K/L",'11-3/4 / 5 / 23 / 11-1/2 / 7-1/2 / 19 / 43"']],
+    'Min. floor protection 29-5/8" W x 39" D', { spec2: QF_CLR + ". Requires min. 2' vertical pipe off stove top.", fan: "Optional 160 CFM fan kit", specBtu: "44,400 peak BTU/hr" }),
+);
+const LOPI_CLR = "A stove→side wall, B stove→back wall, C stove→corner, D connector→side wall, E connector→back wall, F connector→corner";
+[["answer","Answer NexGen-Hybrid",'23-5/8"','27-7/8"',"",'16-1/4"',['18 / 16-1/2 / 10 / 27 / 19-1/2 / 19-1/2"','13 / 9 / 7-1/2 / 21-1/2 / 11-1/2 / 16-1/2"'],'Alcove min width 49-5/8" (comb.) / 35-5/8" (non-comb.)',"160 CFM fan","12,500 - 60,000 (cord)"],
+ ["evergreen","Evergreen NexGen-Hybrid",'28"','31"','33-1/2"','20-1/4"',['12 / 19 / 11-5/8 / 22-1/2 / 21 / 21"','11 / 11 / 4 / 21 / 12-1/2 / 13-1/2"'],'Alcove min width 50" (comb.) / 40" (non-comb.)',"400 CFM fan","12,500 - 70,500 (cord)"],
+ ["endeavor","Endeavor NexGen-Hybrid",'24"','32"',"",'23-1/2"',['15 / 17 / 15 / 24 / 19-3/4 / 24"','13 / 9 / 6-1/2 / 21-1/2 / 11-1/4 / 15"'],'Alcove min width 50" (comb.) / 36" (non-comb.)',"400 CFM fan","15,500 - 70,500 (cord)"],
+ ["liberty","Liberty NexGen-Hybrid",'30"','34-3/16"',"",'24-9/16"',['16 / 15 / 9-1/2 / 28 / 18-1/4 / 21"','16 / 10 / 7-1/2 / 27-1/2 / 12-3/4 / 18-1/2"'],'Alcove min width 62" (comb.) / 42" (non-comb.)',"400 CFM fan","15,000 - 78,200 (cord)"],
+ ["rockport","Rockport NexGen-Hybrid",'28-1/4"','31-1/2"',"",'19-3/4" (21-3/4" w/heat shield)',['16 / 16 / 9 / 27-1/8 / 18-1/4 / 19-1/4"','16 / 10.5 / 9 / 26-1/2 / 12-1/4 / 18-3/4"'],'Alcove min width 60-1/4" (comb.) / 40-1/4" (non-comb.)',"400 CFM fan","13,500 - 65,500 (cord)"]
+].forEach(r => {
+  const dims = [["Width", r[2]], ["Height (legs)", r[3]]]; if (r[4]) dims.push(["Height (pedestal)", r[4]]); dims.push(["Depth", r[5]]);
+  FP_SHEET_MODELS.push(stove("lopi_" + r[0], r[1] + " stove", "Travis Lopi", SRC_LOPI, dims, '6"',
+    [["Single wall A/B/C/D/E/F", r[6][0]], ["Double wall A/B/C/D/E/F", r[6][1]], ["Alcove", r[7] + '; max depth 48"; min height 84" (comb.)']],
+    'Hearth protection front 16" US / 18" CAN, sides & back 6" US / 8" CAN', { spec2: LOPI_CLR, fan: r[8] + " (per catalog)", specBtu: r[9] }));
+});
+/* Wood inserts (retrofit into an existing fireplace): insert dims + minimum fireplace opening */
+function woodInsert(id, label, brand, src, dims, minOpen, flue, extra) {
+  const g = k => (minOpen.find(x => x[0] === k) || [])[2];
+  return Object.assign({ id, label, brand, category: "insert", insertFuel: "wood", insertOk: true, hearthLip: 0, platformH: 0, blower: "none",
+    roH: fpFrac(g("h")), roW: fpFrac(g("fw")), roD: fpFrac(g("d")),
+    spec: { src, dims, minOpen: minOpen.map(x => [x[1], x[2] + '"']), vent: flue } }, extra || {});
+}
+[["answer","Answer NexGen-Hybrid insert","Travis Lopi",[["Width",'23-5/8"'],["Height",'20-3/4"'],["Depth overall",'16-1/4"'],["Depth on hearth",'2"'],["Depth into fireplace",'14-1/2"']],
+   [["fw","Front width","23-7/8"],["bw","Back width","23-7/8"],["h","Height","21"],["d","Depth*","14-1/2"]],'Hearth 18" US / 20" CAN deep; 35-5/8" US / 39-5/8" CAN wide',"130 CFM fan"],
+ ["evergreen","Evergreen NexGen-Hybrid insert","Travis Lopi",[["Width",'26" front, 23-1/2" back'],["Height",'23"'],["Depth overall",'19-3/8"'],["Depth on hearth",'4-1/4"'],["Depth into fireplace",'15-1/4"']],
+   [["fw","Front width","26-1/4"],["bw","Back width","23-3/4"],["h","Height (front; rear 23-1/4)","23-1/4"],["d","Depth*","15-1/4"]],'Hearth 20-1/4" US / 22-1/4" CAN deep; 35-5/8" US / 39-5/8" CAN wide',"130 CFM fan"],
+ ["medflush","Medium Flush Wood NexGen-Hybrid insert","Travis Lopi / FPX",[["Width",'28-7/8" front, 18-7/8" back'],["Height",'21-1/2" front, 19-3/4" back'],["Depth overall",'19"'],["Depth on hearth",'0"'],["Depth into fireplace",'19-1/8"']],
+   [["fw","Front width (36-7/8\" w/ GreenStart)","30-7/8"],["bw","Back width","19-1/8"],["h","Height","21-3/4"],["d","Depth*","19-1/8"]],'Hearth 16" US / 18" CAN deep; 44-7/8" wide',"Standard 180 CFM fan"],
+ ["lgflush","Large Flush Wood NexGen-Hybrid insert","Travis Lopi / FPX",[["Width",'31" front, 20-3/4" back'],["Height",'23-3/4" front, 22-1/4" back'],["Depth overall",'19"'],["Depth on hearth",'0"'],["Depth into fireplace",'19-1/8"']],
+   [["fw","Front width (40\" w/ GreenStart)","33"],["bw","Back width","21"],["h","Height (front; rear 22-1/4)","23-3/4"],["d","Depth*","19-1/8"]],'Hearth 16" to 20" deep (see manual); 47" wide',"Standard 180 CFM fan"]
+].forEach(r => FP_SHEET_MODELS.push(woodInsert("ins_" + r[0], r[1], r[2], SRC_INS, r[3], r[4], '6" flue',
+  { spec2: "*Min. fireplace depth can be reduced 1-1/4\" with optional panel trim. Masonry fireplace.", hearth: r[5], fan: r[6] + " (per catalog)" })));
+FP_SHEET_MODELS.push(
+  woodInsert("expedition2", "Expedition II insert", "Quadra-Fire", SRC_QEXP,
+    [["Flue setback (A)",'14"'],["Rear height (B)",'23-1/8"'],["Front height (C)",'23-3/4"'],["Front width (D)",'31-1/2"'],["Back width (E)",'23-5/8"'],["Depth (F)",'18"']],
+    [["fw","Front width (A)","32"],["h","Front height (B)","23-3/8"],["bw","Back width (C)","23-3/8"],["d","Depth (D)","18-1/4"],["hm","Hearth to mantel (E)","47-3/4"]], "",
+    { specBtu: "56,000 peak BTU/hr", spec2: "Spec letters A–F read off the side/top view drawing. Flue/liner size not stated in the brochure." }),
+  woodInsert("expedition1", "Expedition I insert", "Quadra-Fire", SRC_QEXP,
+    [["Flue setback (A)",'12-1/8"'],["Rear height (B)",'19"'],["Front height (C)",'19-3/4"'],["Front width (D)",'26-1/2"'],["Back width (E)",'24"'],["Depth (F)",'16"']],
+    [["fw","Front width (A)","27"],["h","Front height (B)","19-1/4"],["bw","Back width (C)","24-1/2"],["d","Depth (D)","16"],["hm","Hearth to mantel (E)","44-3/4"]], "",
+    { specBtu: "37,400 peak BTU/hr", spec2: "Spec letters A–F read off the side/top view drawing. Flue/liner size not stated in the brochure." }),
+);
+/* merge into FP_CATALOG: sheet data replaces same-id built-ins; framing → RO defaults */
+FP_SHEET_MODELS.forEach(m => {
+  const s = m.spec || {};
+  const KMAP = { specVent: "vent", specBtu: "btu", specNote: "note", spec2: "key", fan: "fan", hearth: "hearth" };
+  Object.keys(KMAP).forEach(k => { if (m[k] != null) { if (m[k] !== "") s[KMAP[k]] = m[k]; delete m[k]; } });
+  if (m.category !== "stove" && m.category !== "insert" && s.frame) {
+    m.roH = fpFrac(s.frame.h); m.roW = fpFrac(s.frame.fw); m.roD = fpFrac(s.frame.d);
+    if (m.roH == null && m.placeholderRO) { m.roH = m.placeholderRO.roH; m.roW = m.placeholderRO.roW; m.roD = m.placeholderRO.roD; s.placeholder = true; }
+  }
+  delete m.placeholderRO;
+  s.type = FP_TYPE_LABELS[m.category] + (m.category === "insert" ? " (" + (m.insertFuel || "") + ", existing fireplace)" : "");
+  m.spec = s;
+  const i = FP_CATALOG.findIndex(x => x.id === m.id);
+  if (i >= 0) FP_CATALOG[i] = m; else FP_CATALOG.push(m);
+});
+FP_CATALOG.forEach(m => { if (m.id === "buck") m.hidden = true; });
+function fpInTxt(v) {
+  const x = parseFloat(v); if (!Number.isFinite(x)) return String(v || "—");
+  let w = Math.floor(x), num = Math.round((x - w) * 16), den = 16;
+  if (num === 16) { w += 1; num = 0; }
+  if (!num) return String(w);
+  while (num % 2 === 0) { num /= 2; den /= 2; }
+  return (w ? w + "-" : "") + num + "/" + den;
+}
+function fpDimTxt(o) { if (!o) return ""; const p = []; if (o.fw) p.push("front W " + o.fw + '"'); if (o.bw) p.push("back W " + o.bw + '"'); if (o.h) p.push("H " + o.h + '"'); if (o.d) p.push("D " + o.d + '"'); return p.join(" · "); }
+function fpSpecRows(m) {
+  const s = m && m.spec; if (!s) return [];
+  const rows = [["Type", s.type]];
+  if (s.frame && fpDimTxt(s.frame)) rows.push(["Framing (RO)", fpDimTxt(s.frame)]);
+  if (s.placeholder) rows.push(["Framing (RO)", "Not on the sheet — RO fields hold an unverified placeholder"]);
+  if (s.minOpen) rows.push(["Min. fireplace opening", s.minOpen.map(x => x[0] + " " + x[1]).join(" · ")]);
+  if (s.unit && fpDimTxt(s.unit)) rows.push(["Unit", fpDimTxt(s.unit)]);
+  if (s.dims) rows.push([m.category === "insert" ? "Insert" : "Unit", s.dims.map(x => x[0] + " " + x[1]).join(" · ")]);
+  if (s.firebox) rows.push(["Firebox / opening", s.firebox]);
+  if (s.vent) rows.push(["Venting", s.vent]);
+  if (s.btu) rows.push(["BTU", s.btu]);
+  if (s.clear) s.clear.forEach(c => rows.push(["Clearance " + c[0], c[1]]));
+  if (s.hearth) rows.push(["Hearth", s.hearth]);
+  if (s.fan) rows.push(["Fan (sheet)", s.fan]);
+  if (s.note) rows.push(["Note", s.note]);
+  if (s.key) rows.push(["Key", s.key]);
+  rows.push(["Source", s.src]);
+  return rows;
+}
 
 const PACKAGE_LABELS = {
   standard: "Standard (blow + batts)",
@@ -761,7 +960,7 @@ const S = {
   fpHearthPlatform: "", fpWoodGasStarter: false, fpBlowerChoice: "none",
   fpMeasRoH: "", fpMeasRoW: "", fpMeasRoD: "",
   fpSpecRoH: "", fpSpecRoW: "", fpSpecRoD: "", fpSpecLip: "", fpSpecPlatform: "",
-  fpWall90: false, fpSpecNote: "",
+  fpWall90: false, fpSpecNote: "", fpSpecUser: false,
   showBallpark: false, marginPick: "40", marginCustom: "40",
   priceLibrary: mergePriceLibrary([]),
   showPriceLib: false,
@@ -807,6 +1006,7 @@ function flags() {
 
 function fpModelsForContext(fpMode, retroKind) {
   return FP_CATALOG.filter(m => {
+    if (m.hidden && m.id !== S.fpModelId) return false;
     if (fpMode === "retro" && retroKind === "insert") return m.insertOk;
     if (fpMode === "retro" && retroKind === "wood_stove")
       return m.category === "stove" || m.category === "sealed_wood" || m.category === "open_wood";
@@ -1073,8 +1273,21 @@ function appendFpLines(lines, noteTag) {
     desc = "Wood stove" + (S.fpWall90 ? " · 90° wall OK" : "");
   else if (model && model.category === "sealed_wood")
     desc = "Sealed-face wood (NC/tear-out only — not insert)";
-  else desc = (model && model.category) || "Unit";
+  else desc = (model && (FP_TYPE_LABELS[model.category] || model.category)) || "Unit";
   push(lines, { area: "Fireplace", assembly: S.fpMode === "nc" ? "NC fireplace" : "Retro " + S.fpRetroKind, product: modelLabel, description: desc, footage: 1, unit: "ea", notes: noteTag });
+  if (S.fpSpecRoW || S.fpSpecRoH || S.fpSpecRoD) {
+    const isIns = model && model.category === "insert";
+    push(lines, { area: "Fireplace", assembly: isIns ? "Min. fireplace opening" : "Framing (RO)", product: isIns ? "Min. opening" : "Framing specs",
+      description: "W " + fpInTxt(S.fpSpecRoW) + '" × H ' + fpInTxt(S.fpSpecRoH) + '" × D ' + fpInTxt(S.fpSpecRoD) + '"' +
+        (model && model.spec && model.spec.frame && model.spec.frame.bw ? " · back W " + model.spec.frame.bw + '"' : "") +
+        (model && model.spec && model.spec.firebox ? " · " + model.spec.firebox : ""),
+      footage: 1, unit: "ea", notes: noteTag + (S.fpSpecUser ? "Saved spec" : (model && model.spec ? (model.spec.placeholder ? "Placeholder — not on spec sheet" : model.spec.src) : "Catalog default")) });
+  }
+  if (model && model.spec && model.spec.vent) push(lines, { area: "Fireplace", assembly: "Venting", product: "Venting", description: model.spec.vent, footage: 1, unit: "ea", notes: noteTag + "Spec sheet" });
+  if (model && model.spec && model.spec.clear) {
+    push(lines, { area: "Fireplace", assembly: "Clearances", product: "Clearances to combustibles", description: model.spec.clear.map(c => c[0] + ": " + c[1]).join(" | ") + (model.spec.key ? " (" + model.spec.key + ")" : ""), footage: 1, unit: "ea", notes: noteTag + "Spec sheet" });
+  }
+  if (model && model.spec && model.spec.hearth) push(lines, { area: "Fireplace", assembly: "Hearth protection", product: "Hearth", description: model.spec.hearth, footage: 1, unit: "ea", notes: noteTag + "Spec sheet" });
   if (n(S.fpPipeFt) > 0) {
     push(lines, { area: "Fireplace", assembly: "Pipe", product: "Vent pipe", description: fmt(n(S.fpPipeFt)) + " ft of pipe · term " + S.fpTerm, footage: round2(n(S.fpPipeFt)), unit: "LF", notes: noteTag + "Total feet of pipe" });
   }
@@ -1539,6 +1752,12 @@ function renderFireplace() {
   if (model && model.category === "sealed_wood") {
     body.appendChild(el("div", "callout", "<strong>Sealed-face wood</strong>Tear-out or new construction only — not sold as an insert."));
   }
+  if (model && model.spec) {
+    const rows = fpSpecRows(model);
+    body.appendChild(el("div", "callout fp-spec", "<strong>Spec sheet — " + escHtml(fpDisplayName(model)) + "</strong><table class='fp-spec-t'>" +
+      rows.map(r => "<tr><th>" + escHtml(r[0]) + "</th><td>" + escHtml(r[1]) + "</td></tr>").join("") + "</table>" +
+      (model.roH != null ? "<p class='status'>" + (model.category === "insert" ? "Min. fireplace opening" : "Framing") + " fills the Spec RO fields below" + (S.fpSpecUser ? " — your saved specs override it." : ".") + "</p>" : "")));
+  }
 
   body.appendChild(el("div", "divider"));
   body.appendChild(el("p", "cap", "Pipe, termination, chase"));
@@ -1594,7 +1813,7 @@ function renderFireplace() {
   const saveSpec = el("button", "btn btn-secondary btn-block"); saveSpec.type = "button"; saveSpec.textContent = "Save specs for this model";
   saveSpec.onclick = () => {
     idbPutSpec({ modelId: S.fpModelId, roH: S.fpSpecRoH, roW: S.fpSpecRoW, roD: S.fpSpecRoD, hearthLip: S.fpSpecLip, platformH: S.fpSpecPlatform })
-      .then(() => { S.fpSpecNote = "Specs saved to IndexedDB."; renderFireplace(); })
+      .then(() => { S.fpSpecNote = "Specs saved to IndexedDB."; S.fpSpecUser = true; renderFireplace(); })
       .catch(() => { S.fpSpecNote = "Spec save failed."; renderFireplace(); });
   };
   body.appendChild(saveSpec);
@@ -1617,21 +1836,27 @@ function renderFireplace() {
 function loadFpSpecs() {
   const m = findFpModel(S.fpModelId);
   if (!m) return;
+  S.fpSpecUser = false;
+  if (m.insertFuel && S.fpMode === "retro" && S.fpRetroKind === "insert") S.fpFuel = m.insertFuel;
   if (m.blower === "dv_default") S.fpBlowerChoice = "include";
   else if (m.blower === "vf_none") S.fpBlowerChoice = "none";
   else if (m.blower === "a42c_only") S.fpBlowerChoice = "include";
   else S.fpBlowerChoice = "none";
   idbGetAllSpecs().then(specs => {
     const o = specs.find(s => s.modelId === S.fpModelId);
-    S.fpSpecRoH = (o && o.roH) || String(m.roH);
-    S.fpSpecRoW = (o && o.roW) || String(m.roW);
-    S.fpSpecRoD = (o && o.roD) || String(m.roD);
-    S.fpSpecLip = (o && o.hearthLip) || String(m.hearthLip);
-    S.fpSpecPlatform = (o && o.platformH) || String(m.platformH);
+    const dv = v => v == null ? "" : String(v);
+    S.fpSpecRoH = (o && o.roH) || dv(m.roH);
+    S.fpSpecRoW = (o && o.roW) || dv(m.roW);
+    S.fpSpecRoD = (o && o.roD) || dv(m.roD);
+    S.fpSpecLip = (o && o.hearthLip) || dv(m.hearthLip);
+    S.fpSpecPlatform = (o && o.platformH) || dv(m.platformH);
+    S.fpSpecUser = !!(o && (o.roH || o.roW || o.roD));
+    if (S.includeFp && S.fpModelId === m.id) renderFireplace();
     renderLiveOnly();
   }).catch(() => {
-    S.fpSpecRoH = String(m.roH); S.fpSpecRoW = String(m.roW); S.fpSpecRoD = String(m.roD);
-    S.fpSpecLip = String(m.hearthLip); S.fpSpecPlatform = String(m.platformH);
+    const dv = v => v == null ? "" : String(v);
+    S.fpSpecRoH = dv(m.roH); S.fpSpecRoW = dv(m.roW); S.fpSpecRoD = dv(m.roD);
+    S.fpSpecLip = dv(m.hearthLip); S.fpSpecPlatform = dv(m.platformH); S.fpSpecUser = false;
   });
 }
 
