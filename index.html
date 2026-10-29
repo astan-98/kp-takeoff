@@ -558,6 +558,12 @@ function interiorWallLine(r, idx, count, noteTag) {
     footage: round2(interiorWallSf(r)), unit: "SF",
     notes: noteTag + cav + " cav × " + round2(wallFactor(r)) + (n(r.cavities) > 0 ? "" : " (from " + fmt(n(r.lf)) + " LF)") };
 }
+const MISC_UNITS = [["SF","SF"],["LF","LF"],["Each","Each"],["Bags","Bags"],["Rolls","Rolls"],["Sheets","Sheets"],["Hours","Hours"],["custom","Custom…"]];
+function newMiscItem() { return { id: uid(), material: "", notes: "", qty: "", unit: "SF", customUnit: "" }; }
+function miscUnit(r) { return r.unit === "custom" ? ((r.customUnit || "").trim() || "custom") : (r.unit || "SF"); }
+function miscFilled() {
+  return (Array.isArray(S.misc) ? S.misc : []).filter(r => (r.material || "").trim() !== "");
+}
 function defaultWallMode(pkg, kind) {
   if (pkg === "total_foam") return "foam";
   if (pkg === "foam_cellulose") return "cellulose";
@@ -659,6 +665,7 @@ const S = {
   hasRim: false, hasWalls: true, hasInteriorWalls: false, hasGables: false, hasCants: false,
   hasGarage: false, hasPorch: false, hasBasementWalls: false,
   hasSubfloor: false, hasDense: false, hasCrawlWalls: false,
+  hasMisc: false, misc: [newMiscItem()],
   interiorWalls: [newInteriorWall()],
   deadAir: [{ id: uid(), name: "", sf: "" }],
   vaults: [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }],
@@ -963,6 +970,15 @@ function buildLinesForPackage(p, tag) {
     if (denseNet > 0) push(lines, { area: "Dense-pack", assembly: "Netting", product: "Netting", description: "Matches dense-pack", footage: round2(denseNet), unit: "SF", notes: noteTag });
   }
 
+  if (S.hasMisc) {
+    miscFilled().forEach(r => {
+      const u = miscUnit(r);
+      const notes = (r.notes || "").trim();
+      push(lines, { area: "Misc", assembly: "Miscellaneous", product: r.material.trim(),
+        description: notes ? notes + " (" + u + ")" : u, footage: round2(n(r.qty)), unit: u, notes: noteTag + "Manual entry" });
+    });
+  }
+
   if (S.airSealed) push(lines, { area: site, assembly: "Air seal (caulk & foam)", product: "Air seal", description: "Caulk & foam — base plate / openings / penetrations", footage: 1, unit: "ea", notes: noteTag });
 
   if (S.gasType === "idk") {
@@ -1055,7 +1071,11 @@ function ballpark() {
   const missing = new Set();
   allLines().forEach(L => {
     if (L.footage === 0 && L.unit === "—") return;
-    const unit40 = priceMap.get(L.product);
+    let unit40 = priceMap.get(L.product);
+    if (unit40 === undefined && L.product) {
+      const key = String(L.product).trim().toLowerCase();
+      priceMap.forEach((v, k) => { if (unit40 === undefined && k.trim().toLowerCase() === key) unit40 = v; });
+    }
     if (unit40 === undefined || unit40 <= 0) { unpricedLines++; missing.add(L.product); return; }
     total += L.footage * unit40 * scale;
     pricedLines++;
@@ -1137,6 +1157,7 @@ function renderGates() {
   addToggle("Crawl walls to foam", "hasCrawlWalls", F.canAskCrawlEncap);
   addToggle("Dense-pack floors", "hasDense", F.canAskDense);
   addToggle("Poured floor (skip poly)", "pouredFloor", F.canAskCrawlEncap);
+  addToggle("Miscellaneous", "hasMisc", true);
 }
 
 function pitchSelectHtml(selected) {
@@ -1342,6 +1363,27 @@ function renderAssemblyEditors() {
     });
     card.appendChild(addBtn("Add foam roof line", () => { S.foamRoofs.push({ id: uid(), name: "", flatSf: "", pitch: "6", customRise: "" }); render(); }));
     box.appendChild(card);
+  }
+  if (S.hasMisc) {
+    box.appendChild(el("div", "divider"));
+    box.appendChild(el("p", "cap", "Miscellaneous — anything out of the ordinary. Each item with a material becomes its own Excel line. Price looks up the material name in the price library."));
+    if (!Array.isArray(S.misc) || !S.misc.length) S.misc = [newMiscItem()];
+    S.misc.forEach((r, idx) => {
+      const card = el("div", "row-card");
+      card.innerHTML = '<div class="row-title">Misc item #' + (idx+1) + '</div>';
+      card.appendChild(fieldInput("Material (required)", r.material, v => { r.material = v; schedule(); }));
+      card.appendChild(fieldInput("Description / notes (optional)", r.notes, v => { r.notes = v; schedule(); }));
+      const g = el("div", "grid2");
+      g.appendChild(fieldInput("Quantity", r.qty, v => { r.qty = v; schedule(); }, "number"));
+      g.appendChild(fieldSelect("Unit of measure", r.unit, MISC_UNITS, v => { r.unit = v; render(); }));
+      card.appendChild(g);
+      if (r.unit === "custom") card.appendChild(fieldInput("Custom unit", r.customUnit, v => { r.customUnit = v; schedule(); }));
+      const rm = el("button", "btn btn-secondary btn-sm"); rm.type = "button"; rm.textContent = "Remove item";
+      rm.onclick = () => { S.misc.splice(idx, 1); if (!S.misc.length) S.misc.push(newMiscItem()); render(); };
+      card.appendChild(rm);
+      box.appendChild(card);
+    });
+    box.appendChild(addBtn("Add item", () => { S.misc.push(newMiscItem()); render(); }));
   }
 }
 
@@ -1572,7 +1614,7 @@ function renderArchive() {
     if (S.filterFrom && j.dateMeasured < S.filterFrom) return false;
     if (S.filterTo && j.dateMeasured > S.filterTo) return false;
     if (q) {
-      const blob = [j.builder, j.city, j.address, j.packageLabel, j.owner, j.dateMeasured, j.keywords, j.chaseBlocked ? "chase blocked " + j.chaseNote : ""].join(" ").toLowerCase();
+      const blob = [j.builder, j.city, j.address, j.packageLabel, j.owner, j.dateMeasured, j.keywords, j.chaseBlocked ? "chase blocked " + j.chaseNote : "", j.miscText || ""].join(" ").toLowerCase();
       if (!blob.includes(q)) return false;
     }
     return true;
@@ -1748,6 +1790,9 @@ function migrateState(d) {
   if (typeof S.fpChaseClear !== "boolean") S.fpChaseClear = true;
   if (typeof S.fpChaseNote !== "string") S.fpChaseNote = "";
   if (!Array.isArray(S.interiorWalls) || !S.interiorWalls.length) S.interiorWalls = [newInteriorWall()];
+  if (!Array.isArray(S.misc) || !S.misc.length) S.misc = [newMiscItem()];
+  if (typeof S.hasMisc !== "boolean") S.hasMisc = false;
+  if (!("hasMisc" in d)) { S.hasMisc = false; S.misc = [newMiscItem()]; }
   if (S.fpBlowerChoice === "optional_skip") S.fpBlowerChoice = "none";
   if (Array.isArray(S.vaults)) S.vaults.forEach(v => { if (v.kind !== "open" && v.kind !== "decked") v.kind = "open"; });
 }
@@ -1771,6 +1816,7 @@ function refreshArchive() {
     S.archive = jobs.sort((a, b) => b.dateMeasured.localeCompare(a.dateMeasured)).map(j => ({
       id: j.id, dateMeasured: j.dateMeasured, owner: j.owner, builder: j.builder,
       city: j.city, address: j.address, packageLabel: j.packageLabel, keywords: j.keywords || "",
+      miscText: j.miscText || "",
       chaseBlocked: !!j.chaseBlocked, chaseNote: j.chaseNote || ""
     }));
     S._fullJobs = jobs;
@@ -1795,6 +1841,7 @@ function savePermanent() {
     airSealed: S.airSealed,
     chaseBlocked: !!(S.includeFp && !S.fpChaseClear),
     chaseNote: (S.includeFp && !S.fpChaseClear) ? (S.fpChaseNote || "").trim() : "",
+    miscText: S.hasMisc ? miscFilled().map(r => r.material.trim() + " " + (r.notes || "").trim()).join(" ") : "",
     flatSf: S.flatSf,
     excelRows: lines.map(L => ({ product: L.product, description: L.description, footage: (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), bags: L.bags })),
     fgRows: lines.map(L => ({ area: L.area, assembly: L.assembly, material: L.product + " — " + L.description, qty: fmt(L.footage), unit: L.unit, notes: L.notes })),
@@ -1858,6 +1905,7 @@ function newJob() {
   S.interiorWalls = [newInteriorWall()];
   S.hasGarage = false; S.hasPorch = false; S.hasBasementWalls = false;
   S.hasSubfloor = false; S.hasDense = false; S.hasCrawlWalls = false;
+  S.hasMisc = false; S.misc = [newMiscItem()];
   S.deadAir = [{ id: uid(), name: "", sf: "" }];
   S.vaults = [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }];
   S.knees = [{ id: uid(), name: "", height: "8", lf: "", wrap: true }];
