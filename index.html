@@ -341,6 +341,25 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <p class="status" id="photoStatus"></p>
     </div>
 
+    <div class="section" id="sec-access">
+      <h2>Job site access</h2>
+      <p class="cap">Prints in the NOTES on Sky's work order.</p>
+      <div class="field"><label>Scaffolding or ladder needed?</label>
+        <div class="seg" id="seg-accessScaffold">
+          <button type="button" data-v="no" class="active">No</button>
+          <button type="button" data-v="yes">Yes</button>
+        </div>
+      </div>
+      <div class="field hidden" id="accessScaffoldNoteField"><label>Height / reason</label><input id="accessScaffoldNote" placeholder="27 ft to peak · 14 ft walls, ladder" maxlength="80"></div>
+      <div class="field"><label>Driveway access</label>
+        <div class="seg" id="seg-accessDriveway">
+          <button type="button" data-v="easy">Easy</button>
+          <button type="button" data-v="trouble">May have trouble</button>
+        </div>
+      </div>
+      <div class="field hidden" id="accessDrivewayNoteField"><label>Driveway note (optional)</label><input id="accessDrivewayNote" placeholder="muddy, steep, narrow…" maxlength="80"></div>
+    </div>
+
     <div class="section" id="sec-assemblies">
       <h2>What's on this house?</h2>
       <p class="cap">Gates skip unused assemblies. Foam roof packages skip dead air / vaults / knees; gables only on foam roofline. Flat asked once.</p>
@@ -424,7 +443,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <div class="field"><label>Rep</label><input id="woRep" autocapitalize="words"></div>
         <div class="field"><label>Date (blank = none)</label><input id="woDate" type="date"></div>
       </div>
-      <div class="field"><label>Notes (up to 6 lines)</label><textarea id="woNotes" rows="2"></textarea></div>
+      <div class="field"><label>Notes (print in NOTES — long notes continue on the next sheet)</label><textarea id="woNotes" rows="2"></textarea></div>
       <div id="twoActions"></div>
       <p class="status" id="twoStatus"></p>
       <div class="divider"></div>
@@ -1164,6 +1183,7 @@ const S = {
   owner: APP_EDITION === "lance" ? "lance" : "asher",
   woRep: "", woDate: "", woNotes: "",
   photos: [],
+  accessScaffold: "no", accessScaffoldNote: "", accessDriveway: "", accessDrivewayNote: "",
   builder: "", city: "", address: "", keywords: "",
   siteState: "GA", siteZip: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
   billSame: true, billAddress: "", billCity: "", billState: "", billZip: "", showFgMap: false,
@@ -1628,12 +1648,20 @@ function twoOrder() {
   // Order: walls/batts lines first, then attic/roof lines; 21 rows per sheet, extra lines continue on more sheets (tabs) — nothing dropped.
   const ls = twoLines(), ordered = ls.filter(L => twoCatOf(L) === "walls").concat(ls.filter(L => twoCatOf(L) === "attic"));
   const rows = ordered.map(L => ({ p: TWO_LABELS[fgSection(L.assembly)] || L.area || "", d: L.description || L.product, f: wholeQty(L), b: L.bags || "" }));
-  const PER = 21, pages = Math.max(1, Math.ceil(rows.length / PER));
+  const PER = 21, NOTE_ROWS = 6;
   o.pages = []; o.lineCount = rows.length; o.fpPages = []; o.fpCount = 0;
   const fpDet = twoFpDetails(), fpLs = twoFpLines();
-  for (let k = 0; rows.length && k < pages; k++) {
+  // NOTES priority: job site access, then Asher's typed notes, then the fireplace pointer. Nothing is cut — if they don't fit in the
+  // 6 note rows (one row goes to "Page k of N" on multi-sheet orders), they continue on the next sheet's NOTES (adding a sheet if needed).
+  const pri = accessLines().concat((S.woNotes || "").split(/\n/).map(x => x.trim()).filter(Boolean),
+    fpDet.length ? ["FIREPLACE: see the Fireplace sheet (and fireplace .txt) for every fireplace detail."] : []);
+  let pages = Math.max(1, Math.ceil(rows.length / PER));
+  while (pages * (NOTE_ROWS - (pages > 1 ? 1 : 0)) < pri.length) pages++;
+  const per = NOTE_ROWS - (pages > 1 ? 1 : 0);
+  o.notesLines = pri.length;
+  for (let k = 0; (rows.length || fpDet.length) && k < pages; k++) {
     const key = "p" + (k + 1), fit = rows.slice(k * PER, (k + 1) * PER);
-    const notes = [k === 0 ? (S.woNotes || "").trim() : "", k === 0 && fpDet.length ? "FIREPLACE: see the Fireplace sheet (and fireplace .txt) for every fireplace detail." : "", pages > 1 ? "Page " + (k + 1) + " of " + pages + (k < pages - 1 ? " — continued on next sheet" : "") : ""].filter(Boolean).join("\n");
+    const notes = pri.slice(k * per, (k + 1) * per).concat(pages > 1 ? ["Page " + (k + 1) + " of " + pages + (k < pages - 1 ? " — continued on next sheet" : "")] : []).join("\n");
     o.sheets[key] = { cat: "walls", kind: "Work Order", variant: "", title: pages > 1 ? "Work Order " + (k + 1) + " of " + pages : "Work Order",
       rep: (S.woRep || "").trim() || ownerName(), note: "", items: fit.map((x, i) => Object.assign({ r: 9 + i }, x)), notes };
     o.pages.push(key);
@@ -1649,11 +1677,33 @@ function twoOrder() {
       o.sheets[key] = { cat: "walls", kind: "Fireplace", variant: "", title: fpN > 1 ? "Fireplace " + (k + 1) + " of " + fpN : "Fireplace",
         rep: (S.woRep || "").trim() || ownerName(), note: "", items: fr.slice(k * 21, (k + 1) * 21).map((x, i) => Object.assign({ r: 9 + i }, x)),
         notes: ["FIREPLACE — " + (fpDet.find(r => r[0] === "Model") || ["", ""])[1], (fpDet.find(r => r[0] === "Gas type") || ["", ""])[1] ? "Gas: " + fpDet.find(r => r[0] === "Gas type")[1] : "",
-          fpN > 1 ? "Page " + (k + 1) + " of " + fpN : ""].filter(Boolean).join("\n") };
+          ...accessLines(), fpN > 1 ? "Page " + (k + 1) + " of " + fpN : ""].filter(Boolean).join("\n") };
       o.pages.push(key); o.fpPages.push(key);
     }
   }
   return o;
+}
+// build q: job site access answers → NOTES lines for Sky ("Scaffold/ladder: YES — 27 ft to peak", "Driveway: May have trouble — muddy")
+function accessLines() {
+  const out = [], sn = (S.accessScaffoldNote || "").trim(), dn = (S.accessDrivewayNote || "").trim();
+  out.push("Scaffold/ladder: " + (S.accessScaffold === "yes" ? "YES" + (sn ? " — " + sn : "") : "No"));
+  if (S.accessDriveway === "easy") out.push("Driveway: Easy");
+  else if (S.accessDriveway === "trouble") out.push("Driveway: May have trouble" + (dn ? " — " + dn : ""));
+  return out;
+}
+function renderAccess() {
+  const segs = [["seg-accessScaffold", S.accessScaffold], ["seg-accessDriveway", S.accessDriveway]];
+  segs.forEach(([id, v]) => { const b = $(id); if (b) b.querySelectorAll("button").forEach(x => x.classList.toggle("active", x.dataset.v === v)); });
+  toggleField("accessScaffoldNoteField", S.accessScaffold === "yes");
+  toggleField("accessDrivewayNoteField", S.accessDriveway === "trouble");
+  ["accessScaffoldNote", "accessDrivewayNote"].forEach(k => { const e = $(k); if (e && document.activeElement !== e) e.value = S[k] || ""; });
+}
+function wireAccess() {
+  [["seg-accessScaffold", "accessScaffold"], ["seg-accessDriveway", "accessDriveway"]].forEach(([id, k]) => {
+    const b = $(id); if (!b) return;
+    b.querySelectorAll("button").forEach(x => { x.onclick = () => { S[k] = (k === "accessDriveway" && S[k] === x.dataset.v) ? "" : x.dataset.v; saveDraft(); render(); }; });
+  });
+  ["accessScaffoldNote", "accessDrivewayNote"].forEach(k => { const e = $(k); if (e) e.oninput = () => { S[k] = e.value; saveDraft(); }; });
 }
 // build q: every fireplace field Asher recorded, as [label, value] rows (only when the house has a fireplace).
 function twoFpDetails() {
@@ -1695,7 +1745,7 @@ function twoFpDetails() {
 function twoFpLines() { return S.includeFp ? allLines().filter(L => L.area === "Fireplace" || L.assembly === "Gas type") : []; }
 function twoFpText(o) {
   const det = twoFpDetails(), ls = twoFpLines();
-  const head = ["FIREPLACE — " + o.jobSite, [o.address, o.customer].filter(Boolean).join(" · "), "Measured " + (S.dateMeasured || "") + " by " + ((S.woRep || "").trim() || ownerName()), ""];
+  const head = ["FIREPLACE — " + o.jobSite, [o.address, o.customer].filter(Boolean).join(" · "), "Measured " + (S.dateMeasured || "") + " by " + ((S.woRep || "").trim() || ownerName())].concat(accessLines(), (S.woNotes || "").trim() ? ["Notes: " + S.woNotes.trim().replace(/\s*\n\s*/g, " / ")] : [], [""]);
   return head.concat(det.map(r => r[0] + ": " + r[1]), ["", "FIREPLACE LINES"],
     ls.map(L => "- " + (L.assembly || "") + " | " + (L.product || "") + " | " + (L.description || "") + ((L.footage && L.unit !== "—") ? " | " + fmt(n(L.footage)) + " " + (L.unit || "") : "") + (L.notes ? " (" + String(L.notes).trim() + ")" : ""))).join("\n") + "\n";
 }
@@ -1703,7 +1753,7 @@ function twoFileName(o) { return ("WO - " + o.jobSite).replace(/[\\/:*?"<>|]+/g,
 function twoShareText(o) {
   const who = twoWho("walls").name, where = [o.jobSite, (S.city || "").trim()].filter(Boolean).join(", ");
   return { title: "WO - " + o.jobSite,
-    text: who + ", attached is the work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + ". - " + ownerName() };
+    text: who + ", attached is the work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + ". " + accessLines().join(" · ") + ". - " + ownerName() };
 }
 function twoRecipient(cat) {
   const c = twoWho(cat), d = el("div", "wo-recip");
@@ -3147,6 +3197,7 @@ function setStatus(msg) {
 
 function render() {
   renderPhotos();
+  renderAccess();
   const F = flags();
   // header fields
   $("builder").value = S.builder;
@@ -3275,6 +3326,10 @@ function migrateState(d) {
   Object.keys(CUST_DEFAULTS).forEach(k => { if (!(k in d)) S[k] = CUST_DEFAULTS[k]; });
   if (typeof S.billSame !== "boolean") S.billSame = true;
   if (!Array.isArray(S.photos) || !("photos" in d)) S.photos = [];
+  // job site access (build q): old jobs → scaffold "no", driveway unanswered
+  if (S.accessScaffold !== "yes" || !("accessScaffold" in d)) S.accessScaffold = ("accessScaffold" in d && S.accessScaffold === "yes") ? "yes" : "no";
+  if (S.accessDriveway !== "easy" && S.accessDriveway !== "trouble" || !("accessDriveway" in d)) S.accessDriveway = ("accessDriveway" in d && (S.accessDriveway === "easy" || S.accessDriveway === "trouble")) ? S.accessDriveway : "";
+  ["accessScaffoldNote", "accessDrivewayNote"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
   S.photos = S.photos.filter(x => x && x.id).map(x => ({ id: String(x.id), caption: typeof x.caption === "string" ? x.caption : "" }));
   ["woRep", "woDate", "woNotes"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
   if (!OWNER_LABELS[S.owner]) S.owner = APP_EDITION === "lance" ? "lance" : "asher";
@@ -3437,6 +3492,7 @@ function newJob() {
   S.builder = ""; S.city = ""; S.address = ""; S.keywords = "";
   resetCustomer(); S.woRep = ""; S.woDate = ""; S.woNotes = "";
   photoForget(S.photos.map(x => x.id)); S.photos = [];
+  S.accessScaffold = "no"; S.accessScaffoldNote = ""; S.accessDriveway = ""; S.accessDrivewayNote = "";
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard";
   S.compareOn = false; S.optionPkgs = ["standard", "hybrid_foam_batts"]; S.optionView = 0;
   S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38"; S.customAtticBattOc = "24"; S.garageCeilOc = "16"; S.porchCeilOc = "16"; S.touchupOc = "16";
@@ -4015,6 +4071,7 @@ function init() {
   showVersion();
   wireBackup();
   wirePhotos();
+  wireAccess();
   if (APP_EDITION === "lance") document.querySelectorAll(".edition-lance").forEach(e => e.classList.remove("hidden"));
   twoLoadContacts().then(() => renderTwo());
   idbGetAllPrices().then(stored => { S.priceLibrary = mergePriceLibrary(stored); render(); })
