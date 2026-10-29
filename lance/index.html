@@ -378,6 +378,13 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         </div>
       </div>
       <div class="field hidden" id="accessDrivewayNoteField"><label>Driveway note (optional)</label><input id="accessDrivewayNote" placeholder="muddy, steep, narrow…" maxlength="80"></div>
+      <div class="field"><label>Gate / lockbox code?</label>
+        <div class="seg" id="seg-accessGate">
+          <button type="button" data-v="no">No</button>
+          <button type="button" data-v="yes">Yes</button>
+        </div>
+      </div>
+      <div class="field hidden" id="accessGateCodeField"><label>Code</label><input id="accessGateCode" placeholder="1234" maxlength="40" autocomplete="off"></div>
     </div>
 
     <div class="section" id="sec-assemblies">
@@ -1265,7 +1272,7 @@ const S = {
   owner: APP_EDITION === "lance" ? "lance" : "asher",
   woRep: "", woDate: "", woNotes: "",
   photos: [],
-  accessScaffold: "no", accessScaffoldNote: "", accessDriveway: "", accessDrivewayNote: "",
+  accessScaffold: "no", accessScaffoldNote: "", accessDriveway: "", accessDrivewayNote: "", accessGate: "", accessGateCode: "",
   builder: "", city: "", address: "", keywords: "",
   siteState: "GA", siteZip: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
   billSame: true, billAddress: "", billCity: "", billState: "", billZip: "", showFgMap: false,
@@ -1794,21 +1801,26 @@ function accessLines() {
   out.push("Scaffold/ladder: " + (S.accessScaffold === "yes" ? "YES" + (sn ? " — " + sn : "") : "No"));
   if (S.accessDriveway === "easy") out.push("Driveway: Easy");
   else if (S.accessDriveway === "trouble") out.push("Driveway: May have trouble" + (dn ? " — " + dn : ""));
+  // 29aq: gate / lockbox code — unanswered is omitted (like driveway)
+  const gc = (S.accessGateCode || "").trim();
+  if (S.accessGate === "yes") out.push("Gate / lockbox code: " + (gc || "Yes (no code entered)"));
+  else if (S.accessGate === "no") out.push("Gate / lockbox code: No");
   return out;
 }
 function renderAccess() {
-  const segs = [["seg-accessScaffold", S.accessScaffold], ["seg-accessDriveway", S.accessDriveway]];
+  const segs = [["seg-accessScaffold", S.accessScaffold], ["seg-accessDriveway", S.accessDriveway], ["seg-accessGate", S.accessGate]];
   segs.forEach(([id, v]) => { const b = $(id); if (b) b.querySelectorAll("button").forEach(x => x.classList.toggle("active", x.dataset.v === v)); });
   toggleField("accessScaffoldNoteField", S.accessScaffold === "yes");
   toggleField("accessDrivewayNoteField", S.accessDriveway === "trouble");
-  ["accessScaffoldNote", "accessDrivewayNote"].forEach(k => { const e = $(k); if (e && document.activeElement !== e) e.value = S[k] || ""; });
+  toggleField("accessGateCodeField", S.accessGate === "yes");
+  ["accessScaffoldNote", "accessDrivewayNote", "accessGateCode"].forEach(k => { const e = $(k); if (e && document.activeElement !== e) e.value = S[k] || ""; });
 }
 function wireAccess() {
-  [["seg-accessScaffold", "accessScaffold"], ["seg-accessDriveway", "accessDriveway"]].forEach(([id, k]) => {
+  [["seg-accessScaffold", "accessScaffold"], ["seg-accessDriveway", "accessDriveway"], ["seg-accessGate", "accessGate"]].forEach(([id, k]) => {
     const b = $(id); if (!b) return;
     b.querySelectorAll("button").forEach(x => { x.onclick = () => { S[k] = (k === "accessDriveway" && S[k] === x.dataset.v) ? "" : x.dataset.v; saveDraft(); render(); }; });
   });
-  ["accessScaffoldNote", "accessDrivewayNote"].forEach(k => { const e = $(k); if (e) e.oninput = () => { S[k] = e.value; saveDraft(); }; });
+  ["accessScaffoldNote", "accessDrivewayNote", "accessGateCode"].forEach(k => { const e = $(k); if (e) e.oninput = () => { S[k] = e.value; saveDraft(); }; });
 }
 // build q: every fireplace field Asher recorded, as [label, value] rows (only when the house has a fireplace).
 function twoFpDetails() {
@@ -3867,6 +3879,9 @@ function migrateState(d) {
   if (S.accessScaffold !== "yes" || !("accessScaffold" in d)) S.accessScaffold = ("accessScaffold" in d && S.accessScaffold === "yes") ? "yes" : "no";
   if (S.accessDriveway !== "easy" && S.accessDriveway !== "trouble" || !("accessDriveway" in d)) S.accessDriveway = ("accessDriveway" in d && (S.accessDriveway === "easy" || S.accessDriveway === "trouble")) ? S.accessDriveway : "";
   ["accessScaffoldNote", "accessDrivewayNote"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
+  // 29aq: gate / lockbox — old jobs load unanswered + blank code
+  if (!("accessGate" in d) || (S.accessGate !== "yes" && S.accessGate !== "no")) S.accessGate = "";
+  if (typeof S.accessGateCode !== "string" || !("accessGateCode" in d)) S.accessGateCode = "";
   S.photos = S.photos.filter(x => x && x.id).map(x => ({ id: String(x.id), caption: typeof x.caption === "string" ? x.caption : "" }));
   ["woRep", "woDate", "woNotes"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
   if (!OWNER_LABELS[S.owner]) S.owner = APP_EDITION === "lance" ? "lance" : "asher";
@@ -4045,7 +4060,7 @@ function newJob() {
   S.builder = ""; S.city = ""; S.address = ""; S.keywords = "";
   resetCustomer(); S.woRep = ""; S.woDate = ""; S.woNotes = "";
   photoForget(S.photos.map(x => x.id)); S.photos = [];
-  S.accessScaffold = "no"; S.accessScaffoldNote = ""; S.accessDriveway = ""; S.accessDrivewayNote = "";
+  S.accessScaffold = "no"; S.accessScaffoldNote = ""; S.accessDriveway = ""; S.accessDrivewayNote = ""; S.accessGate = ""; S.accessGateCode = "";
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard"; S.totalBat = false;
   S.compareOn = false; S.optionPkgs = ["standard", "hybrid_foam_batts"]; S.optionView = 0;
   S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38"; S.customAtticBattOc = "24"; S.garageCeilOc = "16"; S.porchCeilOc = "16"; S.touchupOc = "16";
@@ -4180,7 +4195,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29ap";
+const APP_BUILD = "2026-10-29aq";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
