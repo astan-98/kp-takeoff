@@ -264,6 +264,13 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
           <option value="custom">Custom mix</option>
         </select>
       </div>
+      <div id="optionsBlock">
+        <div class="toggle-row"><span>Compare packages (2–3 options)?</span><button type="button" class="switch" id="compareOn"></button></div>
+        <div id="optionChipsWrap" class="hidden">
+          <div class="field"><label>Options to price (pick 2–3)</label><div class="seg" id="optionChips"><button type="button" data-v="standard">Standard</button><button type="button" data-v="hybrid_foam_batts">Foam Roofline + Batt Walls</button><button type="button" data-v="foam_cellulose">Foam Roofline + Cellulose Walls</button><button type="button" data-v="foam_spider">Foam Roofline + Spider Walls</button><button type="button" data-v="total_foam">Total foam</button><button type="button" data-v="crawl_encap">Crawl encapsulation</button><button type="button" data-v="custom">Custom mix</button></div></div>
+          <p class="cap">Measure once. Every area any option needs is shown; the Excel tab sorts lines into a separate sheet per option (walls use each option's material).</p>
+        </div>
+      </div>
       <div id="customMixFields" class="hidden">
         <div class="field"><label>Roofline / attic (pick one or more)</label>
           <div class="seg" id="customRoofChips"><button type="button" data-v="blow">Blow attic</button><button type="button" data-v="foam">Foam roofline</button><button type="button" data-v="batts">Batts attic</button></div>
@@ -337,6 +344,15 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <div class="seg" id="seg-outputView">
         <button type="button" data-v="excel" class="active">Excel (primary)</button>
         <button type="button" data-v="fg">FG-style (secondary)</button>
+      </div>
+      <div id="optionBar" class="hidden">
+        <div class="seg" id="optionSwitch"></div>
+        <div class="table-wrap" id="optionCompare"></div>
+        <div class="grid2" style="margin:8px 0">
+          <button type="button" class="btn btn-secondary" id="btnExportOption">Export this option (.xlsx)</button>
+          <button type="button" class="btn btn-primary" id="btnExportAll">Export all options</button>
+        </div>
+        <p class="status" id="optionStatus"></p>
       </div>
       <div class="callout" id="outputHint"></div>
       <div class="table-wrap" id="outputTable"></div>
@@ -822,6 +838,23 @@ function pkgProfile(pkg) {
     crawlEncap: packageIsCrawlEncap(pkg),
   };
 }
+const OPTION_KEYS = ["standard", "hybrid_foam_batts", "foam_cellulose", "foam_spider", "total_foam", "crawl_encap", "custom"];
+function optionsOn() { return S.jobMode === "new" && !!S.compareOn && optionPkgs().length >= 2; }
+function optionPkgs() {
+  const a = (Array.isArray(S.optionPkgs) ? S.optionPkgs : []).filter((k, i, arr) => OPTION_KEYS.includes(k) && arr.indexOf(k) === i);
+  return a.slice(0, 3);
+}
+function optionLetter(i) { return String.fromCharCode(65 + i); }
+function optionTitle(i) { const k = optionPkgs()[i]; return "Option " + optionLetter(i) + " " + (PACKAGE_LABELS[k] || k); }
+// Union of what the picked options need (for the wizard: which areas to ask).
+function unionProfile() {
+  const ps = optionPkgs().map(pkgProfile);
+  const any = f => ps.some(x => x[f]), all = f => ps.every(x => x[f]);
+  const cust = ps.find(x => x.custom);
+  return { custom: any("custom"), foamRoof: any("foamRoof"), blow: any("blow"), batts: any("batts"), onlyAttic: cust ? cust.onlyAttic : true,
+    excludeDVK: all("excludeDVK"), totalFoam: false, wallOverride: null, standardBlow: any("standardBlow"), dense: any("dense"),
+    denseProduct: "Cellulose", crawlEncap: any("crawlEncap") };
+}
 const CUSTOM_ROOF_LABELS = { blow: "Blow attic", foam: "Foam roofline", batts: "Batts attic" };
 const CUSTOM_WALL_LABELS = { batt: "Batt walls", foam: "Foam walls", cellulose: "Cellulose walls", spider: "Spider walls" };
 const LEGACY_PKG_LABELS = [["Hybrid foam + batts", "Foam Roofline + Batt Walls"], ["Foam roofline + cellulose", "Foam Roofline + Cellulose Walls"],
@@ -830,7 +863,7 @@ function relabelPkg(label) { let t = String(label || ""); LEGACY_PKG_LABELS.forE
 // Defaults applied when the package (or custom mix) is chosen — user can still toggle after.
 function applyPkgDefaults() {
   if (S.jobMode !== "new") return;
-  const pr = pkgProfile(S.pkg);
+  const pr = optionsOn() ? unionProfile() : pkgProfile(S.pkg);
   if (pr.blow || pr.batts) {
     S.hasDeadAir = true; S.hasKnees = true; S.hasVaults = true; S.hasBaffles = true; S.airSealed = true; S.hasWalls = true;
   }
@@ -1016,6 +1049,7 @@ const S = {
   crawlRetro: "remove_replace",
   blowR: "R-38",
   pkg: "standard",
+  compareOn: false, optionPkgs: ["standard", "hybrid_foam_batts"], optionView: 0,
   customRoofs: ["blow"], customWallList: ["batt"], customBlowSf: "", customBlowR: "R-38", customBattSf: "", customAtticBattR: "R-38",
   airSealed: false,
   flatSf: "",
@@ -1069,7 +1103,7 @@ const S = {
   _suppressSave: false,
 };
 
-function flags() {
+function flags(pkgArg) {
   const isNew = S.jobMode === "new";
   const isAtticRetro = S.jobMode === "retro" && S.retroScope === "attic";
   const isCrawlRetro = S.jobMode === "retro" && S.retroScope === "crawl";
@@ -1080,7 +1114,7 @@ function flags() {
   const crawlIsTouchup = isCrawlRetro && S.crawlRetro === "touchup";
   const crawlIsReplace = isCrawlRetro && S.crawlRetro === "remove_replace";
   const crawlIsNewBatts = isCrawlRetro && S.crawlRetro === "new_batts";
-  const PR = pkgProfile(S.pkg);
+  const PR = pkgArg ? pkgProfile(pkgArg) : (optionsOn() ? unionProfile() : pkgProfile(S.pkg));
   const atticBlowR = isNew ? "R-38" : (atticIsBlow ? S.blowR : "R-38");
   function excludesDeadVaultKnees(p) { return pkgProfile(p).excludeDVK || atticIsFoam; }
   const primaryExcludesDVK = PR.excludeDVK || atticIsFoam;
@@ -1160,7 +1194,7 @@ function kneeSf(r) { const sf = n(r.height) * n(r.lf); return r.shape === "trian
 function push(lines, partial) { lines.push(Object.assign({ bags: "" }, partial)); }
 
 function buildLinesForPackage(p, tag) {
-  const F = flags();
+  const F = flags(p);
   const PR = pkgProfile(p);
   const customAttic = F.isNew && PR.custom;
   const lines = [];
@@ -1352,6 +1386,8 @@ function buildLinesForPackage(p, tag) {
       const factor = wallFactor(r);
       const sf = factor * cavities; if (sf <= 0) return;
       let mode = r.materialMode;
+      // Options mode: each option uses its own wall material (special rock-wool picks and interior rows stay as entered).
+      if (optionsOn() && r.kind !== "interior" && mode !== "comfortbat" && mode !== "acoustical") mode = PR.custom ? customWallList()[0] : "batt";
       if (mode === "batt") {
         if (totalFoam) mode = "foam";
         else if (PR.wallOverride === "cellulose" && r.kind !== "garage_ext") mode = "cellulose";
@@ -1549,13 +1585,19 @@ function appendFpLines(lines, noteTag) {
 }
 
 function allLines() {
+  if (optionsOn()) {
+    const ks = optionPkgs(); const i = Math.min(Math.max(0, S.optionView | 0), ks.length - 1);
+    return buildLinesForPackage(ks[i], "");
+  }
   return buildLinesForPackage(S.pkg, "");
 }
+function optionLines(i) { return buildLinesForPackage(optionPkgs()[i], ""); }
 
 function packageLabel() {
   const F = flags();
   let base = "";
-  if (F.isNew) base = (PACKAGE_LABELS[S.pkg] || S.pkg) + (S.pkg === "custom" ? " (" + customRoofs().map(k => CUSTOM_ROOF_LABELS[k] + (k === "blow" ? " " + S.customBlowR : k === "batts" ? " " + S.customAtticBattR : "")).join(" + ") +
+  if (F.isNew && optionsOn()) base = "Options: " + optionPkgs().map((k, i) => optionLetter(i) + ") " + (PACKAGE_LABELS[k] || k)).join(" / ");
+  else if (F.isNew) base = (PACKAGE_LABELS[S.pkg] || S.pkg) + (S.pkg === "custom" ? " (" + customRoofs().map(k => CUSTOM_ROOF_LABELS[k] + (k === "blow" ? " " + S.customBlowR : k === "batts" ? " " + S.customAtticBattR : "")).join(" + ") +
     " · " + customWallList().map(k => CUSTOM_WALL_LABELS[k]).join(" + ") + ")" : "");
   else if (F.isAtticRetro) base = "Attic: " + (ATTIC_RETRO_LABELS[S.atticRetro] || S.atticRetro);
   else base = "Crawl: " + (CRAWL_RETRO_LABELS[S.crawlRetro] || S.crawlRetro);
@@ -1570,13 +1612,13 @@ function marginPct() {
   return S.marginPick === "custom" ? clampMargin(n(S.marginCustom)) : clampMargin(n(S.marginPick));
 }
 
-function ballpark() {
+function ballpark(linesArg) {
   const scale = marginPct() / MARGIN_BASE;
   const priceMap = new Map();
   S.priceLibrary.forEach(p => { const u = n(p.unitPrice40); if (u > 0) priceMap.set(p.materialKey, u); });
   let total = 0, pricedLines = 0, unpricedLines = 0;
   const missing = new Set();
-  allLines().forEach(L => {
+  (linesArg || allLines()).forEach(L => {
     if (L.footage === 0 && L.unit === "—") return;
     let unit40 = L.priceKey ? priceMap.get(L.priceKey) : undefined;
     if (unit40 === undefined) unit40 = priceMap.get(L.product);
@@ -2154,7 +2196,84 @@ function loadFpSpecs() {
   });
 }
 
+function renderOptionBar() {
+  const bar = $("optionBar"); if (!bar) return;
+  const on = optionsOn();
+  bar.classList.toggle("hidden", !on);
+  if (!on) return;
+  const ks = optionPkgs();
+  S.optionView = Math.min(Math.max(0, S.optionView | 0), ks.length - 1);
+  const sw = $("optionSwitch"); sw.innerHTML = "";
+  ks.forEach((k, i) => {
+    const b = el("button", i === S.optionView ? "active" : ""); b.type = "button";
+    b.textContent = optionLetter(i) + " · " + (PACKAGE_LABELS[k] || k);
+    b.onclick = () => { S.optionView = i; render(); };
+    sw.appendChild(b);
+  });
+  const priced = S.priceLibrary.some(p => n(p.unitPrice40) > 0);
+  let html = "<table><thead><tr><th>Option</th><th>Lines</th>" + (priced ? "<th>Ballpark @ " + marginPct() + "%</th>" : "") + "</tr></thead><tbody>";
+  ks.forEach((k, i) => {
+    const ls = optionLines(i), b = priced ? ballpark(ls) : null;
+    html += "<tr" + (i === S.optionView ? " style='font-weight:700'" : "") + "><td>" + escHtml(optionTitle(i)) + "</td><td class='num'>" + ls.length + "</td>" +
+      (priced ? "<td class='num'>" + fmtMoney(b.total) + (b.unpricedLines ? " <span class='cap'>(" + b.unpricedLines + " unpriced)</span>" : "") + "</td>" : "") + "</tr>";
+  });
+  $("optionCompare").innerHTML = html + "</tbody></table>" + (priced ? "" : "<p class='cap'>Add prices in Pricing to see a ballpark per option.</p>");
+}
+function xmlEsc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function takeoffXlsx(lines, title) {
+  const cell = (ref, v, style) => (typeof v === "number")
+    ? '<c r="' + ref + '"' + (style ? ' s="' + style + '"' : "") + '><v>' + v + "</v></c>"
+    : '<c r="' + ref + '" t="inlineStr"' + (style ? ' s="' + style + '"' : "") + "><is><t xml:space=\"preserve\">" + xmlEsc(v) + "</t></is></c>";
+  const rows = ['<row r="1">' + cell("A1", title, 1) + "</row>",
+    '<row r="2">' + ["Product", "Description", "Footage", "Bags"].map((h, i) => cell("ABCD"[i] + "2", h, 1)).join("") + "</row>"];
+  lines.forEach((L, i) => {
+    const r = i + 3, foot = (L.footage === 0 && L.unit === "—") ? "" : Number(L.footage);
+    rows.push('<row r="' + r + '">' + cell("A" + r, L.product || "") + cell("B" + r, L.description || "") + (foot === "" ? "" : cell("C" + r, foot)) + (L.bags ? cell("D" + r, L.bags) : "") + "</row>");
+  });
+  const x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  const sheet = x + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="30" customWidth="1"/><col min="2" max="2" width="44" customWidth="1"/><col min="3" max="4" width="12" customWidth="1"/></cols><sheetData>' + rows.join("") + "</sheetData></worksheet>";
+  const files = [
+    { name: "[Content_Types].xml", data: x + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
+    { name: "_rels/.rels", data: x + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: "xl/workbook.xml", data: x + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Takeoff" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+    { name: "xl/_rels/workbook.xml.rels", data: x + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+    { name: "xl/styles.xml", data: x + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>' },
+    { name: "xl/worksheets/sheet1.xml", data: sheet }
+  ];
+  return KPWO.zipStore(files);
+}
+function optionFileName(i) {
+  const job = (S.address.trim() || S.builder.trim() || "Job").replace(/[\\/:*?"<>|]+/g, "-");
+  return job + " - " + optionTitle(i).replace(/[\\/:*?"<>|]+/g, "-") + ".xlsx";
+}
+function exportOptions(idxs) {
+  const st = $("optionStatus");
+  const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const made = idxs.map(i => {
+    const title = optionTitle(i) + " · " + (S.address.trim() || S.builder.trim() || "Job") + " · " + (S.dateMeasured || "");
+    const bytes = takeoffXlsx(optionLines(i), title), name = optionFileName(i);
+    let file = null; try { file = new File([bytes], name, { type: XT }); } catch (e) {}
+    return { name, bytes, file };
+  });
+  const files = made.map(m => m.file).filter(Boolean);
+  const dl = () => { made.forEach((m, k) => setTimeout(() => {
+      const url = URL.createObjectURL(new Blob([m.bytes], { type: XT }));
+      const a = document.createElement("a"); a.href = url; a.download = m.name; document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000);
+    }, k * 700));
+    if (st) st.textContent = "Downloaded " + made.map(m => m.name).join(", ") + "."; };
+  window.__lastOptionExport = made;
+  if (files.length === made.length && navigator.canShare && navigator.share && navigator.canShare({ files })) {
+    return navigator.share({ files, title: made.length > 1 ? "Takeoff options" : made[0].name })
+      .then(() => { if (st) st.textContent = "Shared " + made.length + " file" + (made.length > 1 ? "s" : "") + "."; },
+        err => { if (err && err.name === "AbortError") { if (st) st.textContent = "Share cancelled."; } else dl(); });
+  }
+  dl();
+  return Promise.resolve();
+}
+
 function renderOutput() {
+  renderOptionBar();
   const lines = allLines();
   const hint = $("outputHint");
   const pricedCount = S.priceLibrary.filter(p => n(p.unitPrice40) > 0).length;
@@ -2163,7 +2282,7 @@ function renderOutput() {
     if (pricedCount === 0) extra = " · Ballpark: add 40% prices in Pricing";
     else { const b = ballpark(); extra = " · Ballpark " + fmtMoney(b.total) + " @ " + marginPct() + "% (not final invoice)"; }
   }
-  hint.innerHTML = lines.length + " rows · Bags blank until bag-yield · Air seal, gas & chase flags · Owner: " +
+  hint.innerHTML = (optionsOn() ? "<strong>" + escHtml(optionTitle(S.optionView | 0)) + "</strong> · " : "") + lines.length + " rows · Bags blank until bag-yield · Air seal, gas & chase flags · Owner: " +
     (S.owner === "asher" ? "Asher" : "Sky") + extra;
 
   const wrap = $("outputTable");
@@ -2340,7 +2459,27 @@ function render() {
   toggleField("gasIdk", S.gasType === "idk");
   toggleField("retroBlock", S.jobMode === "retro");
   toggleField("pkgField", S.jobMode === "new");
-  toggleField("customMixFields", S.jobMode === "new" && S.pkg === "custom");
+  toggleField("pkgField", S.jobMode === "new" && !S.compareOn);
+  toggleField("optionsBlock", S.jobMode === "new");
+  toggleField("optionChipsWrap", S.jobMode === "new" && !!S.compareOn);
+  setSwitch($("compareOn"), !!S.compareOn);
+  {
+    const cur = optionPkgs();
+    $("optionChips").querySelectorAll("button").forEach(btn => {
+      const k = cur.indexOf(btn.dataset.v);
+      btn.classList.toggle("active", k >= 0);
+      btn.textContent = (k >= 0 ? optionLetter(k) + " · " : "") + (PACKAGE_LABELS[btn.dataset.v] || btn.dataset.v);
+      btn.onclick = () => {
+        const a = optionPkgs(), at = a.indexOf(btn.dataset.v);
+        if (at >= 0) a.splice(at, 1);
+        else { if (a.length >= 3) { setStatus("Pick up to 3 options."); return; } a.push(btn.dataset.v); }
+        S.optionPkgs = a; if (a.length) S.pkg = a[0];
+        S.optionView = Math.min(S.optionView | 0, Math.max(0, a.length - 1));
+        applyPkgDefaults(); render();
+      };
+    });
+  }
+  toggleField("customMixFields", S.jobMode === "new" && (S.compareOn ? optionPkgs().includes("custom") : S.pkg === "custom"));
   toggleField("atticRetroFields", S.jobMode === "retro" && S.retroScope === "attic");
   toggleField("crawlRetroFields", S.jobMode === "retro" && S.retroScope === "crawl");
   toggleField("blowRField", F.atticIsBlow);
@@ -2413,6 +2552,10 @@ function migrateState(d) {
   if (typeof S.hasUfbc !== "boolean") S.hasUfbc = false;
   if (!/^R-(13|19|30)$/.test(S.crawlSubR || "")) S.crawlSubR = "R-19";
   if (!/^R-(13|19|30)$/.test(S.ufbcR || "")) S.ufbcR = "R-19";
+  if (typeof S.compareOn !== "boolean") S.compareOn = false;
+  if (!Array.isArray(S.optionPkgs) || optionPkgs().length < 2) S.optionPkgs = ["standard", "hybrid_foam_batts"];
+  else S.optionPkgs = optionPkgs();
+  S.optionView = Math.max(0, S.optionView | 0);
   // single-select custom (build c) → multi-select
   if (!Array.isArray(d.customRoofs)) S.customRoofs = [CUSTOM_ROOF_LABELS[d.customRoof] ? d.customRoof : "blow"];
   if (!Array.isArray(d.customWallList)) S.customWallList = [CUSTOM_WALL_LABELS[d.customWalls] ? d.customWalls : "batt"];
@@ -2474,6 +2617,8 @@ function savePermanent() {
     flatSf: S.flatSf,
     excelRows: lines.map(L => ({ product: L.product, description: L.description, footage: (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), bags: L.bags })),
     fgRows: lines.map(L => ({ area: L.area, assembly: L.assembly, material: L.product + " — " + L.description, qty: fmt(L.footage), unit: L.unit, notes: L.notes })),
+    options: optionsOn() ? optionPkgs().map((k, i) => ({ pkg: k, title: optionTitle(i),
+      excelRows: optionLines(i).map(L => ({ product: L.product, description: L.description, footage: (L.footage === 0 && L.unit === "—") ? "" : fmt(L.footage), bags: L.bags })) })) : undefined,
     draft: draftPayload()
   };
   idbPut(snap).then(() => { setStatus("Saved permanently to archive."); refreshArchive(); })
@@ -2527,6 +2672,7 @@ function newJob() {
   S.dateMeasured = todayISO();
   S.builder = ""; S.city = ""; S.address = ""; S.keywords = "";
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard";
+  S.compareOn = false; S.optionPkgs = ["standard", "hybrid_foam_batts"]; S.optionView = 0;
   S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38";
   S.porchFlat = ""; S.includePorchCeiling = true; S.porchCeilMat = "batt_r19"; S.porchRoofPitch = "6";
   S.hasBetweenFloors = false; S.betweenFloors = [newBetweenFloor()];
@@ -2585,6 +2731,19 @@ function wireInputs() {
   });
 
   $("airSealed").onclick = () => { S.airSealed = !S.airSealed; render(); };
+  $("compareOn").onclick = () => {
+    S.compareOn = !S.compareOn;
+    if (S.compareOn) {
+      let a = optionPkgs();
+      if (!a.includes(S.pkg)) a = [S.pkg].concat(a.filter(k => k !== S.pkg));
+      if (a.length < 2) a.push(S.pkg === "standard" ? "hybrid_foam_batts" : "standard");
+      S.optionPkgs = a.slice(0, 3); S.pkg = S.optionPkgs[0]; S.optionView = 0;
+      applyPkgDefaults();
+    }
+    render();
+  };
+  $("btnExportOption").onclick = () => exportOptions([Math.min(S.optionView | 0, optionPkgs().length - 1)]);
+  $("btnExportAll").onclick = () => exportOptions(optionPkgs().map((k, i) => i));
   $("includeFp").onclick = () => { S.includeFp = !S.includeFp; if (S.includeFp) loadFpSpecs(); render(); };
   $("showBallpark").onclick = () => { S.showBallpark = !S.showBallpark; render(); };
   $("showPriceLib").onclick = () => { S.showPriceLib = !S.showPriceLib; render(); };
@@ -2631,7 +2790,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29d";
+const APP_BUILD = "2026-10-29e";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
