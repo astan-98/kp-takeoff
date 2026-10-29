@@ -946,6 +946,8 @@ function packageUsesFoamRoof(pkg) {
   return pkg === "hybrid_foam_batts" || pkg === "foam_cellulose" || pkg === "foam_spider" || pkg === "total_foam";
 }
 function packageIsCrawlEncap(pkg) { return pkg === "crawl_encap"; }
+// 29al: "Foam band/rim joist" option — new-construction foam roofline packages that don't already foam the band (not total foam).
+function rimFoamAllowed(pkg) { if (S.jobMode !== "new" || pkg == null) return false; const pr = pkgProfile(pkg); return !!pr.foamRoof && !pr.totalFoam; }
 const CUSTOM_ROOF_KEYS = ["blow", "foam", "batts"], CUSTOM_WALL_KEYS = ["batt", "foam", "cellulose", "spider"];
 function customRoofs() { const a = (Array.isArray(S.customRoofs) ? S.customRoofs : []).filter(k => CUSTOM_ROOF_KEYS.includes(k)); return a.length ? a : ["blow"]; }
 function customWallList() { const a = (Array.isArray(S.customWallList) ? S.customWallList : []).filter(k => CUSTOM_WALL_KEYS.includes(k)); return a.length ? a : ["batt"]; }
@@ -2115,12 +2117,15 @@ function buildLinesForPackage(p, tag) {
   }
 
   if (S.hasRim && F.canAskRim) {
+    // 29al: foam roofline jobs with batt (or cellulose/spider) walls can foam the band/rim instead of R19 batts (row toggle r.foam).
+    const rimFoamOpt = rimFoamAllowed(p);
     S.rims.forEach(r => {
       const lf = n(r.lf); if (lf <= 0) return;
+      const bandFoam = totalFoam || (rimFoamOpt && !!r.foam);
       push(lines, { area: "Rim joist", assembly: "Band / rim",
-        product: totalFoam ? "Open-cell spray foam" : "R-19 fiberglass batts",
-        description: totalFoam ? '3.5" OC band' : "R19/" + battW(r.oc, "16"),
-        footage: round2(lf * 1.2), unit: "LF", notes: noteTag + fmt(lf) + " LF × 1.2" });
+        product: bandFoam ? "Open-cell spray foam" : "R-19 fiberglass batts",
+        description: bandFoam ? '3.5" OC band' : "R19/" + battW(r.oc, "16"),
+        footage: round2(lf * 1.2), unit: "LF", notes: noteTag + fmt(lf) + " LF × 1.2" + (bandFoam && !totalFoam ? " · foamed (not batts)" : "") });
       applyFoamType(lines[lines.length - 1], r, "band");
     });
   }
@@ -2678,6 +2683,7 @@ function renderAssemblyEditors() {
   };
   battUse.rim = battUse.notTotalFoam;
   const anyTotalFoam = pkList.some(k => k && pkgProfile(k).totalFoam);
+  const rimFoamAny = pkList.some(k => rimFoamAllowed(k));
   // Job-level spray foam type (open cell default) — shown whenever this job has a spray foam line.
   let jobHasFoam = false;
   try { jobHasFoam = S.foamType === "cc" || S.foamType === "both" || allLines().some(L => /spray foam/i.test(L.product) && L.assembly !== "Crawl wall foam"); } catch (e) {}
@@ -2751,11 +2757,20 @@ function renderAssemblyEditors() {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Rim #' + (idx+1) + ' · ×1.2 → ' + fmt(n(r.lf)*1.2) + '</div>';
       card.appendChild(fieldInput("LF", r.lf, v => { r.lf = v; schedule(); }, "number"));
-      if (battUse.rim) card.appendChild(fieldSelect("Batt width", battW(r.oc, "16"), BATT_W_CHOICES, v => { r.oc = v; render(); }));
-      if (anyTotalFoam) foamTypeControls(card, r, "foamType", "ccDepth");
+      if (rimFoamAny) {
+        const fr = el("div", "toggle-row"); fr.appendChild(el("span", null, "Foam band/rim joist (instead of R19 batts)"));
+        const fs = el("button", "switch" + (r.foam ? " on" : "")); fs.type = "button";
+        fs.onclick = () => { r.foam = !r.foam; render(); };
+        fr.appendChild(fs); card.appendChild(fr);
+      }
+      // batt width only while some line still uses R19 batts for this rim
+      const rimBatts = pkList.some(k => !(k && pkgProfile(k).totalFoam) && !(r.foam && rimFoamAllowed(k)));
+      if (battUse.rim && rimBatts) card.appendChild(fieldSelect("Batt width", battW(r.oc, "16"), BATT_W_CHOICES, v => { r.oc = v; render(); }));
+      if (anyTotalFoam || (rimFoamAny && r.foam)) foamTypeControls(card, r, "foamType", "ccDepth");
+      if (rimFoamAny && r.foam) card.appendChild(el("p", "cap", 'Band foamed: 3.5" open cell (or closed cell per foam type) × LF×1.2 — replaces the R19 band batts' + (pkList.some(k => k && !rimFoamAllowed(k) && !pkgProfile(k).totalFoam) ? " (options without a foam roofline keep R19 batts)" : "") + "."));
       box.appendChild(card);
     });
-    box.appendChild(addBtn("Add rim", () => { S.rims.push({ id: uid(), name: "", lf: "", oc: "16" }); render(); }));
+    box.appendChild(addBtn("Add rim", () => { const f0 = S.rims[0] || {}; S.rims.push({ id: uid(), name: "", lf: "", oc: "16", foam: !!f0.foam, foamType: f0.foamType || "", ccDepth: f0.ccDepth || "" }); render(); }));
   }
   if (S.hasWalls && F.canAskWalls) {
     const h = el("div", "divider"); box.appendChild(h);
@@ -4124,7 +4139,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29ak";
+const APP_BUILD = "2026-10-29al";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
