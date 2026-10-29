@@ -216,6 +216,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <div class="seg" id="seg-owner">
           <button type="button" data-v="asher" class="active">Asher's job</button>
           <button type="button" data-v="sky">Sky's job</button>
+          <button type="button" data-v="lance" class="edition-lance hidden">Lance's job</button>
         </div>
       </div>
       <div class="callout" id="ownerHint">Asher → FG-style secondary default (Excel still primary handoff)</div>
@@ -313,17 +314,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
           <div class="field"><label>Zip</label><input id="billZip" inputmode="numeric"></div>
         </div>
       </details>
-      <div class="grid2">
-        <div class="field"><label>Date measured</label><input id="dateMeasured" type="date"></div>
-        <div class="field"><label>Gas type</label>
-          <select id="gasType">
-            <option value="natural" selected>Natural Gas</option>
-            <option value="propane">Propane</option>
-            <option value="idk">I Don't Know</option>
-          </select>
-        </div>
-      </div>
-      <div id="gasIdk" class="callout warn hidden"><strong>Confirm gas type</strong>Flagged for builder — no propane conversion kit auto-added.</div>
+      <div class="field"><label>Date measured</label><input id="dateMeasured" type="date"></div>
       <div class="field"><label>Keywords / notes</label><input id="keywords" placeholder="searchable notes"></div>
       <div class="grid2" style="margin-top:10px">
         <button type="button" class="btn btn-primary" id="btnSaveArchive">Save to archive</button>
@@ -352,9 +343,12 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <h2>Air sealing</h2>
       <p class="cap">Air sealing = caulk &amp; foam package (base plate / openings / penetrations). One line item.</p>
       <div class="toggle-row"><span>Air seal?</span><button type="button" class="switch" id="airSealed"></button></div>
-      <div class="field hidden" id="airSealAddonField"><label>Air seal add-on $ (above-average house, added to the $300)</label><input id="airSealAddon" type="number" inputmode="decimal" placeholder="0"></div>
-      <div class="divider"></div>
+      <div class="field hidden" id="airSealAddonField"><label>Air seal add-on $ (air seal labor runs over the $300 — added to it)</label><input id="airSealAddon" type="number" inputmode="decimal" placeholder="0"></div>
+    </div>
+
+    <div class="section" id="sec-extra">
       <h2>Extra labor</h2>
+      <p class="cap">Job-wide labor add in dollars. Fixed $ (not margin-scaled) and on every option in compare mode. FieldGroove: Labor item / Labor work area.</p>
       <div class="grid2">
         <div class="field"><label>Extra labor $</label><input id="extraLabor" type="number" inputmode="decimal" placeholder="0"></div>
         <div class="field"><label>Note (optional)</label><input id="extraLaborNote" placeholder="tough access, steep roof…"></div>
@@ -365,6 +359,16 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <h2>Fireplace</h2>
       <p class="cap">Sealed-face wood = tear-out or NC only. Spec library saved in IndexedDB.</p>
       <div class="toggle-row"><span>Include fireplace on this job?</span><button type="button" class="switch" id="includeFp"></button></div>
+      <div id="fpGasBlock" class="hidden">
+        <div class="field"><label>Gas type</label>
+          <select id="gasType">
+            <option value="natural" selected>Natural Gas</option>
+            <option value="propane">Propane</option>
+            <option value="idk">I Don't Know</option>
+          </select>
+        </div>
+        <div id="gasIdk" class="callout warn hidden"><strong>Confirm gas type</strong>Flagged for builder — no propane conversion kit auto-added.</div>
+      </div>
       <div id="fpBody" class="hidden"></div>
       <div class="grid2" style="margin-top:10px">
         <button type="button" class="btn btn-primary" id="btnSaveArchive3">Save to archive</button>
@@ -397,6 +401,16 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <button type="button" class="btn btn-secondary" id="btnSaveArchive2">Save to archive</button>
       </div>
       <div class="divider"></div>
+      <h2>Work order → Sky</h2>
+      <p class="cap">Same KP work order sheet, filled from this job (customer, address, city, subdivision). Walls / batts lines go to Sky; attic blow / roof foam lines make a separate Attic sheet. Preview, then share.</p>
+      <div class="grid2">
+        <div class="field"><label>Rep</label><input id="woRep" autocapitalize="words"></div>
+        <div class="field"><label>Date (blank = none)</label><input id="woDate" type="date"></div>
+      </div>
+      <div class="field"><label>Notes (up to 6 lines)</label><textarea id="woNotes" rows="2"></textarea></div>
+      <div id="twoActions"></div>
+      <p class="status" id="twoStatus"></p>
+      <div class="divider"></div>
       <h2>FieldGroove</h2>
       <p class="cap">Import file for FieldGroove → Opportunities → Import Estimates. One row per line; compare mode = one estimate per option. Fireplace lines left out.</p>
       <div class="toggle-row"><span>Include app unit prices (at this job's margin)</span><button type="button" class="switch" id="fgPrices"></button></div>
@@ -428,7 +442,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       </div>
       <div class="grid2">
         <div class="field"><label>Owner</label>
-          <select id="filterOwner"><option value="all">All</option><option value="asher">Asher</option><option value="sky">Sky</option></select>
+          <select id="filterOwner"><option value="all">All</option><option value="asher">Asher</option><option value="sky">Sky</option><option value="lance" class="edition-lance hidden">Lance</option></select>
         </div>
         <div class="field"><label>Package contains</label><input id="filterPkg"></div>
       </div>
@@ -546,6 +560,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 (function () {
 "use strict";
 
+// Build edition: "asher" (full app) or "lance" (coworker copy). build.py swaps this line for the Lance build — keep it on one line.
+const APP_EDITION = "asher";
+const OWNER_LABELS = { asher: "Asher", sky: "Sky", lance: "Lance" };
+function ownerName(o) { o = o || S.owner; return OWNER_LABELS[o] || "Asher"; }
 const DB_NAME = "kp-takeoff-v2";
 const STORE = "jobs";
 const SPEC_STORE = "fp_specs";
@@ -862,7 +880,11 @@ function resolvePitchFactor(pitch, customRise) {
   if (pitch === "custom") return pitchFactorFromRise(n(customRise));
   return pitchFactorFromRise(n(pitch) || 6);
 }
-function wallInside(oc) { return oc === "16" ? 15 : 24; }
+// Cavity width (inches) used for SF: 16 OC → 15, 19 OC → 18 (build i, 19.2" layouts), 24 OC → 24 (Asher's rule).
+function wallInside(oc) { return oc === "16" ? 15 : oc === "19" ? 18 : 24; }
+// Width shown in Excel descriptions: 15 / 19 / 24 — 19 OC never merges with 16 or 24.
+function wallWidthLabel(oc) { return oc === "16" ? 15 : oc === "19" ? 19 : 24; }
+const OC_CHOICES = [["16", "16 OC"], ["19", "19 OC"], ["24", "24 OC"]];
 function wallHeightFt(row) { return row.height === "custom" ? n(row.customHeight) : n(row.height); }
 function wallFactor(row) {
   const h = wallHeightFt(row);
@@ -955,7 +977,7 @@ function fmtMoney(x) {
   return "$" + r.join(".");
 }
 function wallExcelDesc(row, mode) {
-  const inside = wallInside(row.oc);
+  const inside = wallWidthLabel(row.oc);
   const h = wallHeightFt(row);
   const hLabel = h + "'";
   if (mode === "foam") return '3.5" OC foam / ' + inside + " / " + hLabel;
@@ -995,11 +1017,11 @@ function interiorCavities(r) {
   if (c > 0) return c;
   const lf = n(r.lf);
   if (lf <= 0) return 0;
-  return Math.ceil((lf * 12) / (r.oc === "24" ? 24 : 16));
+  return Math.ceil((lf * 12) / (r.oc === "24" ? 24 : r.oc === "19" ? 19.2 : 16));
 }
 function interiorWallSf(r) { return wallFactor(r) * interiorCavities(r); }
 function interiorWallLine(r, idx, count, noteTag) {
-  const inside = wallInside(r.oc);
+  const inside = wallWidthLabel(r.oc);
   const hLabel = wallHeightFt(r) + "'";
   const mode = r.materialMode || "batt";
   let product, desc;
@@ -1110,7 +1132,8 @@ PITCH_OPTIONS.push({ value: "custom", label: "Custom rise/run" });
 const S = {
   jobId: uid(),
   dateMeasured: todayISO(),
-  owner: "asher",
+  owner: APP_EDITION === "lance" ? "lance" : "asher",
+  woRep: "", woDate: "", woNotes: "",
   builder: "", city: "", address: "", keywords: "",
   siteState: "GA", siteZip: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
   billSame: true, billAddress: "", billCity: "", billState: "", billZip: "", showFgMap: false,
@@ -1277,7 +1300,7 @@ const GARAGE_CEIL_MATS = {
    EDIT HERE: FG_RULES is the one table that maps app lines → FieldGroove ItemName + WorkArea.
    Each row: id (stable, used by Pricing → FieldGroove mapping overrides), label (what Asher sees),
    key = the app's price-library key (priceKeyFor), sec = app sections it applies to ("*" = any),
-   items = FieldGroove ItemName candidates in order; {w} = batt width 15/23 (from 16/24 OC), {W} = 16/24,
+   items = FieldGroove ItemName candidates in order; {w} = batt width 15/19/23 (from 16/19/24 OC), {W} = 16/19/24 (19 OC with no 19" item falls back to 16" + flag),
    {h} = 8 or 9 (wall height; skipped when the height isn't 8' or 9'), {r} = R-value number from the key.
    The first candidate that exists in FieldGroove's item list wins. area = WorkArea (null → FG_AREA_BY_SECTION).
    rv: "key" puts the R-value from the key into RValue. depth: true puts inches from the description into Depth.
@@ -1311,7 +1334,7 @@ const FG_RULES = [
   ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r + "_retro", label: "Blown fiberglass R-" + r + " (retro / Add Attic Blow)", key: "Blown fiberglass R-" + r + " (retro)", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool" + OC], rv: "key", conf: "sure", note: "Same item as new; FG showed 'R38 Retro Blow: Knauf Jet Stream…' so retro is set by the estimate, not the item." })),
   ...["30", "38"].map(r => ({ id: "blow_cel_r" + r, label: "Blown cellulose R" + r, key: "Blown cellulose R" + r, sec: "*", items: ["Blown Cellulose Insulation for Open Attics" + OC], rv: "key", conf: "sure", note: "Alt: GreenFiber Cellulose." })),
   // —— batts: walls ——
-  { id: "wall_r13", label: "R-13 batts — exterior / concrete / garage walls", key: "R-13 fiberglass batts", sec: WALL_SECS, items: ["R13/{w}/{h}' KRAFT" + OC, "R13/{W} KRAFT" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Kraft-faced; 16 OC→15\", 24 OC→23\"; 8'/9' precuts, other heights → R13/16 KRAFT roll (24 OC → R13/24 UF, no kraft 24\" roll)." },
+  { id: "wall_r13", label: "R-13 batts — exterior / concrete / garage walls", key: "R-13 fiberglass batts", sec: WALL_SECS, items: ["R13/{w}/{h}' KRAFT" + OC, "R13/{W} KRAFT" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Kraft-faced; 16 OC→15\", 24 OC→23\" (19 OC: no R13 19\" item → 16\" item, flagged); 8'/9' precuts, other heights → R13/16 KRAFT roll (24 OC → R13/24 UF, no kraft 24\" roll)." },
   { id: "wall_r19", label: "R-19 batts — 2x6 / daylight / garage walls", key: "R-19 fiberglass batts", sec: WALL_SECS, items: ["R19/{w}/{h}' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "guess", note: "Kraft-faced; 8'/9' precuts else R19/16 or R19/24 KRAFT. Mixed-height merged lines use the roll." },
   { id: "int_r13", label: "R-13 sound batts — interior walls", key: "R-13 fiberglass batts", sec: INT_SECS, items: ["R13/{w}/{h}' UF" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Unfaced for sound walls." },
   { id: "knee_r19", label: "R-19 batts — knee walls", key: "R-19 fiberglass batts", sec: ["Knee wall"], items: ["R19/{w}/8' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "guess", note: "Kraft 8' precut by OC. Work area 2/4 Knee Walls (alt Bonus Room Knee Walls)." },
@@ -1367,12 +1390,12 @@ function fgSection(a) { return String(a || "").replace(/^(Gable)\s*\([^)]*\)\s*$
 function fgVars(L, key) {
   const d = String(L.description || "");
   let oc = "16";
-  const m1 = d.match(/(16|24) OC/); const m2 = d.match(/(?:^|\/)\s*(15|23|24)\s*(?:\/|$)/);
-  if (m1) oc = m1[1]; else if (m2) oc = m2[1] === "15" ? "16" : "24";
+  const m1 = d.match(/(16|19|24) OC/); const m2 = d.match(/(?:^|\/)\s*(15|19|23|24)\s*(?:\/|$)/);
+  if (m1) oc = m1[1]; else if (m2) oc = m2[1] === "15" ? "16" : m2[1] === "19" ? "19" : "24";
   const hm = d.match(/\/\s*(\d+(?:\.\d+)?)'\s*(?:\(|$)/);
   const h = hm && (hm[1] === "8" || hm[1] === "9") ? hm[1] : null;
   const rm = String(key || "").match(/R-?(\d+)/);
-  return { w: oc === "24" ? "23" : "15", W: oc, h, r: rm ? rm[1] : "" };
+  return { w: oc === "24" ? "23" : oc === "19" ? "19" : "15", W: oc, h, r: rm ? rm[1] : "" };
 }
 function fgRuleFor(L) {
   const sec = fgSection(L.assembly);
@@ -1389,13 +1412,17 @@ function fgResolve(L) {
     return null;
   }
   const key = L.dollars != null ? L.product : priceKeyFor(L), v = fgVars(L, key), ov = fgOverrides()[rule.id] || {};
-  let item = (ov.item || "").trim();
-  if (!item) {
-    for (const t of rule.items) {
-      if (t.indexOf("{h}") >= 0 && !v.h) continue;
-      const s = t.replace(/\{w\}/g, v.w).replace(/\{W\}/g, v.W).replace(/\{h\}/g, v.h || "").replace(/\{r\}/g, v.r);
-      if (FG_ITEM_SET.has(s)) { item = s; break; }
-    }
+  let item = (ov.item || "").trim(), flag = "";
+  const pick = vv => { for (const t of rule.items) {
+      if (t.indexOf("{h}") >= 0 && !vv.h) continue;
+      const s = t.replace(/\{w\}/g, vv.w).replace(/\{W\}/g, vv.W).replace(/\{h\}/g, vv.h || "").replace(/\{r\}/g, vv.r);
+      if (FG_ITEM_SET.has(s)) return s;
+    } return ""; };
+  if (!item) item = pick(v);
+  if (!item && v.W === "19") {
+    // FieldGroove only has 19" batts for R19 / R30 / R38 — anything else at 19 OC falls back to the 16" item and is flagged.
+    item = pick(Object.assign({}, v, { W: "16", w: "15" }));
+    if (item) flag = "19 OC → no 19\" FG item for " + (L.description || L.product) + "; used " + item;
   }
   if (!item) return null;
   let area = (ov.area || "").trim() || rule.area || "";
@@ -1406,7 +1433,7 @@ function fgResolve(L) {
   const rv = rule.rv === "key" && v.r ? Number(v.r) : "";
   const u = String(L.unit || "").toUpperCase();
   const uom = rule.uom || (u === "SF" || u === "LF" ? "SqFt" : u === "EA" ? "Ea." : u === "BAGS" ? "Bags" : "Ea.");
-  return { item, area, depth, rv, uom, rule };
+  return { item, area, depth, rv, uom, rule, flag };
 }
 function fgEstimateType(pkg) {
   const F = flags();
@@ -1438,11 +1465,12 @@ function fgBuildRows() {
   }
   const scale = marginPct() / MARGIN_BASE, priceMap = new Map();
   S.priceLibrary.forEach(p => { const u = n(p.unitPrice40); if (u > 0) priceMap.set(p.materialKey, u); });
-  const rows = [], skipped = new Set();
+  const rows = [], skipped = new Set(), flags = new Set();
   ests.forEach(E => E.lines.forEach(L => {
     if (lineIsUnpriced(L)) return;
     const r = fgResolve(L);
     if (!r) { skipped.add(L.product + (L.description ? " — " + L.description : "")); return; }
+    if (r.flag) flags.add(r.flag);
     let price = "";
     if (L.dollars != null) price = round2(n(L.dollars));
     else if (fgPricesOn()) { const u = priceMap.get(priceKeyFor(L)); if (u > 0) price = Math.round(u * (L.fixed ? 1 : scale) * 10000) / 10000; }
@@ -1451,7 +1479,7 @@ function fgBuildRows() {
       project, site, city, st, zip, (S.subdivision || "").trim(), "", projType, E.name, E.type, "Base Estimate", "No", "",
       r.item, r.area, qty, r.uom, r.depth, r.rv, "No", "", price, "", ""]);
   }));
-  return { rows, skipped: Array.from(skipped), estimates: ests.map(e => e.name) };
+  return { rows, skipped: Array.from(skipped), flags: Array.from(flags), estimates: ests.map(e => e.name) };
 }
 function fgXlsx(rows) {
   const colL = i => { let s = ""; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
@@ -1486,7 +1514,7 @@ function exportFieldGroove() {
   const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const bytes = fgXlsx(res.rows), name = fgFileName();
   const msg = res.rows.length + " line" + (res.rows.length > 1 ? "s" : "") + " · " + res.estimates.length + " estimate" + (res.estimates.length > 1 ? "s" : "") +
-    (res.skipped.length ? " · not mapped (left out): " + res.skipped.join("; ") : "");
+    (res.skipped.length ? " · not mapped (left out): " + res.skipped.join("; ") : "") + (res.flags.length ? " · check: " + res.flags.join("; ") : "");
   let file = null; try { file = new File([bytes], name, { type: XT }); } catch (e) {}
   const dl = () => { const url = URL.createObjectURL(new Blob([bytes], { type: XT }));
     const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
@@ -1518,6 +1546,126 @@ function renderFgMap() {
       const note = $("fgMapNote"); if (note) note.textContent = (bad || bad2) ? "Saved — note “" + v + "” isn't in FieldGroove's list (FG may reject it)." : "Saved.";
     };
   });
+}
+
+/* ===== Takeoff → work order (Walls/Batts → Sky, Attic → Josh), build 29i =====
+   Same sheet layout + preview as the Chafin work orders (KPWO.sheetLayout / buildXlsx / previewHtml in wo-core.js),
+   filled from this takeoff's own job info instead of the Chafin lot log. */
+const TWO_DEFAULT_CONTACTS = {
+  walls: { name: "Sky", phone: "706-296-2731", email: "sporter@kpiaf.com" },
+  attic: { name: "Josh", phone: "706-340-6120", email: "joshg@kpiaf.com" },
+};
+let TWO_CONTACTS = JSON.parse(JSON.stringify(TWO_DEFAULT_CONTACTS));
+function twoLoadContacts() {
+  // Asher's build: use the recipients saved on the Work Order tab (same phone storage) when present.
+  return dbReadAll(openWoDb, "kv", true).then(kv => {
+    const c = (kv.find(e => e.key === "contacts") || {}).value;
+    if (c && c.walls && c.attic) TWO_CONTACTS = { walls: Object.assign({}, TWO_DEFAULT_CONTACTS.walls, c.walls), attic: Object.assign({}, TWO_DEFAULT_CONTACTS.attic, c.attic) };
+  }).catch(() => {});
+}
+function twoWho(cat) { return TWO_CONTACTS[cat] || TWO_DEFAULT_CONTACTS[cat]; }
+const TWO_ATTIC_SECS = ["Attic blow", "Attic batts", "Attic prep", "Roof foam", "Porch roof foam", "Garage roof foam"];
+const TWO_LABELS = {
+  "Wall — 2x4 exterior (R-13)": "Ext Walls", "Wall — 2x6 exterior (R-19)": "Ext Walls 2x6", "Wall — Daylight basement (R-19)": "Daylight Walls",
+  "Wall — Concrete basement (R-13)": "Basement Walls", "Wall — Garage exterior": "Garage Walls", "Wall — Interior": "Interior Walls", "Interior walls": "Interior Walls",
+  "Knee wall": "Knee Walls", "Knee wrap": "Knee Wrap", "Dead air": "Dead Air", "Open vault": "Open Vault", "Closed vault": "Closed Vault", "Poly vent": "Poly Vents",
+  "Garage ceiling": "Garage Ceiling", "Baffles": "Baffles", "Band / rim": "Bands", "Between floors (sound)": "Between Floors", "Cantilever": "Cantilever",
+  "Gable": "Gables", "Gable wrap": "Gable Wrap", "Crawl subfloor": "Crawl", "Crawl touch-up": "Crawl Touch-up", "Crawl prep": "Crawl Removal", "Poly": "Crawl Poly",
+  "UFBC": "UFBC", "Porch ceiling": "Porch Ceiling", "Porch gable-off": "Porch Gable", "Floor dense-pack": "Dense-pack", "Netting": "Netting",
+  "Encap poly": "Encap Poly", "Seam taping": "Seam Tape", "Crawl wall foam": "Crawl Walls", "Dehumidifier": "Dehumidifier",
+  "Air seal (caulk & foam)": "Air Seal", "Miscellaneous": "Misc", "Attic blow": "Attic", "Attic batts": "Attic Batts", "Attic prep": "Attic Removal",
+  "Roof foam": "Roof Foam", "Porch roof foam": "Porch Roof Foam", "Garage roof foam": "Garage Roof Foam",
+};
+function twoCatOf(L) { return TWO_ATTIC_SECS.indexOf(fgSection(L.assembly)) >= 0 ? "attic" : "walls"; }
+function twoLines(cat) {
+  return allLines().filter(L => !lineIsUnpriced(L) && L.dollars == null && twoCatOf(L) === cat);
+}
+function twoOrder() {
+  const first = (S.custFirst || "").trim(), last = (S.custLast || "").trim();
+  const customer = (S.custCompany || "").trim() || (S.builder || "").trim() || [first, last].filter(Boolean).join(" ");
+  const cityLine = [(S.city || "").trim(), [(S.siteState || "").trim(), (S.siteZip || "").trim()].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  const d = (S.woDate || "").split("-");
+  const o = {
+    kind: "takeoff", customer: customer, jobSite: (S.address || "").trim() || (S.builder || "").trim() || "Job", address: cityLine,
+    city: (S.subdivision || "").trim() ? "Subdivision: " + S.subdivision.trim() : "",
+    line7: optionsOn() ? optionTitle(S.optionView | 0) : packageLabel().replace(/ · FP .*$/, ""), plan: "",
+    date: d.length === 3 ? new Date(+d[0], +d[1] - 1, +d[2]) : null, dateText: "", sheets: {}, overflow: {},
+  };
+  ["walls", "attic"].forEach(cat => {
+    const ls = twoLines(cat); if (!ls.length) { o.sheets[cat] = null; return; }
+    const rows = ls.map(L => ({ p: TWO_LABELS[fgSection(L.assembly)] || L.area || "", d: L.description || L.product,
+      f: (L.footage === 0 && L.unit === "—") ? "" : n(L.footage), b: L.bags || "" }));
+    const fit = rows.slice(0, 21), extra = rows.slice(21);
+    o.overflow[cat] = extra.length;
+    const notes = [(S.woNotes || "").trim()].concat(extra.length ? ["More: " + extra.map(x => x.p + " " + x.d + " " + fmt(n(x.f))).join("; ")] : []).filter(Boolean).join("\n");
+    o.sheets[cat] = { cat, kind: cat === "attic" ? "Attic" : "Walls/Batts", variant: "", title: cat === "attic" ? "Attic" : "Walls-Batts",
+      rep: (S.woRep || "").trim() || ownerName(), note: "", items: fit.map((x, i) => Object.assign({ r: 9 + i }, x)), notes };
+  });
+  return o;
+}
+function twoFileName(o, cat) { return ("WO - " + o.jobSite + " - " + (cat === "attic" ? "Attic" : "Walls-Batts")).replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() + ".xlsx"; }
+function twoShareText(o, cat) {
+  const who = twoWho(cat).name, where = [o.jobSite, (S.city || "").trim()].filter(Boolean).join(", ");
+  return { title: "WO - " + o.jobSite + " - " + (cat === "attic" ? "Attic" : "Walls/Batts"),
+    text: who + ", attached is the " + (cat === "attic" ? "attic" : "walls/batts") + " work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + ". - " + ownerName() };
+}
+function twoRecipient(cat) {
+  const c = twoWho(cat), d = el("div", "wo-recip");
+  d.innerHTML = '<div class="wo-recip-txt"><b>To ' + escHtml(c.name) + "</b><br>" + (c.email ? escHtml(c.email) : "<i>no email set</i>") +
+    (c.phone ? ' · <a href="tel:' + escHtml(c.phone.replace(/[^0-9+]/g, "")) + '">' + escHtml(c.phone) + "</a>" : "") + "</div>";
+  const b = el("button", "btn btn-secondary btn-sm", "Copy email"); b.type = "button"; b.disabled = !c.email;
+  b.onclick = () => copyText(c.email).then(ok => { b.textContent = ok ? "Copied ✓" : "Copy failed"; setTimeout(() => { b.textContent = "Copy email"; }, 1800); });
+  d.appendChild(b); return d;
+}
+function twoExport(cat, msgEl) {
+  const o = twoOrder(); if (!o.sheets[cat]) return Promise.resolve();
+  const bytes = KPWO.buildXlsx(o, [cat]), name = twoFileName(o, cat), XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  window.__lastTwo = { name, bytes };
+  const t = twoShareText(o, cat), m = msgEl || $("twoStatus");
+  let file = null; try { file = new File([bytes], name, { type: XT }); } catch (e) {}
+  const dl = () => { const url = URL.createObjectURL(new Blob([bytes], { type: XT }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); if (m) m.textContent = "Downloaded " + name + "."; };
+  if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+    return navigator.share({ files: [file], title: t.title, text: t.text }).then(() => { if (m) m.textContent = "Shared " + name + "."; },
+      e => { if (e && e.name === "AbortError") { if (m) m.textContent = "Share canceled."; } else { dl(); if (m) m.textContent = "Share didn't open, so I downloaded the file instead."; } });
+  }
+  dl(); return Promise.resolve();
+}
+function twoPreview(cat) {
+  const o = twoOrder(); if (!o.sheets[cat]) return;
+  twoClose();
+  const m = el("div", "xl-modal"); m.id = "twoPreview";
+  m.innerHTML = '<div class="xl-bar"><button type="button" class="btn btn-secondary btn-sm" id="twoXlClose">Close</button>' +
+    '<div class="xl-title">' + escHtml(twoFileName(o, cat).replace(/\.xlsx$/, "")) + "</div>" +
+    '<button type="button" class="btn btn-secondary btn-sm" id="twoXlZoom">100%</button></div>' +
+    '<div class="xl-scroll" id="twoXlScroll"><div class="xl-zoom" id="twoXlZoomBox">' + KPWO.previewHtml(o, cat) + "</div></div>" +
+    '<div class="xl-foot">' + (o.overflow[cat] ? '<p class="status">' + o.overflow[cat] + " more line(s) than the sheet's 21 rows — listed in Notes.</p>" : "") +
+    '<button type="button" class="btn btn-primary btn-block" id="twoXlShare">Share this file to ' + escHtml(twoWho(cat).name) + "</button>" +
+    '<div id="twoXlRecip"></div><p class="status" id="twoXlMsg" style="text-align:center"></p></div>';
+  document.body.appendChild(m); document.body.classList.add("xl-open");
+  $("twoXlRecip").appendChild(twoRecipient(cat));
+  let fit = true; const box = $("twoXlZoomBox");
+  const apply = () => { const page = box.firstChild, w = (page && page.offsetWidth) || 806, avail = $("twoXlScroll").clientWidth - 16;
+    box.style.zoom = fit ? Math.min(1, avail > 0 ? avail / w : 1) : 1; $("twoXlZoom").textContent = fit ? "100%" : "Fit"; };
+  apply(); window.addEventListener("resize", apply); m._apply = apply;
+  $("twoXlZoom").onclick = () => { fit = !fit; apply(); };
+  $("twoXlClose").onclick = twoClose;
+  $("twoXlShare").onclick = () => twoExport(cat, $("twoXlMsg"));
+}
+function twoClose() { const m = $("twoPreview"); if (!m) return; if (m._apply) window.removeEventListener("resize", m._apply); m.remove(); document.body.classList.remove("xl-open"); }
+function renderTwo() {
+  const box = $("twoActions"); if (!box) return;
+  const hasW = twoLines("walls").length > 0, hasA = twoLines("attic").length > 0;
+  if ($("woRep") && document.activeElement !== $("woRep")) { $("woRep").value = S.woRep || ""; $("woRep").placeholder = ownerName(); }
+  if ($("woDate") && document.activeElement !== $("woDate")) $("woDate").value = S.woDate || "";
+  if ($("woNotes") && document.activeElement !== $("woNotes")) $("woNotes").value = S.woNotes || "";
+  box.innerHTML = "";
+  const b = el("button", "btn btn-primary btn-block", "Work order → " + escHtml(twoWho("walls").name)); b.type = "button"; b.id = "btnTwoWalls";
+  b.disabled = !hasW; b.onclick = () => twoPreview("walls"); box.appendChild(b); box.appendChild(twoRecipient("walls"));
+  if (hasA) { const a = el("button", "btn btn-secondary btn-block", "Attic work order → " + escHtml(twoWho("attic").name)); a.type = "button"; a.id = "btnTwoAttic"; a.style.marginTop = "8px";
+    a.onclick = () => twoPreview("attic"); box.appendChild(a); }
+  if (!hasW) box.appendChild(el("p", "status", "No walls / batts lines on this takeoff yet."));
 }
 
 function wallModeOptions() {
@@ -1825,9 +1973,10 @@ function buildLinesForPackage(p, tag) {
   }
   if (n(S.extraLabor) > 0) push(lines, { area: site, assembly: "Extra labor", product: "Extra labor", description: "$" + fmt(round2(n(S.extraLabor))) + ((S.extraLaborNote || "").trim() ? " — " + S.extraLaborNote.trim() : ""), footage: 1, unit: "ea", dollars: round2(n(S.extraLabor)), notes: noteTag + "Fixed $ (not margin-scaled)" });
 
-  if (S.gasType === "idk") {
+  // Gas type lives in the Fireplace section (build i): only on the takeoff when the house has a fireplace; saved value kept either way.
+  if (S.includeFp && S.gasType === "idk") {
     push(lines, { area: site, assembly: "Gas type", product: "CONFIRM WITH BUILDER", description: "Gas type unknown — confirm before quoting propane kit", footage: 0, unit: "—", notes: noteTag + "Do NOT auto-add propane conversion kit" });
-  } else if (S.gasType === "propane") {
+  } else if (S.includeFp && S.gasType === "propane") {
     push(lines, { area: site, assembly: "Gas type", product: "Propane", description: "Propane noted (kit not auto-added)", footage: 1, unit: "ea", notes: noteTag });
   }
 
@@ -2151,7 +2300,7 @@ function renderAssemblyEditors() {
       card.appendChild(fieldSelect("Shape", r.shape || "rectangle", [["rectangle","Rectangle"],["triangle","Triangle"]], v => { r.shape = v; render(); }));
       card.appendChild(fieldInput("Height ft", r.height, v => { r.height = v; showSf(); schedule(); }, "number"));
       card.appendChild(fieldInput("LF", r.lf, v => { r.lf = v; showSf(); schedule(); }, "number"));
-      card.appendChild(fieldSelect("OC", r.oc || "16", [["16","16 OC"],["24","24 OC"]], v => { r.oc = v; render(); }));
+      card.appendChild(fieldSelect("OC", r.oc || "16", OC_CHOICES, v => { r.oc = v; render(); }));
       showSf(); card.appendChild(sfOut);
       const wrapRow = el("div", "toggle-row");
       wrapRow.appendChild(el("span", null, "Wrap"));
@@ -2176,13 +2325,13 @@ function renderAssemblyEditors() {
   }
   if (S.hasWalls && F.canAskWalls) {
     const h = el("div", "divider"); box.appendChild(h);
-    box.appendChild(el("p", "cap", "Walls — matching walls of the same type combine into one Excel row (R-13 batts stay split by height). 16 OC = 12×15×h÷144 · 24 OC = 12×24×h÷144"));
+    box.appendChild(el("p", "cap", "Walls — matching walls of the same type combine into one Excel row (R-13 batts stay split by height). 16 OC = 12×15×h÷144 · 19 OC = 12×18×h÷144 · 24 OC = 12×24×h÷144"));
     S.walls.forEach((r, idx) => {
       const card = el("div", "row-card");
       const sf = round2(wallFactor(r) * n(r.cavities));
       card.innerHTML = '<div class="row-title">Wall #' + (idx+1) + ' · ' + wallExcelDesc(r, r.materialMode) + ' → ' + fmt(sf) + ' SF</div>';
       card.appendChild(fieldSelect("Kind", r.kind, Object.keys(WALL_KIND_LABELS).map(k => [k, WALL_KIND_LABELS[k]]), v => { r.kind = v; render(); }));
-      card.appendChild(fieldSelect("OC", r.oc, [["16","16 OC"],["24","24 OC"]], v => { r.oc = v; render(); }));
+      card.appendChild(fieldSelect("OC", r.oc, OC_CHOICES, v => { r.oc = v; render(); }));
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
       card.appendChild(fieldInput("Cavities", r.cavities, v => { r.cavities = v; schedule(); }, "number"));
@@ -2196,13 +2345,13 @@ function renderAssemblyEditors() {
   }
   if (S.hasInteriorWalls && F.canAskWalls) {
     box.appendChild(el("div", "divider"));
-    box.appendChild(el("p", "cap", "Interior walls — enter cavities (or linear feet → cavities = LF×12÷OC). 16 OC = 12×15×h÷144 · 24 OC = 12×24×h÷144"));
+    box.appendChild(el("p", "cap", "Interior walls — enter cavities (or linear feet → cavities = LF×12÷OC). 16 OC = 12×15×h÷144 · 19 OC = 12×18×h÷144 · 24 OC = 12×24×h÷144"));
     if (!Array.isArray(S.interiorWalls) || !S.interiorWalls.length) S.interiorWalls = [newInteriorWall()];
     S.interiorWalls.forEach((r, idx) => {
       const card = el("div", "row-card");
       const sf = round2(interiorWallSf(r));
       card.innerHTML = '<div class="row-title">Interior walls #' + (idx+1) + ' · ' + fmt(interiorCavities(r)) + ' cav → ' + fmt(sf) + ' SF</div>';
-      card.appendChild(fieldSelect("OC", r.oc, [["16","16 OC"],["24","24 OC"]], v => { r.oc = v; render(); }));
+      card.appendChild(fieldSelect("OC", r.oc, OC_CHOICES, v => { r.oc = v; render(); }));
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
       const g = el("div", "grid2");
@@ -2300,7 +2449,7 @@ function renderAssemblyEditors() {
     card.innerHTML = '<div class="row-title">Crawl – new batts (no removal)</div>';
     card.appendChild(fieldInput("Subfloor SF (blank = flat SF)", S.crawlNewSf, v => { S.crawlNewSf = v; schedule(); }, "number"));
     card.appendChild(fieldSelect("Batt R-value", S.crawlNewR, [["R-19","R19"],["R-13","R13"],["R-30","R30"]], v => { S.crawlNewR = v; render(); }));
-    card.appendChild(fieldSelect("OC", S.crawlNewOc, [["16","16 OC"],["24","24 OC"]], v => { S.crawlNewOc = v; render(); }));
+    card.appendChild(fieldSelect("OC", S.crawlNewOc, OC_CHOICES, v => { S.crawlNewOc = v; render(); }));
     const row = el("div", "toggle-row"); row.appendChild(el("span", null, "Add poly?"));
     const b = el("button", "switch" + (S.crawlNewPoly ? " on" : "")); b.type = "button";
     b.onclick = () => {
@@ -2651,6 +2800,7 @@ function exportOptions(idxs) {
 
 function renderOutput() {
   renderOptionBar();
+  renderTwo();
   const lines = allLines();
   const hint = $("outputHint");
   const pricedCount = S.priceLibrary.filter(p => n(p.unitPrice40) > 0).length;
@@ -2660,7 +2810,7 @@ function renderOutput() {
     else { const b = ballpark(); extra = " · Ballpark " + fmtMoney(b.total) + " (" + fmtMoney(b.scaled) + " @ " + marginPct() + "% + " + fmtMoney(b.fixed) + " fixed; not final invoice)"; }
   }
   hint.innerHTML = (optionsOn() ? "<strong>" + escHtml(optionTitle(S.optionView | 0)) + "</strong> · " : "") + lines.length + " rows · Bags blank until bag-yield · Air seal, gas & chase flags · Owner: " +
-    (S.owner === "asher" ? "Asher" : "Sky") + extra;
+    ownerName() + extra;
 
   const wrap = $("outputTable");
   if (!lines.length) { wrap.innerHTML = "<p class='status'>Enter measurements — Excel rows appear here.</p>"; return; }
@@ -2711,7 +2861,7 @@ function renderArchive() {
   }
   filtered.forEach(j => {
     const card = el("div", "archive-card");
-    card.innerHTML = '<div class="meta">' + escHtml(j.dateMeasured) + " · " + (j.owner === "asher" ? "Asher" : "Sky") +
+    card.innerHTML = '<div class="meta">' + escHtml(j.dateMeasured) + " · " + ownerName(j.owner) +
       " · " + escHtml(j.builder || "—") + " · " + escHtml(j.city || "—") + '</div>' +
       '<div class="title">' + escHtml(j.address || "(no address)") + '</div>' +
       '<div class="meta">' + escHtml(relabelPkg(j.packageLabel)) + '</div>' +
@@ -2780,7 +2930,7 @@ function renderLiveOnly() {
     if (pricedCount === 0) ball = '<span class="pill">Ballpark: add prices</span>';
     else ball = '<span class="pill">' + fmtMoney(ballpark().total) + " @ " + marginPct() + "%</span>";
   }
-  $("liveBar").innerHTML = '<span class="pill">' + (S.owner === "asher" ? "Asher" : "Sky") + "</span>" +
+  $("liveBar").innerHTML = '<span class="pill">' + ownerName() + "</span>" +
     '<span class="pill">' + lines.length + " rows</span>" +
     '<span class="pill">' + fmt(flat) + " SF</span>" + ball;
   renderOutput();
@@ -2840,8 +2990,9 @@ function render() {
   bindSeg("seg-retroScope", () => S.retroScope, v => { S.retroScope = v; render(); });
   bindSeg("seg-outputView", () => S.outputView, v => { S.outputView = v; render(); });
 
-  $("ownerHint").textContent = S.owner === "sky" ? "Sky → Excel handoff primary" : "Asher → FG-style secondary view default (Excel CSV still primary handoff)";
-  toggleField("gasIdk", S.gasType === "idk");
+  $("ownerHint").textContent = S.owner === "sky" ? "Sky → Excel handoff primary" : ownerName() + " → FG-style secondary view default (Excel CSV still primary handoff)";
+  toggleField("fpGasBlock", !!S.includeFp);
+  toggleField("gasIdk", !!S.includeFp && S.gasType === "idk");
   toggleField("retroBlock", S.jobMode === "retro");
   toggleField("pkgField", S.jobMode === "new");
   toggleField("pkgField", S.jobMode === "new" && !S.compareOn);
@@ -2922,6 +3073,8 @@ function migrateState(d) {
   // customer fields (build h): jobs saved before them start blank, never inherit the previous job's customer
   Object.keys(CUST_DEFAULTS).forEach(k => { if (!(k in d)) S[k] = CUST_DEFAULTS[k]; });
   if (typeof S.billSame !== "boolean") S.billSame = true;
+  ["woRep", "woDate", "woNotes"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
+  if (!OWNER_LABELS[S.owner]) S.owner = APP_EDITION === "lance" ? "lance" : "asher";
   if (d.caulkFoam) S.airSealed = true;
   if (S.fpModelId && FP_LEGACY_IDS[S.fpModelId]) S.fpModelId = FP_LEGACY_IDS[S.fpModelId];
   if (typeof S.fpChaseClear !== "boolean") S.fpChaseClear = true;
@@ -2963,7 +3116,7 @@ function migrateState(d) {
   if (Array.isArray(S.cants)) S.cants.forEach(c => { if (!CANT_MATS[c.material]) c.material = "r30"; });
   if (!GARAGE_CEIL_MATS[S.garageCeilMat]) S.garageCeilMat = "r19";
   if (Array.isArray(S.betweenFloors)) S.betweenFloors.forEach(b => { if (BETWEEN_FLOOR_MIGRATE[b.mat]) b.mat = BETWEEN_FLOOR_MIGRATE[b.mat]; if (!BETWEEN_FLOOR_MATS[b.mat]) b.mat = "r13_sound"; });
-  if (Array.isArray(S.knees)) S.knees.forEach(k => { if (k.shape !== "triangle") k.shape = "rectangle"; if (k.oc !== "24") k.oc = "16"; });
+  if (Array.isArray(S.knees)) S.knees.forEach(k => { if (k.shape !== "triangle") k.shape = "rectangle"; if (k.oc !== "24" && k.oc !== "19") k.oc = "16"; });
 }
 
 function restoreDraft() {
@@ -3070,7 +3223,7 @@ function newJob() {
   S.jobId = uid();
   S.dateMeasured = todayISO();
   S.builder = ""; S.city = ""; S.address = ""; S.keywords = "";
-  resetCustomer();
+  resetCustomer(); S.woRep = ""; S.woDate = ""; S.woNotes = "";
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard";
   S.compareOn = false; S.optionPkgs = ["standard", "hybrid_foam_batts"]; S.optionView = 0;
   S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38";
@@ -3114,7 +3267,7 @@ function wireInputs() {
     touchupPatchSf: "touchupPatchSf", marginCustom: "marginCustom",
     siteState: "siteState", siteZip: "siteZip", subdivision: "subdivision", custFirst: "custFirst", custLast: "custLast",
     custCompany: "custCompany", custPhone: "custPhone", custEmail: "custEmail", billAddress: "billAddress", billCity: "billCity",
-    billState: "billState", billZip: "billZip",
+    billState: "billState", billZip: "billZip", woRep: "woRep", woDate: "woDate", woNotes: "woNotes",
     airSealAddon: "airSealAddon", extraLabor: "extraLabor", extraLaborNote: "extraLaborNote",
     filterText: "filterText", filterBuilder: "filterBuilder", filterCity: "filterCity",
     filterOwner: "filterOwner", filterPkg: "filterPkg", filterFrom: "filterFrom", filterTo: "filterTo"
@@ -3199,7 +3352,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29h";
+const APP_BUILD = "2026-10-29i";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -3484,6 +3637,8 @@ function init() {
   wirePullToRefresh();
   showVersion();
   wireBackup();
+  if (APP_EDITION === "lance") document.querySelectorAll(".edition-lance").forEach(e => e.classList.remove("hidden"));
+  twoLoadContacts().then(() => renderTwo());
   idbGetAllPrices().then(stored => { S.priceLibrary = mergePriceLibrary(stored); render(); })
     .catch(() => { S.priceLibrary = mergePriceLibrary([]); render(); });
   refreshArchive();
@@ -3766,11 +3921,11 @@ function sheetLayout(o, sh) {
   region(2, 8, 2, 8, "DATE:", B14);
   var dv = o.date ? { n: excelSerial(o.date) } : (o.dateText || "");
   region(2, 9, 2, 10, dv, { font: "b14", h: "left", fmt: o.date ? "date" : null });
-  region(3, 0, 3, 1, "CUSTOMER:", { font: "b14", h: "left" }); region(3, 2, 3, 10, "Chafin", { font: "b14", h: "left" });
+  region(3, 0, 3, 1, "CUSTOMER:", { font: "b14", h: "left" }); region(3, 2, 3, 10, o.customer != null ? o.customer : "Chafin", { font: "b14", h: "left" });
   region(4, 0, 4, 1, "JOB SITE:", { font: "b14", h: "left" }); region(4, 2, 4, 10, o.jobSite, { font: "b14", h: "left" });
   region(5, 0, 5, 1, "", B14); region(5, 2, 5, 10, o.address || "", { font: "b14", h: "left" });
   region(6, 0, 6, 1, "", B14); region(6, 2, 6, 10, o.city || "", { font: "b14", h: "left" });
-  region(7, 0, 7, 1, "", B14); region(7, 2, 7, 10, o.plan + " Plan" + (sh.note ? " - " + sh.note : ""), { font: "b14", h: "left" });
+  region(7, 0, 7, 1, "", B14); region(7, 2, 7, 10, o.line7 != null ? o.line7 : o.plan + " Plan" + (sh.note ? " - " + sh.note : ""), { font: "b14", h: "left" });
   region(8, 0, 8, 1, "PRODUCT ", { font: "b14", h: "center" }); region(8, 2, 8, 6, "DESCRIPTION", { font: "b14", h: "center" });
   region(8, 7, 8, 8, "FOOTAGE", { font: "b14", h: "center" }); region(8, 9, 8, 10, "BAGS", { font: "b14", h: "center" });
   var byRow = {}; sh.items.forEach(function (it) { byRow[it.r] = it; });
@@ -3891,7 +4046,7 @@ function buildXlsx(o, cats) { // cats: ["attic"] or ["walls"] or both
       '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' +
       '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>' },
     { name: "docProps/core.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
-      "<dc:title>" + esc("Chafin Work Order - " + o.jobSite) + "</dc:title><dc:creator>KP Takeoff</dc:creator>" +
+      "<dc:title>" + esc((o.customer != null ? o.customer : "Chafin") + " Work Order - " + o.jobSite) + "</dc:title><dc:creator>KP Takeoff</dc:creator>" +
       '<dcterms:created xsi:type="dcterms:W3CDTF">' + iso + '</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">' + iso + "</dcterms:modified></cp:coreProperties>" },
     { name: "docProps/app.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Microsoft Excel</Application></Properties>' },
     { name: "xl/workbook.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
