@@ -597,7 +597,6 @@ const DEFAULT_PRICE_KEYS = [
   { materialKey: 'Spider walls 3.5"', unit: "SF", price: "1.30" },
   { materialKey: 'Spider walls 5.5"', unit: "SF", price: "1.89" },
   { materialKey: "Dense-pack floors", unit: "SF", price: "1.19" },
-  { materialKey: "Dense-pack floors (spider)", unit: "SF", price: "1.19" },
   { materialKey: "Attic suck-out", unit: "SF", price: "1.25" },
   { materialKey: "Attic batt removal", unit: "SF", price: "1.25" },
   { materialKey: "Crawl insulation removal", unit: "SF", price: "1.25" },
@@ -914,7 +913,7 @@ function pkgProfile(pkg) {
       wallOverride: foam && single && single !== "batt" ? single : null,
       standardBlow: false,
       dense: blow || batts || w.includes("cellulose") || w.includes("spider"),
-      denseProduct: w.includes("spider") && !w.includes("cellulose") ? "Spider" : "Cellulose",
+      denseProduct: "Cellulose", // dense-pack floors are cellulose only
       crawlEncap: false,
     };
   }
@@ -925,7 +924,7 @@ function pkgProfile(pkg) {
     wallOverride: pkg === "total_foam" ? "foam" : pkg === "foam_cellulose" ? "cellulose" : pkg === "foam_spider" ? "spider" : null,
     standardBlow: pkg === "standard",
     dense: pkg === "foam_cellulose" || pkg === "foam_spider" || pkg === "standard",
-    denseProduct: pkg === "foam_spider" ? "Spider" : "Cellulose",
+    denseProduct: "Cellulose", // dense-pack floors are cellulose only
     crawlEncap: packageIsCrawlEncap(pkg),
   };
 }
@@ -1313,9 +1312,8 @@ const BETWEEN_FLOOR_MATS = {
   acoustical: ['AcousticalBat 3" (rock wool)', "Rock wool", 'AcousticalBat 3"', 'AcousticalBat 3"'],
   foam: ['Open-cell foam 3.5"', "Open-cell spray foam", '3.5" OC foam', "Open-cell foam (walls)"],
   dense_cel: ["Dense-pack cellulose", "Cellulose", "Dense-pack cellulose", "Dense-pack floors", true],
-  dense_spider: ["Dense-pack spider", "Spider", "Dense-pack spider", "Dense-pack floors (spider)", true],
 };
-const BETWEEN_FLOOR_MIGRATE = { blow_fg: "r19", cellulose: "dense_cel" };
+const BETWEEN_FLOOR_MIGRATE = { blow_fg: "r19", cellulose: "dense_cel", dense_spider: "dense_cel" };
 const BF_BATT_KEYS = ["r13_sound", "r19", "comfortbat", "acoustical"];
 // [label, product, description, priceKey]
 const CANT_MATS = {
@@ -1400,8 +1398,7 @@ const FG_RULES = [
   { id: "cel55", label: 'Cellulose walls 5.5"', key: 'Cellulose walls 5.5"', sec: "*", items: ["GreenFiber Cellulose"], depth: true, rv: 19, conf: "sure", note: "Plain GreenFiber Cellulose (includes material). 2x6 cavity → R-19 / 5.5\" selection (Depth 5.5, RValue 19)." },
   { id: "spi35", label: 'Spider walls 3.5"', key: 'Spider walls 3.5"', sec: "*", items: ["JM Spider Plus Spray Insulation"], depth: true, rv: 15, conf: "guess", note: "Plain JM Spider Plus (not the Labor Rate item). 2x4 cavity → R-15 / 3.5\" (Depth 3.5, RValue 15)." },
   { id: "spi55", label: 'Spider walls 5.5"', key: 'Spider walls 5.5"', sec: "*", items: ["JM Spider Plus Spray Insulation"], depth: true, rv: 21, conf: "guess", note: "Plain JM Spider Plus (not the Labor Rate item). 2x6 cavity → R-21 / 5.5\" (Depth 5.5, RValue 21)." },
-  { id: "dense_cel", label: "Dense-pack floors (cellulose)", key: "Dense-pack floors", sec: "*", items: ["Cellulose - Dense Pack Floor System"], conf: "sure", note: "" },
-  { id: "dense_spi", label: "Dense-pack floors (spider)", key: "Dense-pack floors (spider)", sec: "*", items: ["JM Spider Plus Spray Insulation"], conf: "guess", note: "No spider dense-pack item in FG." },
+  { id: "dense_cel", label: "Dense-pack floors (cellulose)", key: "Dense-pack floors", sec: "*", items: ["Cellulose - Dense Pack Floor System"], conf: "sure", note: "Dense-pack floor systems are always cellulose (no spider dense-pack item in FieldGroove)." },
   { id: "netting", label: "Netting", key: "Netting", sec: "*", items: ["Netting - Insulweb Fabric"], conf: "sure", note: "Work area follows what it nets (walls / between floors / floors)." },
   // —— removal / prep ——
   { id: "rm_suck", label: "Attic suck-out", key: "Attic suck-out", sec: "*", items: ["Insulation Removal"], conf: "sure", note: "" },
@@ -2101,7 +2098,7 @@ function buildLinesForPackage(p, tag) {
     let denseNet = 0;
     S.dense.forEach(r => {
       if (n(r.sf) <= 0) return;
-      push(lines, { area: "Dense-pack", assembly: "Floor dense-pack", product: PR.denseProduct, description: "Dense-pack flat SF", footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
+      push(lines, { area: "Dense-pack", assembly: "Floor dense-pack", product: "Cellulose" /* floor dense-pack is cellulose only */, description: "Dense-pack flat SF", footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
       if (r.netting) denseNet += n(r.sf);
     });
     if (denseNet > 0) push(lines, { area: "Dense-pack", assembly: "Netting", product: "Netting", description: "Matches dense-pack", footage: round2(denseNet), unit: "SF", notes: noteTag });
@@ -2275,7 +2272,7 @@ function priceKeyFor(L) {
   if (pr === "Closed-cell spray foam") { const m = d.match(/(\d(?:\.\d)?)"/); return 'Closed-cell foam ' + (m ? m[1] : "2") + '"'; }
   if (pr === "Rock wool") return /ComfortBat/i.test(d) ? "ComfortBat R15" : 'AcousticalBat 3"';
   if (pr === "Cellulose" || pr === "Spider") {
-    if (a === "Floor dense-pack") return pr === "Spider" ? "Dense-pack floors (spider)" : "Dense-pack floors";
+    if (a === "Floor dense-pack") return "Dense-pack floors"; // cellulose only
     const depth = /5\.5"/.test(d) ? '5.5"' : /3\.5"/.test(d) ? '3.5"' : "";
     if (depth && (/^Wall/.test(a) || a === "Interior walls")) return pr + " walls " + depth;
     if (pr === "Cellulose") { const r = d.match(/R(30|38)/); if (r) return "Blown cellulose R" + r[1]; }
@@ -3631,7 +3628,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29ab";
+const APP_BUILD = "2026-10-29ac";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
