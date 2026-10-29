@@ -1046,7 +1046,7 @@ function applyPkgDefaults() {
   }
   if (pr.foamRoof) { S.hasGables = true; S.hasWalls = true; }
   const nm = defaultWallMode(S.pkg);
-  (S.walls || []).forEach(w => { if (!/int/i.test(w.kind || "")) w.materialMode = nm; });
+  (S.walls || []).forEach(w => { if (!/int/i.test(w.kind || "")) w.materialMode = w.kind === "concrete" ? defaultWallMode(S.pkg, "concrete") : nm; });
 }
 function todayISO() {
   const d = new Date();
@@ -1096,7 +1096,9 @@ function withFoam(v, fn) { const prev = FOAM_VIEW; FOAM_VIEW = v === "cc" ? "cc"
 function foamViewNow() { return S.foamView === "cc" ? "cc" : "oc"; }
 const FOAM_OPT_LABEL = { oc: "Option A - Open Cell", cc: "Option B - Closed Cell" };
 function foamTypeFor(t) { return t === "cc" || t === "oc" ? t : foamTypeJob(); }
-function ccDepthJob() { return ccValid(S.ccFoamDepth) ? String(S.ccFoamDepth) : "2"; }
+// 29as: no default closed-cell depth — "" until picked (the only defaults left: Total Foam concrete walls 1", crawl walls locked 1.5")
+function ccDepthJob() { return ccValid(S.ccFoamDepth) ? String(S.ccFoamDepth) : ""; }
+const CC_PICK_DESC = "Pick closed cell depth", CC_PICK_KEY = "Closed-cell foam — depth not picked";
 function ccDepthFor(d, dflt) { return ccValid(d) ? String(d) : (dflt || ccDepthJob()); }
 function isOcFoam(L) { return L.product === "Open-cell spray foam" || L.product === "Spray foam"; }
 // Swap an open-cell line to closed cell when its row (or the job) says closed cell; force = always CC (concrete walls).
@@ -1106,8 +1108,9 @@ function applyFoamType(L, row, word, force, dflt) {
   if (!force && foamTypeFor(row && row.foamType) !== "cc") return L;
   const dep = ccDepthFor(row && row.ccDepth, dflt);
   // 29ap: no work-area word or batt width/height on foam descriptions (the Sky product column carries the area); keeps a "(#n)" instance tag
-  const swap = t => { const m = String(t).match(/\s*\(#\d+\)$/); return dep + '" CC' + (m ? m[0] : ""); };
+  const swap = t => { const m = String(t).match(/\s*\(#\d+\)$/); return (dep ? dep + '" CC' : CC_PICK_DESC) + (m ? m[0] : ""); };
   L.product = "Closed-cell spray foam"; L.description = swap(L.description); delete L.priceKey;
+  if (!dep) { L._ccMissing = true; L.priceKey = CC_PICK_KEY; } // never guessed: no price → ballpark incomplete; warning in wizard + output
   if (L._mergeDesc != null) L._mergeDesc = swap(L._mergeDesc);
   return L;
 }
@@ -1120,9 +1123,11 @@ function foamTypeControls(card, obj, tKey, dKey, force, dflt) {
   const optB = !force && foamCompareOn() && obj[tKey] !== "oc" && obj[tKey] !== "cc";
   if (force || foamTypeFor(obj[tKey]) === "cc" || optB)
     card.appendChild(ccDepthPicker(optB ? "Closed-cell depth (Option B)" : "Closed-cell depth", ccValid(obj[dKey]) ? String(obj[dKey]) : "",
-      v => { obj[dKey] = v; render(); }, "Default " + (dflt || ccDepthJob()) + '"'));
+      v => { obj[dKey] = v; render(); }, (dflt || ccDepthJob()) ? "Default " + (dflt || ccDepthJob()) + '"' : null));
+  if ((force || foamTypeFor(obj[tKey]) === "cc" || optB) && !ccValid(obj[dKey]) && !(dflt || ccDepthJob())) card.appendChild(ccPickWarn());
 }
 // 29as: segmented half-inch closed-cell depth control (1–5"). dfltLabel adds a leading "Default" choice (value "").
+function ccPickWarn(what) { return el("div", "callout warn cc-pick-warn", "<strong>Pick closed cell depth</strong>" + (what || "No default — tap a depth (1–5\") so this line can be priced.")); }
 function ccDepthPicker(label, value, onPick, dfltLabel) {
   const f = el("div", "field");
   f.innerHTML = "<label>" + label + "</label>";
@@ -1150,7 +1155,7 @@ function foamWordsLine(L) {
 // 29am: band/rim foam type — default is always 3.5" open cell (not the job foam type); per-rim override to closed cell + depth.
 function rimFoamControls(card, r) {
   card.appendChild(fieldSelect("Band foam type", r.foamType === "cc" ? "cc" : "", [["", 'Default — 3.5" open cell (bands always open cell)'], ["cc", "Closed cell (override)"]], v => { r.foamType = v; render(); }));
-  if (r.foamType === "cc") card.appendChild(ccDepthPicker("Closed-cell depth", ccValid(r.ccDepth) ? String(r.ccDepth) : "", v => { r.ccDepth = v; render(); }, "Default " + ccDepthJob() + '"'));
+  if (r.foamType === "cc") { card.appendChild(ccDepthPicker("Closed-cell depth", ccValid(r.ccDepth) ? String(r.ccDepth) : "", v => { r.ccDepth = v; render(); }, ccDepthJob() ? "Default " + ccDepthJob() + '"' : null)); if (!ccValid(r.ccDepth) && !ccDepthJob()) card.appendChild(ccPickWarn()); }
   else if (foamTypeJob() === "cc" || foamCompareOn()) card.appendChild(el("p", "cap", 'Band stays 3.5" open cell' + (foamCompareOn() ? " in both options." : " even though the job is closed cell.")));
 }
 function kraftToggle(r) {
@@ -1230,6 +1235,8 @@ function miscFilled() {
   return (Array.isArray(S.misc) ? S.misc : []).filter(r => (r.material || "").trim() !== "");
 }
 function defaultWallMode(pkg, kind) {
+  // 29as: basement concrete walls — 1" closed cell foam only on Total Foam; R-13 fiberglass on every other package
+  if (kind === "concrete") return pkgProfile(pkg).totalFoam ? "foam" : "batt";
   if (pkg === "custom") return customWallList()[0];
   if (pkg === "total_foam") return "foam";
   if (pkg === "foam_cellulose") return "cellulose";
@@ -1357,7 +1364,7 @@ const S = {
   cants: [{ id: uid(), name: "", sf: "", material: "r30" }],
   garageLivingAbove: false, garageCeilingSf: "", garageCeilMat: "r19", garageCeilOc: "16", garageCeils: [],
   roofFoamDepth: "", porchRoofDepth: "", garageRoofDepth: "",
-  foamType: "oc", foamView: "oc", ccFoamDepth: "2", porchRoofFoam: "", porchRoofCc: "", porchCeilFoam: "", porchCeilCc: "", garageRoofFoam: "", garageRoofCc: "", garageCeilFoam: "", garageCeilCc: "",
+  foamType: "oc", foamView: "oc", ccFoamDepth: "", ccNoDefault: true, porchRoofFoam: "", porchRoofCc: "", porchCeilFoam: "", porchCeilCc: "", garageRoofFoam: "", garageRoofCc: "", garageCeilFoam: "", garageCeilCc: "",
   garageFoamRoof: false, garageRoofFlat: "", garageRoofPitch: "6", garageRoofCustomRise: "", houseRoofCc: "", crawlSubFoam: "", crawlSubCc: "",
   includePorchRoof: true, porchGabledOff: false, porchRoofFlat: "", porchRoofPitch: "6", porchRoofCustomRise: "",
   porchCeilingSf: "", porchCeilMat: "batt_r19", porchJoistOc: "16", porchCeilOc: "16", touchupOc: "16",
@@ -2249,26 +2256,29 @@ function buildLinesForPackage(p, tag) {
     let nettingTotal = 0;
     S.walls.forEach(r => {
       if ((r.kind === "daylight" || r.kind === "concrete") && !F.basementWalls) return;
-      const cavities = n(r.cavities); if (cavities <= 0) return;
+      // 29as: unframed concrete walls can be measured LF × wall height (closed cell foam line); default = cavity counting
+      const lfMode = r.kind === "concrete" && !!r.measureLf;
+      const cavities = n(r.cavities); if (!lfMode && cavities <= 0) return;
       const factor = wallFactor(r);
-      const sf = factor * cavities; if (sf <= 0) return;
-      let mode = r.materialMode;
+      const sf = lfMode ? n(r.lf) * n(r.lfHeight) : factor * cavities; if (sf <= 0) return;
+      let mode = lfMode ? "foam" : r.materialMode;
       // Options mode: each option uses its own wall material (special rock-wool picks and interior rows stay as entered).
-      if (optionsOn() && r.kind !== "interior" && mode !== "comfortbat" && mode !== "acoustical") mode = PR.custom ? customWallList()[0] : "batt";
+      if (optionsOn() && !lfMode && r.kind !== "interior" && mode !== "comfortbat" && mode !== "acoustical") mode = PR.custom && r.kind !== "concrete" ? customWallList()[0] : "batt";
       if (mode === "batt") {
         if (totalFoam) mode = "foam";
-        else if (PR.wallOverride === "cellulose" && r.kind !== "garage_ext") mode = "cellulose";
-        else if (PR.wallOverride === "spider" && r.kind !== "garage_ext") mode = "spider";
+        // 29as: basement concrete walls stay R-13 fiberglass on every non-Total-Foam package (never cellulose/spider)
+        else if (PR.wallOverride === "cellulose" && r.kind !== "garage_ext" && r.kind !== "concrete") mode = "cellulose";
+        else if (PR.wallOverride === "spider" && r.kind !== "garage_ext" && r.kind !== "concrete") mode = "spider";
       }
       push(lines, {
         area: WALL_KIND_LABELS[r.kind] || "Wall",
         assembly: "Wall — " + (WALL_KIND_LABELS[r.kind] || r.kind),
         product: wallProduct(mode, r.kind), description: wallExcelDesc(r, mode),
         _mergeDesc: wallHeightSplits(r.kind, mode) ? r13Band(wallExcelDesc(r, mode), wallHeightFt(r)) : dropHeight(wallExcelDesc(r, mode)),
-        footage: round2(sf), unit: "SF", notes: noteTag + cavities + " cav × " + round2(factor) + " @ " + wallHeightFt(r) + "'"
+        footage: round2(sf), unit: "SF", notes: noteTag + (lfMode ? fmt(n(r.lf)) + " LF × " + fmt(n(r.lfHeight)) + "' (unframed)" : cavities + " cav × " + round2(factor) + " @ " + wallHeightFt(r) + "'")
       });
-      // concrete (basement) walls: spray foam is always closed cell, 1" unless the row picks a depth
-      applyFoamType(lines[lines.length - 1], r, "wall", r.kind === "concrete", r.kind === "concrete" ? "1" : "");
+      // concrete (basement) walls: spray foam is always closed cell; 1" default ONLY on Total Foam (29as) — otherwise the row picks a depth
+      applyFoamType(lines[lines.length - 1], r, "wall", r.kind === "concrete", r.kind === "concrete" && totalFoam ? "1" : "");
       if ((mode === "cellulose" || mode === "spider") && r.kind === "interior") nettingTotal += sf;
     });
     if (nettingTotal > 0) push(lines, { area: "Interior", assembly: "Netting", product: "Netting", description: "Matches interior SF", footage: round2(nettingTotal), unit: "SF", notes: noteTag });
@@ -2513,7 +2523,7 @@ function priceKeyFor(L) {
     if (dm && /roof foam$/i.test(a) && ROOF_FOAM_DEPTH_KEYS.indexOf(dm[1]) >= 0) return ROOF_FOAM_BASE + " " + dm[1] + '"';
     return ROOF_FOAM_BASE;
   }
-  if (pr === "Closed-cell spray foam") { const m = d.match(/(\d+(?:\.\d+)?)"/); return 'Closed-cell foam ' + (m ? m[1] : "2") + '"'; }
+  if (pr === "Closed-cell spray foam") { const m = d.match(/(\d+(?:\.\d+)?)"/); return m ? 'Closed-cell foam ' + m[1] + '"' : CC_PICK_KEY; } // 29as: no guessed depth
   if (pr === "Rock wool") return /ComfortBat/i.test(d) ? "ComfortBat R15" : 'AcousticalBat 3"';
   if (pr === "Cellulose" || pr === "Spider") {
     if (a === "Floor dense-pack") return "Dense-pack floors"; // cellulose only
@@ -2618,7 +2628,7 @@ function foamCompareTotalsHtml(fc) {
   const t = (o, lbl) => "<td class='num'><strong>" + fmtMoney(o.total) + "</strong>" + (o.incomplete ? " <span class='cap' style='color:#b45309'>⚠ incomplete — " + o.unpricedLines + " line" + (o.unpricedLines > 1 ? "s" : "") + " missing a price</span>" : "") + "</td>";
   const diff = (fc.A.incomplete || fc.B.incomplete) ? "<span class='cap'>Difference not shown — a total is incomplete</span>" :
     (fc.diff === 0 ? "Same price" : (fc.diff > 0 ? "Closed cell is " + fmtMoney(fc.diff) + " more" : "Closed cell is " + fmtMoney(-fc.diff) + " less"));
-  return "<table><thead><tr><th>Option A — Open cell</th><th>Option B — Closed cell (" + escHtml(fc.ccDepth) + "\")</th></tr></thead><tbody><tr>" + t(fc.A) + t(fc.B) +
+  return "<table><thead><tr><th>Option A — Open cell</th><th>Option B — Closed cell (" + (fc.ccDepth ? escHtml(fc.ccDepth) + "\"" : "pick depth") + ")</th></tr></thead><tbody><tr>" + t(fc.A) + t(fc.B) +
     "</tr><tr><td colspan='2'>" + diff + " <span class='cap'>(ballpark @ " + marginPct() + "% — not final; FieldGroove pricing rules)</span></td></tr></tbody></table>";
 }
 function foamCompareHtml(fc) {
@@ -2811,6 +2821,8 @@ function renderAssemblyEditors() {
   // Job-level spray foam type (open cell default) — shown whenever this job has a spray foam line.
   let jobHasFoam = false;
   try { jobHasFoam = S.foamType === "cc" || S.foamType === "both" || allLines().some(L => /spray foam/i.test(L.product) && L.assembly !== "Crawl wall foam"); } catch (e) {}
+  SEC = 1; // 29as: closed-cell line(s) with no depth picked — say so up top
+  try { const miss = (foamCompareOn() ? withFoam("cc", allLines) : allLines()).filter(L => L._ccMissing); if (miss.length) box.appendChild(ccPickWarn(miss.length + " closed-cell area(s) have no depth yet — " + Array.from(new Set(miss.map(L => L.area))).join(", ") + ". Nothing is guessed; the ballpark stays incomplete until picked.")); } catch (e) {}
   SEC = 2;
   if (jobHasFoam) {
     const card = el("div", "row-card");
@@ -2818,6 +2830,7 @@ function renderAssemblyEditors() {
     card.appendChild(fieldSelect("Foam type", foamCompareOn() ? "both" : foamTypeJob(), [["oc", "Open cell (default)"], ["cc", "Closed cell"], ["both", "Show both (compare)"]], v => { S.foamType = v; render(); }));
     if (foamCompareOn()) card.appendChild(ccDepthPicker("Closed-cell depth (Option B)", ccDepthJob(), v => { S.ccFoamDepth = v; render(); }));
     else if (foamTypeJob() === "cc") card.appendChild(ccDepthPicker("Closed-cell depth (job)", ccDepthJob(), v => { S.ccFoamDepth = v; render(); }));
+    if ((foamCompareOn() || foamTypeJob() === "cc") && !ccDepthJob()) card.appendChild(ccPickWarn("No default depth — pick the job closed-cell depth" + (foamCompareOn() ? " for Option B" : "") + " (or a depth on each area)."));
     card.appendChild(el("p", "cap", foamCompareOn() ? "Compare: every foam row is priced both ways — A open cell (its OC depth) and B closed cell (depth above). Rows that pick their own foam type, concrete basement walls and crawl walls stay the same in both. Excel tab shows the side-by-side; exports ask which option." :
       "Every foam row uses this unless the row picks its own foam type. Concrete basement walls are always closed cell."));
     if (foamCompareOn()) { try { const d = el("div", "table-wrap"); d.innerHTML = foamCompareTotalsHtml(foamCompare()); card.appendChild(d); } catch (e) {} }
@@ -2914,14 +2927,31 @@ function renderAssemblyEditors() {
     const genKinds = Object.keys(WALL_KIND_LABELS).filter(k => !isBase(k) || !(ownBase || F.noBasementKinds));
     const wallCard = (r, title, kinds) => {
       const card = el("div", "row-card");
-      const sf = round2(wallFactor(r) * n(r.cavities));
-      const tl = applyFoamType({ product: wallProduct(r.materialMode, r.kind), description: wallExcelDesc(r, r.materialMode) }, r, "wall", r.kind === "concrete", r.kind === "concrete" ? "1" : "");
+      const lfMode = r.kind === "concrete" && !!r.measureLf; // 29as: unframed concrete measured LF × wall height
+      const sf = lfMode ? round2(n(r.lf) * n(r.lfHeight)) : round2(wallFactor(r) * n(r.cavities));
+      const cDflt = r.kind === "concrete" && anyTotalFoam ? "1" : "";
+      const tl = applyFoamType({ product: wallProduct(lfMode ? "foam" : r.materialMode, r.kind), description: wallExcelDesc(r, lfMode ? "foam" : r.materialMode) }, r, "wall", r.kind === "concrete", cDflt);
       card.innerHTML = '<div class="row-title">' + title + ' · ' + foamWordsLine(tl).description + ' → ' + fmt(sf) + ' SF</div>';
       if (kinds) card.appendChild(fieldSelect("Type", r.kind, kinds.concat(kinds.includes(r.kind) ? [] : [r.kind]).map(k => [k, WALL_KIND_LABELS[k] || k]), v => {
         r.kind = v;
         if (isBase(v) && F.foundation === "unfinished") S.hasBasementWalls = true; // unfinished basement: picking one turns its lines on
         render();
       }));
+      if (r.kind === "concrete") {
+        const lr = el("div", "toggle-row"); lr.appendChild(el("span", null, "Measure by linear feet × wall height (unframed concrete — closed cell foam)"));
+        const ls = el("button", "switch" + (r.measureLf ? " on" : "")); ls.type = "button";
+        ls.onclick = () => { r.measureLf = !r.measureLf; render(); };
+        lr.appendChild(ls); card.appendChild(lr);
+      }
+      if (lfMode) {
+        const g = el("div", "grid2");
+        g.appendChild(fieldInput("Linear feet", r.lf, v => { r.lf = v; schedule(); }, "number"));
+        g.appendChild(fieldInput("Wall height ft", r.lfHeight, v => { r.lfHeight = v; schedule(); }, "number"));
+        card.appendChild(g);
+        card.appendChild(el("p", "cap", "SF = LF × wall height = " + fmt(sf) + " SF of closed cell foam"));
+        foamTypeControls(card, r, "foamType", "ccDepth", true, cDflt);
+        box.appendChild(card); return;
+      }
       card.appendChild(fieldSelect("Stud spacing", r.oc, WALL_W_CHOICES, v => { r.oc = v; render(); }));
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
@@ -2933,7 +2963,7 @@ function renderAssemblyEditors() {
         ks.onclick = () => { r.kraft = !r.kraft; render(); };
         kr.appendChild(ks); card.appendChild(kr);
       }
-      if (r.materialMode === "foam" || ((r.materialMode || "batt") === "batt" && anyTotalFoam)) foamTypeControls(card, r, "foamType", "ccDepth", r.kind === "concrete", r.kind === "concrete" ? "1" : "");
+      if (r.materialMode === "foam" || ((r.materialMode || "batt") === "batt" && anyTotalFoam)) foamTypeControls(card, r, "foamType", "ccDepth", r.kind === "concrete", cDflt);
       box.appendChild(card);
     };
     const h = el("div", "divider"); box.appendChild(h);
@@ -3168,9 +3198,9 @@ function renderAssemblyEditors() {
     if (foamTypeJob() !== "cc") {
       card.appendChild(roofDepthSelect("Roofline foam depth (job)", S.roofFoamDepth, v => { S.roofFoamDepth = v; render(); }, true));
       card.appendChild(el("p", "cap", 'Open cell fills in from the job site address: Athens-Clarke County 8", Highlands NC 10", everywhere else 5.5". Pick a depth to override.'));
-      if (foamCompareOn()) card.appendChild(el("p", "cap", 'Compare on: this is Option A (open cell). Option B prices these lines closed cell at ' + ccDepthJob() + '".'));
-    } else card.appendChild(el("p", "cap", 'Job foam type is closed cell — house roofline uses the job closed-cell depth (' + ccDepthJob() + '") unless picked below. Lines can switch back to open cell below.'));
-    if (foamTypeJob() === "cc" || foamCompareOn()) card.appendChild(ccDepthPicker("House roofline closed-cell depth" + (foamCompareOn() ? " (Option B)" : ""), ccValid(S.houseRoofCc) ? String(S.houseRoofCc) : "", v => { S.houseRoofCc = v; render(); }, "Default " + ccDepthJob() + '"')); // 29as
+      if (foamCompareOn()) card.appendChild(el("p", "cap", 'Compare on: this is Option A (open cell). Option B prices these lines closed cell at ' + (ccDepthJob() ? ccDepthJob() + '"' : "the depth you pick (none yet)") + '.'));
+    } else card.appendChild(el("p", "cap", 'Job foam type is closed cell — house roofline uses the job closed-cell depth (' + (ccDepthJob() ? ccDepthJob() + '"' : "not picked yet") + ') unless picked below. Lines can switch back to open cell below.'));
+    if (foamTypeJob() === "cc" || foamCompareOn()) card.appendChild(ccDepthPicker("House roofline closed-cell depth" + (foamCompareOn() ? " (Option B)" : ""), ccValid(S.houseRoofCc) ? String(S.houseRoofCc) : "", v => { S.houseRoofCc = v; render(); }, ccDepthJob() ? "Default " + ccDepthJob() + '"' : null)); // 29as
     S.foamRoofs.forEach((r, idx) => {
       card.appendChild(fieldInput("Flat SF #" + (idx+1), r.flatSf, v => { r.flatSf = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Pitch", r.pitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { r.pitch = v; render(); }));
@@ -3497,7 +3527,8 @@ function renderOutput() {
   }
   if (S.showBallpark && pricedCount && foamCompareOn()) { const fc = foamCompare(); extra = " · Ballpark A open cell " + fmtMoney(fc.A.total) + (fc.A.incomplete ? " (incomplete)" : "") + " vs B closed cell " + fmtMoney(fc.B.total) + (fc.B.incomplete ? " (incomplete)" : "") + " @ " + marginPct() + "%; not final invoice"; }
   hint.innerHTML = (optionsOn() ? "<strong>" + escHtml(optionTitle(S.optionView | 0)) + "</strong> · " : "") + (foamCompareOn() ? "<strong>Open cell vs. closed cell</strong> (foam lines show both; Sky prices both ways) · " : "") + lines.length + " rows · Bags blank until bag-yield · Air seal, gas & chase flags · Owner: " +
-    ownerName() + extra + (S.jobMode === "new" && !(n(S.baffles) > 0) ? " · <strong>⚠ Baffles required — enter baffle count</strong>" : "");
+    ownerName() + extra + (S.jobMode === "new" && !(n(S.baffles) > 0) ? " · <strong>⚠ Baffles required — enter baffle count</strong>" : "") +
+    ((foamCompareOn() ? withFoam("cc", allLines) : allLines()).some(L => L._ccMissing) ? " · <strong>⚠ Pick closed cell depth</strong> (ballpark incomplete)" : "");
 
   const wrap = $("outputTable");
   if (!lines.length) { wrap.innerHTML = "<p class='status'>Enter measurements — Excel rows appear here.</p>"; return; }
@@ -4056,7 +4087,12 @@ function migrateState(d) {
   delete S.garageBlockAsGable;
   if (S.foamType !== "cc" && S.foamType !== "both") S.foamType = "oc"; // "both" = OC vs CC compare (29aj)
   if (!("foamView" in d) || S.foamView !== "cc") S.foamView = "oc";
-  if (!ccValid(S.ccFoamDepth)) S.ccFoamDepth = "2";
+  // 29as: closed-cell depth has no default any more. Jobs saved before that keep what they printed: job depth 2" and concrete walls 1".
+  if (!d.ccNoDefault) {
+    if (!ccValid(S.ccFoamDepth)) S.ccFoamDepth = "2";
+    (S.walls || []).forEach(r => { if (r && r.kind === "concrete" && !ccValid(r.ccDepth)) r.ccDepth = "1"; });
+  } else if (!ccValid(S.ccFoamDepth)) S.ccFoamDepth = "";
+  S.ccNoDefault = true;
   if (!ccValid(S.ccDepth)) S.ccDepth = "1.5"; // crawl wall CC: blank/invalid → 1.5"; a saved valid pick is kept
   if (!("hasMisc" in d)) { S.hasMisc = false; S.misc = [newMiscItem()]; }
   if (S.fpBlowerChoice === "optional_skip") S.fpBlowerChoice = "none";
@@ -4242,7 +4278,7 @@ function newJob() {
   S.gables = [{ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false }];
   S.cants = [{ id: uid(), name: "", sf: "", material: "r30" }];
   S.touchupPatchSf = ""; S.roofFoamDepth = ""; S.porchRoofDepth = ""; S.garageRoofDepth = "";
-  S.foamType = "oc"; S.foamView = "oc"; S.ccFoamDepth = "2"; S.porchRoofFoam = ""; S.porchRoofCc = ""; S.porchCeilFoam = ""; S.porchCeilCc = ""; S.garageRoofFoam = ""; S.garageRoofCc = ""; S.garageCeilFoam = ""; S.garageCeilCc = ""; S.houseRoofCc = ""; S.crawlSubFoam = ""; S.crawlSubCc = ""; S.includePorchRoof = true; S.porchGabledOff = false;
+  S.foamType = "oc"; S.foamView = "oc"; S.ccFoamDepth = ""; S.ccNoDefault = true; S.porchRoofFoam = ""; S.porchRoofCc = ""; S.porchCeilFoam = ""; S.porchCeilCc = ""; S.garageRoofFoam = ""; S.garageRoofCc = ""; S.garageCeilFoam = ""; S.garageCeilCc = ""; S.houseRoofCc = ""; S.crawlSubFoam = ""; S.crawlSubCc = ""; S.includePorchRoof = true; S.porchGabledOff = false;
   S.includeFp = false; S.fpMode = "nc"; S.fpRetroKind = "tearout"; S.fpOtherDemo = false;
   S.fpModelId = "apex42"; S.fpPipeFt = ""; S.fpTerm = "roof"; S.fpAccessNotes = "";
   S.fpChaseClear = true; S.fpChaseNote = "";
