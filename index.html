@@ -265,16 +265,11 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         </select>
       </div>
       <div id="customMixFields" class="hidden">
-        <div class="grid2">
-          <div class="field"><label>Roofline / attic</label>
-            <select id="customRoof"><option value="blow">Blow attic</option><option value="foam">Foam roofline</option><option value="batts">Batts</option></select>
-          </div>
-          <div class="field"><label>Walls material</label>
-            <select id="customWalls"><option value="batt">Batts</option><option value="foam">Foam</option><option value="cellulose">Cellulose</option><option value="spider">Spider</option></select>
-          </div>
+        <div class="field"><label>Roofline / attic (pick one or more)</label>
+          <div class="seg" id="customRoofChips"><button type="button" data-v="blow">Blow attic</button><button type="button" data-v="foam">Foam roofline</button><button type="button" data-v="batts">Batts attic</button></div>
         </div>
-        <div class="field hidden" id="customAtticBattRField"><label>Attic batt R-value</label>
-          <select id="customAtticBattR"><option>R-19</option><option>R-30</option><option selected>R-38</option><option>R-49</option></select>
+        <div class="field"><label>Walls material (pick one or more)</label>
+          <div class="seg" id="customWallChips"><button type="button" data-v="batt">Batts</button><button type="button" data-v="foam">Foam</button><button type="button" data-v="cellulose">Cellulose</button><button type="button" data-v="spider">Spider</button></div>
         </div>
       </div>
       <div class="grid2">
@@ -796,18 +791,38 @@ function packageUsesFoamRoof(pkg) {
   return pkg === "hybrid_foam_batts" || pkg === "foam_cellulose" || pkg === "foam_spider" || pkg === "total_foam";
 }
 function packageIsCrawlEncap(pkg) { return pkg === "crawl_encap"; }
-// Custom mix behaves exactly like the matching preset.
-function pkgOf(pkg) {
-  if (pkg !== "custom") return pkg;
-  if (S.customRoof === "foam") {
-    if (S.customWalls === "foam") return "total_foam";
-    if (S.customWalls === "cellulose") return "foam_cellulose";
-    if (S.customWalls === "spider") return "foam_spider";
-    return "hybrid_foam_batts";
+const CUSTOM_ROOF_KEYS = ["blow", "foam", "batts"], CUSTOM_WALL_KEYS = ["batt", "foam", "cellulose", "spider"];
+function customRoofs() { const a = (Array.isArray(S.customRoofs) ? S.customRoofs : []).filter(k => CUSTOM_ROOF_KEYS.includes(k)); return a.length ? a : ["blow"]; }
+function customWallList() { const a = (Array.isArray(S.customWallList) ? S.customWallList : []).filter(k => CUSTOM_WALL_KEYS.includes(k)); return a.length ? a : ["batt"]; }
+// What a package means for the wizard. Custom mix = union of its picks (single picks behave like the matching preset).
+function pkgProfile(pkg) {
+  if (pkg === "custom") {
+    const r = customRoofs(), w = customWallList();
+    const foam = r.includes("foam"), blow = r.includes("blow"), batts = r.includes("batts");
+    const single = w.length === 1 ? w[0] : null;
+    return {
+      custom: true, roofs: r, walls: w, foamRoof: foam, blow, batts, onlyAttic: r.length === 1,
+      excludeDVK: foam && !blow && !batts,
+      totalFoam: foam && single === "foam",
+      wallOverride: foam && single && single !== "batt" ? single : null,
+      standardBlow: false,
+      dense: blow || batts || w.includes("cellulose") || w.includes("spider"),
+      denseProduct: w.includes("spider") && !w.includes("cellulose") ? "Spider" : "Cellulose",
+      crawlEncap: false,
+    };
   }
-  return "standard";
+  const foam = packageUsesFoamRoof(pkg);
+  return {
+    custom: false, foamRoof: foam, blow: pkg === "standard", batts: false, onlyAttic: true,
+    excludeDVK: foam, totalFoam: pkg === "total_foam",
+    wallOverride: pkg === "total_foam" ? "foam" : pkg === "foam_cellulose" ? "cellulose" : pkg === "foam_spider" ? "spider" : null,
+    standardBlow: pkg === "standard",
+    dense: pkg === "foam_cellulose" || pkg === "foam_spider" || pkg === "standard",
+    denseProduct: pkg === "foam_spider" ? "Spider" : "Cellulose",
+    crawlEncap: packageIsCrawlEncap(pkg),
+  };
 }
-const CUSTOM_ROOF_LABELS = { blow: "Blow attic", foam: "Foam roofline", batts: "Batt attic" };
+const CUSTOM_ROOF_LABELS = { blow: "Blow attic", foam: "Foam roofline", batts: "Batts attic" };
 const CUSTOM_WALL_LABELS = { batt: "Batt walls", foam: "Foam walls", cellulose: "Cellulose walls", spider: "Spider walls" };
 const LEGACY_PKG_LABELS = [["Hybrid foam + batts", "Foam Roofline + Batt Walls"], ["Foam roofline + cellulose", "Foam Roofline + Cellulose Walls"],
   ["Foam roofline + spider", "Foam Roofline + Spider Walls"], ["Top-up blow only", "Add Attic Blow"]];
@@ -815,12 +830,11 @@ function relabelPkg(label) { let t = String(label || ""); LEGACY_PKG_LABELS.forE
 // Defaults applied when the package (or custom mix) is chosen — user can still toggle after.
 function applyPkgDefaults() {
   if (S.jobMode !== "new") return;
-  const e = pkgOf(S.pkg);
-  if (e === "standard") {
+  const pr = pkgProfile(S.pkg);
+  if (pr.blow || pr.batts) {
     S.hasDeadAir = true; S.hasKnees = true; S.hasVaults = true; S.hasBaffles = true; S.airSealed = true; S.hasWalls = true;
-  } else if (packageUsesFoamRoof(e)) {
-    S.hasGables = true; S.hasWalls = true;
   }
+  if (pr.foamRoof) { S.hasGables = true; S.hasWalls = true; }
   const nm = defaultWallMode(S.pkg);
   (S.walls || []).forEach(w => { if (!/int/i.test(w.kind || "")) w.materialMode = nm; });
 }
@@ -909,7 +923,7 @@ function miscFilled() {
   return (Array.isArray(S.misc) ? S.misc : []).filter(r => (r.material || "").trim() !== "");
 }
 function defaultWallMode(pkg, kind) {
-  if (pkg === "custom") return S.customWalls && S.customWalls !== "batt" ? S.customWalls : "batt";
+  if (pkg === "custom") return customWallList()[0];
   if (pkg === "total_foam") return "foam";
   if (pkg === "foam_cellulose") return "cellulose";
   if (pkg === "foam_spider") return "spider";
@@ -1002,7 +1016,7 @@ const S = {
   crawlRetro: "remove_replace",
   blowR: "R-38",
   pkg: "standard",
-  customRoof: "blow", customWalls: "batt", customAtticBattR: "R-38",
+  customRoofs: ["blow"], customWallList: ["batt"], customBlowSf: "", customBlowR: "R-38", customBattSf: "", customAtticBattR: "R-38",
   airSealed: false,
   flatSf: "",
   housePitch: "6",
@@ -1066,11 +1080,11 @@ function flags() {
   const crawlIsTouchup = isCrawlRetro && S.crawlRetro === "touchup";
   const crawlIsReplace = isCrawlRetro && S.crawlRetro === "remove_replace";
   const crawlIsNewBatts = isCrawlRetro && S.crawlRetro === "new_batts";
-  const P = pkgOf(S.pkg);
+  const PR = pkgProfile(S.pkg);
   const atticBlowR = isNew ? "R-38" : (atticIsBlow ? S.blowR : "R-38");
-  function excludesDeadVaultKnees(p) { return packageUsesFoamRoof(p) || atticIsFoam; }
-  const primaryExcludesDVK = excludesDeadVaultKnees(P);
-  const showFoamRoofPath = packageUsesFoamRoof(P) || atticIsFoam;
+  function excludesDeadVaultKnees(p) { return pkgProfile(p).excludeDVK || atticIsFoam; }
+  const primaryExcludesDVK = PR.excludeDVK || atticIsFoam;
+  const showFoamRoofPath = PR.foamRoof || atticIsFoam;
   return {
     isNew, isAtticRetro, isCrawlRetro, atticIsFoam, atticIsBlow, atticNeedsRemoval,
     crawlIsEncap, crawlIsTouchup, crawlIsReplace, crawlIsNewBatts, atticBlowR, excludesDeadVaultKnees,
@@ -1081,13 +1095,14 @@ function flags() {
     canAskCants: isNew,
     canAskGarage: isNew || showFoamRoofPath,
     canAskPorch: showFoamRoofPath,
-    canAskSubfloor: (isNew && !packageIsCrawlEncap(P)) || crawlIsReplace,
+    canAskSubfloor: (isNew && !PR.crawlEncap) || crawlIsReplace,
+    customAttic: isNew && PR.custom,
     canAskBetweenFloors: isNew,
     canAskUfbc: isNew,
     canAskTouchup: crawlIsTouchup,
-    canAskCrawlEncap: packageIsCrawlEncap(P) || crawlIsEncap,
-    canAskRim: isNew || crawlIsReplace || crawlIsEncap || packageIsCrawlEncap(P) || crawlIsNewBatts,
-    canAskDense: isNew && (P === "foam_cellulose" || P === "foam_spider" || P === "standard"),
+    canAskCrawlEncap: PR.crawlEncap || crawlIsEncap,
+    canAskRim: isNew || crawlIsReplace || crawlIsEncap || PR.crawlEncap || crawlIsNewBatts,
+    canAskDense: isNew && PR.dense,
   };
 }
 
@@ -1132,6 +1147,13 @@ const BETWEEN_FLOOR_MATS = {
   blow_fg: ["Blown fiberglass", "Blown fiberglass", "Blown fiberglass"],
   cellulose: ["Blown cellulose", "Cellulose", "Blown cellulose"],
 };
+function wallModeOptions() {
+  const all = [["batt","Batt"],["foam","Foam"],["cellulose","Cellulose"],["spider","Spider"],["comfortbat","ComfortBat"],["acoustical","Acoustical"]];
+  if (S.pkg !== "custom" || S.jobMode !== "new") return all;
+  const picked = customWallList();
+  if (picked.length < 2) return all;
+  return all.filter(o => picked.includes(o[0])).map(o => [o[0], o[1] + " ✓"]).concat(all.filter(o => !picked.includes(o[0])));
+}
 function newBetweenFloor() { return { id: uid(), sf: "", mat: "r13_sound" }; }
 function kneeSf(r) { const sf = n(r.height) * n(r.lf); return r.shape === "triangle" ? sf / 2 : sf; }
 
@@ -1139,13 +1161,13 @@ function push(lines, partial) { lines.push(Object.assign({ bags: "" }, partial))
 
 function buildLinesForPackage(p, tag) {
   const F = flags();
-  const customBattAttic = F.isNew && p === "custom" && S.customRoof === "batts";
-  p = pkgOf(p);
+  const PR = pkgProfile(p);
+  const customAttic = F.isNew && PR.custom;
   const lines = [];
   const noteTag = tag ? "[" + tag + "] " : "";
-  const foamRoof = packageUsesFoamRoof(p) || F.atticIsFoam;
-  const excludeDVK = F.excludesDeadVaultKnees(p);
-  const totalFoam = p === "total_foam";
+  const foamRoof = PR.foamRoof || F.atticIsFoam;
+  const excludeDVK = PR.excludeDVK || F.atticIsFoam;
+  const totalFoam = PR.totalFoam;
   const site = S.address.trim() || S.builder.trim() || "Job";
   const flat = n(S.flatSf);
   const housePitchFactor = resolvePitchFactor(S.housePitch, S.houseCustomRise);
@@ -1174,18 +1196,30 @@ function buildLinesForPackage(p, tag) {
     }
   }
 
-  const newUsesBlow = F.isNew && p === "standard" && !customBattAttic;
-  if ((newUsesBlow || F.atticIsBlow || customBattAttic) && !foamRoof) {
-    const da = excludeDVK || !S.hasDeadAir ? 0 : S.deadAir.reduce((s, r) => s + n(r.sf), 0);
-    const vf = excludeDVK || !S.hasVaults ? 0 : S.vaults.reduce((s, r) => s + n(r.flatSf), 0);
-    const blow = Math.max(0, flat - da - vf);
+  const da = excludeDVK || !S.hasDeadAir ? 0 : S.deadAir.reduce((s, r) => s + n(r.sf), 0);
+  const vf = excludeDVK || !S.hasVaults ? 0 : S.vaults.reduce((s, r) => s + n(r.flatSf), 0);
+  const derived = Math.max(0, flat - da - vf);
+  const derivedCalc = "flat−dead−vault (" + fmt(flat) + "−" + fmt(da) + "−" + fmt(vf) + ")";
+  if (customAttic) {
+    // Each picked attic type has its own SF. Blank SF uses house flat (minus dead air/vaults) only when it's the only attic type.
+    const own = (v, label) => (v || "").trim() !== "" ? [n(v), label + " SF entered"] : (PR.onlyAttic ? [derived, derivedCalc] : [0, ""]);
+    if (PR.blow) {
+      const [sf, note] = own(S.customBlowSf, "Blow"); const r = S.customBlowR || "R-38";
+      if (sf > 0) push(lines, { area: "Attic", assembly: "Attic blow", product: "Blown fiberglass", priceKey: "Blown fiberglass " + r, description: r.replace("R-", "R") + "/24",
+        footage: round2(sf), unit: "SF", notes: noteTag + note });
+    }
+    if (PR.batts) {
+      const [sf, note] = own(S.customBattSf, "Batts"); const r = S.customAtticBattR || "R-38";
+      if (sf > 0) push(lines, { area: "Attic", assembly: "Attic batts", product: r + " fiberglass batts", description: r.replace("R-", "R") + " attic floor batts",
+        footage: round2(sf), unit: "SF", notes: noteTag + note });
+    }
+  }
+  const newUsesBlow = F.isNew && PR.standardBlow;
+  if ((newUsesBlow || F.atticIsBlow) && !foamRoof) {
+    const blow = derived;
     if (blow > 0) {
-      const calc = "flat−dead−vault (" + fmt(flat) + "−" + fmt(da) + "−" + fmt(vf) + ")";
-      if (customBattAttic) {
-        const r = S.customAtticBattR || "R-38";
-        push(lines, { area: "Attic", assembly: "Attic batts", product: r + " fiberglass batts", description: r.replace("R-", "R") + " attic floor batts",
-          footage: round2(blow), unit: "SF", notes: noteTag + calc });
-      } else {
+      const calc = derivedCalc;
+      {
         const rLabel = F.isNew ? "R-38" : F.atticBlowR;
         push(lines, { area: "Attic", assembly: "Attic blow", product: "Blown fiberglass", priceKey: "Blown fiberglass " + rLabel, description: rLabel.replace("R-", "R") + "/24",
           footage: round2(blow), unit: "SF", notes: noteTag + calc });
@@ -1241,11 +1275,11 @@ function buildLinesForPackage(p, tag) {
         notes: noteTag + (g.parts.length > 1 ? g.parts.length + " pcs: " : "") + g.parts.join(" + ") });
     });
   }
-  if (S.hasBaffles && n(S.baffles) > 0 && (F.isNew || F.isAtticRetro) && !foamRoof) {
+  if (S.hasBaffles && n(S.baffles) > 0 && (F.isNew || F.isAtticRetro) && !excludeDVK) {
     push(lines, { area: "Eaves", assembly: "Baffles", product: "Cardboard baffles", description: "Baffle count", footage: round2(n(S.baffles)), unit: "ea", notes: noteTag });
   }
 
-  if (foamRoof && flat > 0) {
+  if (foamRoof) {
     let usedExplicit = false;
     S.foamRoofs.forEach(r => {
       const f = n(r.flatSf); if (f <= 0) return;
@@ -1253,7 +1287,7 @@ function buildLinesForPackage(p, tag) {
       const factor = resolvePitchFactor(r.pitch, r.customRise);
       push(lines, { area: "Roof line", assembly: "Roof foam", product: "Open-cell spray foam", description: '5.5" OC roof', footage: round2(f * factor), unit: "SF", notes: noteTag + "flat×" + factor.toFixed(3) });
     });
-    if (!usedExplicit) {
+    if (!usedExplicit && flat > 0 && (!customAttic || PR.onlyAttic)) {
       push(lines, { area: "House roof", assembly: "Roof foam", product: "Open-cell spray foam", description: '5.5" OC roof', footage: round2(flat * housePitchFactor), unit: "SF", notes: noteTag + "flat×" + housePitchFactor.toFixed(3) });
     }
   }
@@ -1274,7 +1308,7 @@ function buildLinesForPackage(p, tag) {
   }
 
   let subfloorSf = flat;
-  if ((F.canAskCrawlEncap && !F.crawlIsReplace) || (packageIsCrawlEncap(p) && !F.isCrawlRetro)) subfloorSf = 0;
+  if ((F.canAskCrawlEncap && !F.crawlIsReplace) || (PR.crawlEncap && !F.isCrawlRetro)) subfloorSf = 0;
   if (S.subfloorOverride.trim() !== "") subfloorSf = n(S.subfloorOverride);
   if (S.hasSubfloor && F.canAskSubfloor && subfloorSf > 0) {
     const cr = S.crawlSubR || "R-19";
@@ -1320,8 +1354,8 @@ function buildLinesForPackage(p, tag) {
       let mode = r.materialMode;
       if (mode === "batt") {
         if (totalFoam) mode = "foam";
-        else if (p === "foam_cellulose" && r.kind !== "garage_ext") mode = "cellulose";
-        else if (p === "foam_spider" && r.kind !== "garage_ext") mode = "spider";
+        else if (PR.wallOverride === "cellulose" && r.kind !== "garage_ext") mode = "cellulose";
+        else if (PR.wallOverride === "spider" && r.kind !== "garage_ext") mode = "spider";
       }
       push(lines, {
         area: WALL_KIND_LABELS[r.kind] || "Wall",
@@ -1391,7 +1425,7 @@ function buildLinesForPackage(p, tag) {
     let denseNet = 0;
     S.dense.forEach(r => {
       if (n(r.sf) <= 0) return;
-      push(lines, { area: "Dense-pack", assembly: "Floor dense-pack", product: p === "foam_spider" ? "Spider" : "Cellulose", description: "Dense-pack flat SF", footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
+      push(lines, { area: "Dense-pack", assembly: "Floor dense-pack", product: PR.denseProduct, description: "Dense-pack flat SF", footage: round2(n(r.sf)), unit: "SF", notes: noteTag });
       if (r.netting) denseNet += n(r.sf);
     });
     if (denseNet > 0) push(lines, { area: "Dense-pack", assembly: "Netting", product: "Netting", description: "Matches dense-pack", footage: round2(denseNet), unit: "SF", notes: noteTag });
@@ -1521,7 +1555,8 @@ function allLines() {
 function packageLabel() {
   const F = flags();
   let base = "";
-  if (F.isNew) base = (PACKAGE_LABELS[S.pkg] || S.pkg) + (S.pkg === "custom" ? " (" + (CUSTOM_ROOF_LABELS[S.customRoof] || S.customRoof) + (S.customRoof === "batts" ? " " + S.customAtticBattR : "") + " + " + (CUSTOM_WALL_LABELS[S.customWalls] || S.customWalls) + ")" : "");
+  if (F.isNew) base = (PACKAGE_LABELS[S.pkg] || S.pkg) + (S.pkg === "custom" ? " (" + customRoofs().map(k => CUSTOM_ROOF_LABELS[k] + (k === "blow" ? " " + S.customBlowR : k === "batts" ? " " + S.customAtticBattR : "")).join(" + ") +
+    " · " + customWallList().map(k => CUSTOM_WALL_LABELS[k]).join(" + ") + ")" : "");
   else if (F.isAtticRetro) base = "Attic: " + (ATTIC_RETRO_LABELS[S.atticRetro] || S.atticRetro);
   else base = "Crawl: " + (CRAWL_RETRO_LABELS[S.crawlRetro] || S.crawlRetro);
   if (S.includeFp) {
@@ -1650,6 +1685,25 @@ function renderAssemblyEditors() {
     return b;
   }
 
+  if (F.customAttic) {
+    const pr = pkgProfile(S.pkg);
+    const only = pr.onlyAttic;
+    if (pr.blow) {
+      const card = el("div", "row-card");
+      card.innerHTML = '<div class="row-title">Blow attic</div>';
+      card.appendChild(fieldInput(only ? "Blow SF (blank = house flat − dead air − vaults)" : "Blow SF", S.customBlowSf, v => { S.customBlowSf = v; schedule(); }, "number"));
+      card.appendChild(fieldSelect("Blow R-value", S.customBlowR || "R-38", [["R-19","R19"],["R-30","R30"],["R-38","R38"],["R-49","R49"]], v => { S.customBlowR = v; render(); }));
+      box.appendChild(card);
+    }
+    if (pr.batts) {
+      const card = el("div", "row-card");
+      card.innerHTML = '<div class="row-title">Batts attic</div>';
+      card.appendChild(fieldInput(only ? "Attic batts SF (blank = house flat − dead air − vaults)" : "Attic batts SF", S.customBattSf, v => { S.customBattSf = v; schedule(); }, "number"));
+      card.appendChild(fieldSelect("Batt R-value", S.customAtticBattR || "R-38", [["R-19","R19"],["R-30","R30"],["R-38","R38"],["R-49","R49"]], v => { S.customAtticBattR = v; render(); }));
+      box.appendChild(card);
+    }
+    if (pr.foamRoof && !only) box.appendChild(el("p", "cap", "Foam roofline — enter its flat SF + pitch in the foam roof lines below (house flat isn't used when you combine attic types)."));
+  }
   if (F.canAskDeadVaultKnees && S.hasDeadAir) {
     S.deadAir.forEach((r, idx) => {
       const card = el("div", "row-card");
@@ -1714,7 +1768,7 @@ function renderAssemblyEditors() {
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
       card.appendChild(fieldInput("Cavities", r.cavities, v => { r.cavities = v; schedule(); }, "number"));
-      card.appendChild(fieldSelect("Material mode", r.materialMode, [["batt","Batt"],["foam","Foam"],["cellulose","Cellulose"],["spider","Spider"],["comfortbat","ComfortBat"],["acoustical","Acoustical"]], v => { r.materialMode = v; render(); }));
+      card.appendChild(fieldSelect("Material mode", r.materialMode, wallModeOptions(), v => { r.materialMode = v; render(); }));
       box.appendChild(card);
     });
     box.appendChild(addBtn("Add wall area", () => {
@@ -1877,7 +1931,7 @@ function renderAssemblyEditors() {
   }
   if (F.showFoamRoofPath) {
     const card = el("div", "row-card");
-    card.innerHTML = '<div class="row-title">Extra foam roof lines (optional — blank uses flat×pitch)</div>';
+    card.innerHTML = '<div class="row-title">' + (F.customAttic && !pkgProfile(S.pkg).onlyAttic ? "Foam roofline areas (flat SF × pitch)" : "Extra foam roof lines (optional — blank uses flat×pitch)") + '</div>';
     S.foamRoofs.forEach((r, idx) => {
       card.appendChild(fieldInput("Flat SF #" + (idx+1), r.flatSf, v => { r.flatSf = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Pitch", r.pitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { r.pitch = v; render(); }));
@@ -2255,9 +2309,21 @@ function render() {
   $("keywords").value = S.keywords;
   $("gasType").value = S.gasType;
   $("pkg").value = S.pkg;
-  $("customRoof").value = S.customRoof || "blow";
-  $("customWalls").value = S.customWalls || "batt";
-  $("customAtticBattR").value = S.customAtticBattR || "R-38";
+  const chips = (id, list, set, keys) => {
+    const box = $(id); if (!box) return;
+    box.querySelectorAll("button").forEach(btn => {
+      btn.classList.toggle("active", list.includes(btn.dataset.v));
+      btn.setAttribute("aria-pressed", list.includes(btn.dataset.v) ? "true" : "false");
+      btn.onclick = () => {
+        const cur = list.slice(), v = btn.dataset.v, k = cur.indexOf(v);
+        if (k >= 0) { if (cur.length === 1) { setStatus("Keep at least one pick."); return; } cur.splice(k, 1); } else cur.push(v);
+        set(keys.filter(x => cur.includes(x)).length === cur.length ? cur : cur);
+        applyPkgDefaults(); render();
+      };
+    });
+  };
+  chips("customRoofChips", customRoofs(), v => { S.customRoofs = v; }, CUSTOM_ROOF_KEYS);
+  chips("customWallChips", customWallList(), v => { S.customWallList = v; }, CUSTOM_WALL_KEYS);
   $("atticRetro").value = S.atticRetro;
   $("crawlRetro").value = S.crawlRetro;
   $("blowR").value = S.blowR;
@@ -2275,7 +2341,6 @@ function render() {
   toggleField("retroBlock", S.jobMode === "retro");
   toggleField("pkgField", S.jobMode === "new");
   toggleField("customMixFields", S.jobMode === "new" && S.pkg === "custom");
-  toggleField("customAtticBattRField", S.pkg === "custom" && S.customRoof === "batts");
   toggleField("atticRetroFields", S.jobMode === "retro" && S.retroScope === "attic");
   toggleField("crawlRetroFields", S.jobMode === "retro" && S.retroScope === "crawl");
   toggleField("blowRField", F.atticIsBlow);
@@ -2348,8 +2413,14 @@ function migrateState(d) {
   if (typeof S.hasUfbc !== "boolean") S.hasUfbc = false;
   if (!/^R-(13|19|30)$/.test(S.crawlSubR || "")) S.crawlSubR = "R-19";
   if (!/^R-(13|19|30)$/.test(S.ufbcR || "")) S.ufbcR = "R-19";
-  if (!CUSTOM_ROOF_LABELS[S.customRoof]) S.customRoof = "blow";
-  if (!CUSTOM_WALL_LABELS[S.customWalls]) S.customWalls = "batt";
+  // single-select custom (build c) → multi-select
+  if (!Array.isArray(d.customRoofs)) S.customRoofs = [CUSTOM_ROOF_LABELS[d.customRoof] ? d.customRoof : "blow"];
+  if (!Array.isArray(d.customWallList)) S.customWallList = [CUSTOM_WALL_LABELS[d.customWalls] ? d.customWalls : "batt"];
+  S.customRoofs = customRoofs(); S.customWallList = customWallList();
+  ["customBlowSf", "customBattSf"].forEach(k => { if (typeof S[k] !== "string") S[k] = ""; });
+  if (!/^R-(19|30|38|49)$/.test(S.customBlowR || "")) S.customBlowR = "R-38";
+  if (!/^R-(19|30|38|49)$/.test(S.customAtticBattR || "")) S.customAtticBattR = "R-38";
+  delete S.customRoof; delete S.customWalls;
   if (Array.isArray(S.knees)) S.knees.forEach(k => { if (k.shape !== "triangle") k.shape = "rectangle"; if (k.oc !== "24") k.oc = "16"; });
 }
 
@@ -2456,7 +2527,7 @@ function newJob() {
   S.dateMeasured = todayISO();
   S.builder = ""; S.city = ""; S.address = ""; S.keywords = "";
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard";
-  S.customRoof = "blow"; S.customWalls = "batt"; S.customAtticBattR = "R-38";
+  S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38";
   S.porchFlat = ""; S.includePorchCeiling = true; S.porchCeilMat = "batt_r19"; S.porchRoofPitch = "6";
   S.hasBetweenFloors = false; S.betweenFloors = [newBetweenFloor()];
   S.crawlNewSf = ""; S.crawlNewR = "R-19"; S.crawlNewOc = "16"; S.crawlNewPoly = false; S.crawlNewPolySf = ""; S.crawlNewPolyMil = "6";
@@ -2493,7 +2564,6 @@ function wireInputs() {
     builder: "builder", city: "city", address: "address", dateMeasured: "dateMeasured",
     keywords: "keywords", gasType: "gasType", pkg: "pkg",
     atticRetro: "atticRetro", crawlRetro: "crawlRetro", blowR: "blowR",
-    customRoof: "customRoof", customWalls: "customWalls", customAtticBattR: "customAtticBattR",
     flatSf: "flatSf", housePitch: "housePitch", houseCustomRise: "houseCustomRise",
     touchupPatchSf: "touchupPatchSf", marginCustom: "marginCustom",
     filterText: "filterText", filterBuilder: "filterBuilder", filterCity: "filterCity",
@@ -2503,10 +2573,10 @@ function wireInputs() {
     const e = $(id); if (!e) return;
     const key = map[id];
     const handler = () => {
-      const pkgChange = (id === "pkg" || id === "customRoof" || id === "customWalls") && S[key] !== e.value;
+      const pkgChange = id === "pkg" && S[key] !== e.value;
       S[key] = e.value;
       if (pkgChange) applyPkgDefaults();
-      if (id === "gasType" || id === "pkg" || id === "customRoof" || id === "customWalls" || id === "customAtticBattR" || id === "atticRetro" || id === "crawlRetro" || id === "housePitch" || id === "blowR" || id.indexOf("filter") === 0)
+      if (id === "gasType" || id === "pkg" || id === "atticRetro" || id === "crawlRetro" || id === "housePitch" || id === "blowR" || id.indexOf("filter") === 0)
         render();
       else schedule();
     };
@@ -2561,7 +2631,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29c";
+const APP_BUILD = "2026-10-29d";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
