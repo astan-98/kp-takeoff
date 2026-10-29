@@ -561,7 +561,7 @@ const MARGIN_BASE = 40;
 
 // Asher's unit prices at 40% margin (Oct 29 2026). Saved phone prices always win; blanks fall back to these.
 // roofline foam depth price keys; placeholder values are flagged in the price library until Asher changes them
-const ROOF_FOAM_DEPTH_KEYS = ["5.5", "6", "7", "8", "10"];
+const ROOF_FOAM_DEPTH_KEYS = ["5.5", "6", "7", "8", "9", "10", "11", "12"];
 const ROOF_FOAM_PLACEHOLDERS = {};
 const ROOF_FOAM_BASE = "Open-cell foam (roofline)";
 function roofFoamBaseKey(k) { return /^Open-cell foam \(roofline\) /.test(k) ? ROOF_FOAM_BASE : k; }
@@ -585,12 +585,15 @@ const DEFAULT_PRICE_KEYS = [
   { materialKey: "ComfortBat R15", unit: "SF", price: "2.17" },
   { materialKey: 'AcousticalBat 3"', unit: "SF", price: "1.5875" },
   { materialKey: "Open-cell foam (roofline)", unit: "SF", price: "1.49" }, // other roofline depths (5", 6", 7", 9", 11", 12") use this
-  // ENVERGE .5 @ 40% from "UPDATED PRICING - 4-11-2026" sheet
-  { materialKey: 'Open-cell foam (roofline) 5.5"', unit: "SF", price: "1.38" },
-  { materialKey: 'Open-cell foam (roofline) 6"', unit: "SF", price: "1.46" },
-  { materialKey: 'Open-cell foam (roofline) 7"', unit: "SF", price: "1.61" },
-  { materialKey: 'Open-cell foam (roofline) 8"', unit: "SF", price: "1.77" },
-  { materialKey: 'Open-cell foam (roofline) 10"', unit: "SF", price: "2.11" },
+  // FieldGroove: $2.25/SF at 10"; other depths scaled linearly ($0.225 per inch)
+  { materialKey: 'Open-cell foam (roofline) 5.5"', unit: "SF", price: "1.24" },
+  { materialKey: 'Open-cell foam (roofline) 6"', unit: "SF", price: "1.35" },
+  { materialKey: 'Open-cell foam (roofline) 7"', unit: "SF", price: "1.58" },
+  { materialKey: 'Open-cell foam (roofline) 8"', unit: "SF", price: "1.80" },
+  { materialKey: 'Open-cell foam (roofline) 9"', unit: "SF", price: "2.03" },
+  { materialKey: 'Open-cell foam (roofline) 10"', unit: "SF", price: "2.25" },
+  { materialKey: 'Open-cell foam (roofline) 11"', unit: "SF", price: "2.48" },
+  { materialKey: 'Open-cell foam (roofline) 12"', unit: "SF", price: "2.70" },
   { materialKey: "Open-cell foam (walls)", unit: "SF", price: "1.13" },
   { materialKey: 'Closed-cell foam 1"', unit: "SF", price: "1.49" },
   { materialKey: 'Closed-cell foam 2"', unit: "SF", price: "2.48" },
@@ -3162,7 +3165,7 @@ function renderPricing() {
     row.appendChild(inpWrap);
     if (ROOF_FOAM_PLACEHOLDERS[p.materialKey] && String(p.unitPrice40).trim() === ROOF_FOAM_PLACEHOLDERS[p.materialKey])
       row.appendChild(el("p", "cap", "⚠ Placeholder price — set the real number."));
-    if (p.materialKey === ROOF_FOAM_BASE) row.appendChild(el("p", "cap", 'Roofline foam at depths without their own price (9", 11", 12").'));
+    if (p.materialKey === ROOF_FOAM_BASE) row.appendChild(el("p", "cap", 'Roofline foam at depths without their own price row.'));
     const save = el("button", "btn btn-primary btn-sm"); save.type = "button"; save.textContent = "Save";
     save.onclick = () => {
       idbPutPrice(p).then(() => { $("priceLibNote").textContent = "Saved " + p.materialKey; }).catch(() => { $("priceLibNote").textContent = "Price save failed."; });
@@ -3631,7 +3634,7 @@ function wireInputs() {
 }
 
 /* ---------- Build stamp + pull-to-refresh ---------- */
-const APP_BUILD = "2026-10-29ae";
+const APP_BUILD = "2026-10-29af";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
