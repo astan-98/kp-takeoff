@@ -587,7 +587,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <p class="status" id="twoStatus"></p>
       <div class="divider"></div>
       <h2>FieldGroove</h2>
-      <div class="train-banner fg-wip-banner" id="fgWipBanner" role="note">FieldGroove import — work in progress. Not available yet, and it won't affect your takeoffs. You'll be notified when it's ready.</div> <!-- 29az: notice only; section behavior unchanged -->
+      <p class="cap" id="fgReadyNote"><strong>FieldGroove export is on.</strong> Check FieldGroove's import preview before you confirm.</p> <!-- 30e: WIP banner removed (Asher 10/30) -->
       <p class="cap">Import file for FieldGroove → Opportunities → Import Estimates. One row per line; compare mode = one estimate per option. Fireplace lines left out.</p>
       <div class="toggle-row"><span>Include app unit prices (at this job's margin)</span><button type="button" class="switch" id="fgPrices"></button></div>
       <button type="button" class="btn btn-primary btn-block" id="btnExportFg">Export for FieldGroove (.xlsx)</button>
@@ -733,7 +733,9 @@ const MARGIN_BASE = 40;
 
 // Asher's unit prices at 40% margin (Oct 29 2026). Saved phone prices always win; blanks fall back to these.
 // roofline foam depth price keys; placeholder values are flagged in the price library until Asher changes them
-const CC_DEPTH_CHOICES = ["1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5"]; // 29as: half-inch 1–5" (metal shops); old 6" jobs → 5"
+// PREP (not applied): Asher wants any closed-cell depth in half-inch steps. MIN/MAX still to confirm with Asher.
+const CC_DEPTH_MIN = 0.5, CC_DEPTH_MAX = 8;
+const CC_DEPTH_CHOICES = Array.from({ length: Math.round((CC_DEPTH_MAX - CC_DEPTH_MIN) / 0.5) + 1 }, (_, i) => String(CC_DEPTH_MIN + i * 0.5)); // "0.5","1",…,"8" — every depth → ENVERGE OnePass 2.0
 const ROOF_FOAM_DEPTH_KEYS = ["5.5", "6", "7", "8", "9", "10", "11", "12"];
 const ROOF_FOAM_PLACEHOLDERS = {};
 const ROOF_FOAM_BASE = "Open-cell foam (roofline)";
@@ -770,6 +772,7 @@ const DEFAULT_PRICE_KEYS = [
   { materialKey: 'Open-cell foam (roofline) 11"', unit: "SF", price: "2.42" },
   { materialKey: 'Open-cell foam (roofline) 12"', unit: "SF", price: "2.59" },
   { materialKey: "Open-cell foam (walls)", unit: "SF", price: "1.13" },
+  { materialKey: 'Closed-cell foam 0.5"', unit: "SF", price: "" }, // PREP: new depth, no price (never guessed)
   { materialKey: 'Closed-cell foam 1"', unit: "SF", price: "1.49" },
   { materialKey: 'Closed-cell foam 1.5"', unit: "SF", price: "2.00" }, // 29az: Asher's price
   { materialKey: 'Closed-cell foam 2"', unit: "SF", price: "2.48" },
@@ -779,7 +782,12 @@ const DEFAULT_PRICE_KEYS = [
   { materialKey: 'Closed-cell foam 4"', unit: "SF", price: "" },
   { materialKey: 'Closed-cell foam 4.5"', unit: "SF", price: "" }, // 29as: new depth, no price yet
   { materialKey: 'Closed-cell foam 5"', unit: "SF", price: "" },
+  { materialKey: 'Closed-cell foam 5.5"', unit: "SF", price: "" }, // PREP: new depth, no price
   { materialKey: 'Closed-cell foam 6"', unit: "SF", price: "" },
+  { materialKey: 'Closed-cell foam 6.5"', unit: "SF", price: "" },
+  { materialKey: 'Closed-cell foam 7"', unit: "SF", price: "" },
+  { materialKey: 'Closed-cell foam 7.5"', unit: "SF", price: "" },
+  { materialKey: 'Closed-cell foam 8"', unit: "SF", price: "" },
   { materialKey: 'Cellulose walls 3.5"', unit: "SF", price: "1.07" },
   { materialKey: 'Cellulose walls 5.5"', unit: "SF", price: "1.53" },
   { materialKey: 'Spider walls 3.5"', unit: "SF", price: "1.30" },
@@ -1236,8 +1244,8 @@ function foamTypeControls(card, obj, tKey, dKey, force, dflt) {
       v => { obj[dKey] = v; render(); }, (dflt || ccDepthJob()) ? "Default " + (dflt || ccDepthJob()) + '"' : null));
   if ((force || foamTypeFor(obj[tKey]) === "cc" || optB) && !ccValid(obj[dKey]) && !(dflt || ccDepthJob())) card.appendChild(ccPickWarn());
 }
-// 29as: segmented half-inch closed-cell depth control (1–5"). dfltLabel adds a leading "Default" choice (value "").
-function ccPickWarn(what) { return el("div", "callout warn cc-pick-warn", "<strong>Pick closed cell depth</strong>" + (what || "No default — tap a depth (1–5\") so this line can be priced.")); }
+// 29as/30e: segmented half-inch closed-cell depth control (0.5–8"). dfltLabel adds a leading "Default" choice (value "").
+function ccPickWarn(what) { return el("div", "callout warn cc-pick-warn", "<strong>Pick closed cell depth</strong>" + (what || "No default — tap a depth (0.5–8\") so this line can be priced.")); }
 function ccDepthPicker(label, value, onPick, dfltLabel) {
   const f = el("div", "field");
   f.innerHTML = "<label>" + label + "</label>";
@@ -1668,39 +1676,40 @@ const WALL_SECS = ["Wall — 2x4 exterior (R-13)", "Wall — 2x6 exterior (R-19)
 const INT_SECS = ["Wall — Interior", "Interior walls"];
 const FG_RULES = [
   // —— blown ——
+  { id: "blow_fg_plain", label: "Blown fiberglass (plain price line)", key: "Blown fiberglass", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool" + OC], conf: "sure", note: "30e: Asher 10/30 — Knauf Jet Stream." },
   ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r, label: "Blown fiberglass R-" + r + " (new)", key: "Blown fiberglass R-" + r, sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool" + OC], rv: "key", conf: "sure", note: "RValue column carries R" + r + ". Alt: Owens Corning ProPink L77." })),
   ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r + "_retro", label: "Blown fiberglass R-" + r + " (retro / Add Attic Blow)", key: "Blown fiberglass R-" + r + " (retro)", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool" + OC], rv: "key", conf: "sure", note: "Same item as new; FG showed 'R38 Retro Blow: Knauf Jet Stream…' so retro is set by the estimate, not the item." })),
   ...["30", "38"].map(r => ({ id: "blow_cel_r" + r, label: "Blown cellulose R" + r, key: "Blown cellulose R" + r, sec: "*", items: ["Blown Cellulose Insulation for Open Attics" + OC], rv: "key", conf: "sure", note: "Alt: GreenFiber Cellulose." })),
   // —— batts: walls ——
-  { id: "wall_r13", label: "R-13 batts — exterior / concrete / garage walls", key: "R-13 fiberglass batts", sec: WALL_SECS, items: ["R13/{w}/{h}' UF" + OC, "R13/{W} UF" + OC], kraftItems: ["R13/{w}/{h}' KRAFT" + OC, "R13/{W} KRAFT" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Unfaced (UF) by default; Kraft only when the wall row is marked Kraft faced. 16 OC→15\", 24 OC→23\" (19 OC: no R13 19\" item → 16\" item, flagged); 8'/9' precuts, other heights → R13/16 roll (24 OC → R13/24 UF; no kraft 24\" roll)." },
-  { id: "wall_r19", label: "R-19 batts — 2x6 / daylight / garage walls", key: "R-19 fiberglass batts", sec: WALL_SECS, items: ["R19/{w}/{h}' UF" + OC, "R19/{W} UF" + OC], kraftItems: ["R19/{w}/{h}' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "guess", note: "Unfaced (UF) by default; Kraft only when the wall row is marked Kraft faced. 16 OC→15\", 24 OC→23\"; 8'/9' precuts else R19/16, R19/19 or R19/24 roll. Mixed-height merged lines use the roll." },
-  { id: "int_r13", label: "R-13 sound batts — interior walls", key: "R-13 fiberglass batts", sec: INT_SECS, items: ["R13/{w}/{h}' UF" + OC, "R13/{W} UF" + OC], conf: "guess", note: "Default for interior walls: R-13 unfaced (UF) fiberglass, even in 2x6 walls. R-19 only when someone specifically asks for 2x6 interior walls. Rock wool, cellulose or spider occasionally; no other default." },
-  { id: "knee_r19", label: "R-19 batts — knee walls", key: "R-19 fiberglass batts", sec: ["Knee wall"], items: ["R19/{w}/8' UF" + OC, "R19/{W} UF" + OC], kraftItems: ["R19/{w}/8' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "guess", note: "Unfaced (UF) by default; Kraft only when the knee row is marked Kraft faced. 8' precut by OC. Work area 2/4 Knee Walls (alt Bonus Room Knee Walls)." },
+  { id: "wall_r13", label: "R-13 batts — exterior / concrete / garage walls", key: "R-13 fiberglass batts", sec: WALL_SECS, items: ["R13/{w}/{h}' UF" + OC, "R13/{W} UF" + OC], kraftItems: ["R13/{w}/{h}' KRAFT" + OC, "R13/{W} KRAFT" + OC, "R13/{W} UF" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the wall row is marked Kraft faced. 16 OC→15\", 24 OC→23\" (19 OC: no R13 19\" item → 16\" item, flagged); 8'/9' precuts, other heights → R13/16 roll (24 OC → R13/24 UF; no kraft 24\" roll)." },
+  { id: "wall_r19", label: "R-19 batts — 2x6 / daylight / garage walls", key: "R-19 fiberglass batts", sec: WALL_SECS, items: ["R19/{w}/{h}' UF" + OC, "R19/{W} UF" + OC], kraftItems: ["R19/{w}/{h}' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the wall row is marked Kraft faced. 16 OC→15\", 24 OC→23\"; 8'/9' precuts else R19/16, R19/19 or R19/24 roll. Mixed-height merged lines use the roll." },
+  { id: "int_r13", label: "R-13 sound batts — interior walls", key: "R-13 fiberglass batts", sec: INT_SECS, items: ["R13/{w}/{h}' UF" + OC, "R13/{W} UF" + OC], conf: "sure", note: "Default for interior walls: R-13 unfaced (UF) fiberglass, even in 2x6 walls. R-19 only when someone specifically asks for 2x6 interior walls. Rock wool, cellulose or spider occasionally; no other default." },
+  { id: "knee_r19", label: "R-19 batts — knee walls", key: "R-19 fiberglass batts", sec: ["Knee wall"], items: ["R19/{w}/8' UF" + OC, "R19/{W} UF" + OC], kraftItems: ["R19/{w}/8' KRAFT" + OC, "R19/{W} KRAFT" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the knee row is marked Kraft faced. 8' precut by OC. Work area 2/4 Knee Walls (alt Bonus Room Knee Walls)." },
   // —— batts: ceilings / floors ——
-  { id: "attic_batts", label: "Attic floor batts R19/R30/R38 (custom mix)", key: "R-{r} fiberglass batts", sec: ["Attic batts"], items: ["R{r}/{W} UF" + OC], conf: "guess", note: "Unfaced; width picker default 24\" (trusses). R-49 has no FG batt item." },
-  { id: "deadair_r38", label: "Dead air R38 batts", key: "R-38 fiberglass batts", sec: ["Dead air"], items: ["R38/{W} UF" + OC], conf: "guess", note: "Unfaced; width picker default 24\" (R38/16, /19, /24 UF all exist)." },
-  { id: "openvault_r38", label: "Open vault R38 batts", key: "R-38 fiberglass batts", sec: ["Open vault"], items: ["R38/{W} UF" + OC], kraftItems: ["R38/{W} KRAFT" + OC, "R38/{W} UF" + OC], conf: "guess", note: "Unfaced (UF) by default; Kraft only when the vault is marked Kraft faced. Width picker default 16\"; 19\" kraft → R38/19 UF (no kraft 19\")." },
-  { id: "closedvault_r30", label: "Closed (decked) vault R30 batts", key: "R-30 fiberglass batts", sec: ["Closed vault"], items: ["R30/{W} UF" + OC], kraftItems: ["R30/{W} KRAFT" + OC], conf: "guess", note: "Unfaced (UF) by default; Kraft only when the vault is marked Kraft faced. Width picker default 16\" (R30/16, /19, /24 UF and KRAFT exist)." },
-  { id: "crawl_batts", label: "Crawl subfloor / touch-up / new batts", key: "R-{r} fiberglass batts", sec: ["Crawl subfloor", "Crawl touch-up"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "guess", note: "R19 → R19/15/4' UF (or 23\" at 24 OC); R13/R30 → 16\" UF roll." },
-  { id: "ufbc_batts", label: "UFBC (unfinished basement ceiling) batts", key: "R-{r} fiberglass batts", sec: ["UFBC"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "guess", note: "Same as crawl subfloor." },
+  { id: "attic_batts", label: "Attic floor batts R19/R30/R38 (custom mix)", key: "R-{r} fiberglass batts", sec: ["Attic batts"], items: ["R{r}/{W} UF" + OC], conf: "sure", note: "Unfaced; width picker default 24\" (trusses). R-49 has no FG batt item." },
+  { id: "deadair_r38", label: "Dead air R38 batts", key: "R-38 fiberglass batts", sec: ["Dead air"], items: ["R38/{W} UF" + OC], conf: "sure", note: "Unfaced; width picker default 24\" (R38/16, /19, /24 UF all exist)." },
+  { id: "openvault_r38", label: "Open vault R38 batts", key: "R-38 fiberglass batts", sec: ["Open vault"], items: ["R38/{W} UF" + OC], kraftItems: ["R38/{W} KRAFT" + OC, "R38/{W} UF" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the vault is marked Kraft faced. Width picker default 16\"; 19\" kraft → R38/19 UF (no kraft 19\")." },
+  { id: "closedvault_r30", label: "Closed (decked) vault R30 batts", key: "R-30 fiberglass batts", sec: ["Closed vault"], items: ["R30/{W} UF" + OC], kraftItems: ["R30/{W} KRAFT" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the vault is marked Kraft faced. Width picker default 16\" (R30/16, /19, /24 UF and KRAFT exist)." },
+  { id: "crawl_batts", label: "Crawl subfloor / touch-up / new batts", key: "R-{r} fiberglass batts", sec: ["Crawl subfloor", "Crawl touch-up"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "sure", note: "R19 → R19/15/4' UF (or 23\" at 24 OC); R13/R30 → 16\" UF roll." },
+  { id: "ufbc_batts", label: "UFBC (unfinished basement ceiling) batts", key: "R-{r} fiberglass batts", sec: ["UFBC"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "sure", note: "Same as crawl subfloor." },
   { id: "rim_r19", label: "Rim joist R19 batts (LF × 1.2)", key: "R-19 fiberglass batts", sec: ["Band / rim"], items: ["R19/{W} UF" + OC], conf: "sure", note: "Bands are R19/16 unfaced (UF) by default; 19\"/24\" width → R19/19 or R19/24 UF. Qty = LF×1.2 exported as SqFt." },
-  { id: "bf_r13", label: "Between floors R13 sound batts", key: "R-13 fiberglass batts", sec: ["Between floors (sound)"], items: ["R13/{W} UF" + OC], conf: "guess", note: "19\" → no R13 19\" item, flagged." },
-  { id: "bf_r19", label: "Between floors R19 batts", key: "R-19 fiberglass batts", sec: ["Between floors (sound)"], items: ["R19/{W} UF" + OC], conf: "guess", note: "" },
-  { id: "cant_batts", label: "Cantilever batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Cantilever"], items: ["R{r}/{W} UF" + OC], kraftItems: ["R{r}/{W} KRAFT" + OC, "R{r}/{W} UF" + OC], conf: "guess", note: "Unfaced (UF) by default; Kraft only when the cantilever is marked Kraft faced. Width picker default 16\"; R38/19 kraft → UF (no kraft)." },
-  { id: "garage_batts", label: "Garage ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Garage ceiling"], items: ["R{r}/{W} UF" + OC], conf: "guess", note: "Unfaced (installed from below); width picker default 16\"." },
-  { id: "porch_batts", label: "Porch ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Porch ceiling"], items: ["R{r}/{W} UF" + OC], conf: "guess", note: "Width picker default 16\"." },
+  { id: "bf_r13", label: "Between floors R13 sound batts", key: "R-13 fiberglass batts", sec: ["Between floors (sound)"], items: ["R13/{W} UF" + OC], conf: "sure", note: "19\" → no R13 19\" item, flagged." },
+  { id: "bf_r19", label: "Between floors R19 batts", key: "R-19 fiberglass batts", sec: ["Between floors (sound)"], items: ["R19/{W} UF" + OC], conf: "sure", note: "" },
+  { id: "cant_batts", label: "Cantilever batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Cantilever"], items: ["R{r}/{W} UF" + OC], kraftItems: ["R{r}/{W} KRAFT" + OC, "R{r}/{W} UF" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the cantilever is marked Kraft faced. Width picker default 16\"; R38/19 kraft → UF (no kraft)." },
+  { id: "garage_batts", label: "Garage ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Garage ceiling"], items: ["R{r}/{W} UF" + OC], conf: "sure", note: "Unfaced (installed from below); width picker default 16\"." },
+  { id: "porch_batts", label: "Porch ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Porch ceiling"], items: ["R{r}/{W} UF" + OC], conf: "sure", note: "Width picker default 16\"." },
   // —— rock wool ——
   { id: "comfortbat", label: "ComfortBat R15", key: "ComfortBat R15", sec: "*", items: ['Rockwool Comfort Batt (R15) - 3.5"/{w}"'], conf: "sure", note: "15\" or 23\" by OC (between floors → 15\")." },
   { id: "acoustical", label: 'AcousticalBat 3"', key: 'AcousticalBat 3"', sec: "*", items: ['Rockwool AFB - 3"/{W}"'], conf: "sure", note: "AFB = acoustical fire batt; 16\"/24\" by OC." },
   // —— foam ——
-  { id: "oc_roof", label: "Open-cell foam — roofline / porch / garage roof / 5–5.5\"", key: "Open-cell foam (roofline)", sec: "*", items: ["ENVERGE EasySeal .5 Open Cell Spray Foam"], depth: true, conf: "guess", note: "Depth column = inches. Alt open-cell: Kraken Spray Foam Insulation." },
-  { id: "oc_walls", label: "Open-cell foam — walls / gables / bands / between floors 3.5\"", key: "Open-cell foam (walls)", sec: "*", items: ["ENVERGE EasySeal .5 Open Cell Spray Foam"], depth: true, conf: "guess", note: "Depth 3.5." },
-  ...CC_DEPTH_CHOICES.map(d => ({ id: "cc" + d, label: 'Closed-cell foam ' + d + '"', key: 'Closed-cell foam ' + d + '"', sec: "*", items: ["ENVERGE OnePass 2.0 Closed Cell Spray Foam"], depth: true, conf: "guess", note: "Alt: SWD Urethane QS450 Closed Cell." })),
+  { id: "oc_roof", label: "Open-cell foam — roofline / porch / garage roof / 5–5.5\"", key: "Open-cell foam (roofline)", sec: "*", items: ["ENVERGE EasySeal .5 Open Cell Spray Foam"], depth: true, conf: "sure", note: "Depth column = inches. Alt open-cell: Kraken Spray Foam Insulation." },
+  { id: "oc_walls", label: "Open-cell foam — walls / gables / bands / between floors 3.5\"", key: "Open-cell foam (walls)", sec: "*", items: ["ENVERGE EasySeal .5 Open Cell Spray Foam"], depth: true, conf: "sure", note: "Depth 3.5." },
+  ...CC_DEPTH_CHOICES.map(d => ({ id: "cc" + d, label: 'Closed-cell foam ' + d + '"', key: 'Closed-cell foam ' + d + '"', sec: "*", items: ["ENVERGE OnePass 2.0 Closed Cell Spray Foam"], depth: true, conf: "sure", note: "Alt: SWD Urethane QS450 Closed Cell." })),
   // —— cellulose / spider ——
   { id: "cel35", label: 'Cellulose walls 3.5"', key: 'Cellulose walls 3.5"', sec: "*", items: ["GreenFiber Cellulose"], depth: true, rv: 13, conf: "sure", note: "Plain GreenFiber Cellulose (includes material; the Labor Rate item doesn't). 2x4 cavity → R-13 / 3.5\" selection (Depth 3.5, RValue 13)." },
   { id: "cel55", label: 'Cellulose walls 5.5"', key: 'Cellulose walls 5.5"', sec: "*", items: ["GreenFiber Cellulose"], depth: true, rv: 19, conf: "sure", note: "Plain GreenFiber Cellulose (includes material). 2x6 cavity → R-19 / 5.5\" selection (Depth 5.5, RValue 19)." },
-  { id: "spi35", label: 'Spider walls 3.5"', key: 'Spider walls 3.5"', sec: "*", items: ["JM Spider Plus Spray Insulation"], depth: true, rv: 15, conf: "guess", note: "Plain JM Spider Plus (not the Labor Rate item). 2x4 cavity → R-15 / 3.5\" (Depth 3.5, RValue 15)." },
-  { id: "spi55", label: 'Spider walls 5.5"', key: 'Spider walls 5.5"', sec: "*", items: ["JM Spider Plus Spray Insulation"], depth: true, rv: 21, conf: "guess", note: "Plain JM Spider Plus (not the Labor Rate item). 2x6 cavity → R-21 / 5.5\" (Depth 5.5, RValue 21)." },
+  { id: "spi35", label: 'Spider walls 3.5"', key: 'Spider walls 3.5"', sec: "*", items: ["JM Spider Plus Spray Insulation"], depth: true, rv: 15, conf: "sure", note: "Plain JM Spider Plus (not the Labor Rate item). 2x4 cavity → R-15 / 3.5\" (Depth 3.5, RValue 15)." },
+  { id: "spi55", label: 'Spider walls 5.5"', key: 'Spider walls 5.5"', sec: "*", items: ["JM Spider Plus Spray Insulation"], depth: true, rv: 21, conf: "sure", note: "Plain JM Spider Plus (not the Labor Rate item). 2x6 cavity → R-21 / 5.5\" (Depth 5.5, RValue 21)." },
   { id: "dense_cel", label: "Dense-pack floors (cellulose)", key: "Dense-pack floors", sec: "*", items: ["Cellulose - Dense Pack Floor System"], conf: "sure", note: "Dense-pack floor systems are always cellulose (no spider dense-pack item in FieldGroove)." },
   { id: "netting", label: "Netting", key: "Netting", sec: "*", items: ["Netting - Insulweb Fabric"], conf: "sure", note: "Work area follows what it nets (walls / between floors / floors)." },
   // —— removal / prep ——
@@ -1710,14 +1719,14 @@ const FG_RULES = [
   // —— crawl / encap ——
   { id: "poly6", label: "6 mil poly", key: "6 mil poly", sec: "*", items: ["6 Mil Poly"], conf: "sure", note: "" },
   { id: "poly10", label: "10 mil poly", key: "10 mil poly", sec: "*", items: ["10 Mil Poly"], conf: "sure", note: "" },
-  { id: "seamtape", label: "Seam taping (10 mil)", key: "Seam taping (10 mil)", sec: "*", items: ["Viper Tape"], conf: "guess", note: "" },
-  { id: "dehu", label: "Dehumidifier", key: "Dehumidifier", sec: "*", items: ["Santa - Fe Compact 70 Pint Dehumidifier"], uom: "Ea.", conf: "guess", note: "Alt: 90 pint; pump kit not added." },
+  { id: "seamtape", label: "Seam taping (10 mil)", key: "Seam taping (10 mil)", sec: "*", items: ["Viper Tape"], conf: "sure", note: "" },
+  { id: "dehu", label: "Dehumidifier", key: "Dehumidifier", sec: "*", items: ["Santa - Fe Compact 70 Pint Dehumidifier"], uom: "Ea.", conf: "sure", note: "Alt: 90 pint; pump kit not added." },
   // —— misc materials ——
   { id: "housewrap", label: "House wrap (knee / gable / porch gable-off)", key: "House wrap", sec: "*", items: ["House Wrap"], conf: "sure", note: "" },
   { id: "baffles", label: "Cardboard baffles", key: "Cardboard baffles", sec: "*", items: ['Baffles - {W}"'], uom: "Pieces", conf: "sure", note: "Follows the baffle width picker (16\" or 24\", default 24\")." },
-  { id: "polyvent", label: "Poly vents (closed vault)", key: "Poly vent", sec: "*", items: ['{W}" Poly-Vent'], uom: "Pieces", conf: "guess", note: "Follows the vault's batt width: 16\"/24\" Poly-Vent; 19\" → none, flagged." },
-  { id: "airseal", label: "Air seal (caulk & foam)", key: "Air seal", sec: "*", items: ["Standard Caulk & Foam Air Package"], uom: "Ea.", conf: "guess", note: "Alt: Right Choice / Premium / Energy Star package, Attic Air Seal Kit." },
-  { id: "airseal_add", label: "Air seal add-on $", key: "Air seal add-on", sec: "*", items: ["Standard Caulk & Foam Labor"], uom: "Ea.", conf: "guess", note: "Fixed $ → UnitPrice always filled." },
+  { id: "polyvent", label: "Poly vents (closed vault)", key: "Poly vent", sec: "*", items: ['{W}" Poly-Vent'], uom: "Pieces", conf: "sure", note: "Follows the vault's batt width: 16\"/24\" Poly-Vent; 19\" → none, flagged." },
+  { id: "airseal", label: "Air seal (caulk & foam)", key: "Air seal", sec: "*", items: ["Standard Caulk & Foam Air Package"], uom: "Ea.", conf: "sure", note: "Alt: Right Choice / Premium / Energy Star package, Attic Air Seal Kit." },
+  { id: "airseal_add", label: "Air seal add-on $", key: "Air seal add-on", sec: "*", items: ["Standard Caulk & Foam Labor"], uom: "Ea.", conf: "sure", note: "Fixed $ → UnitPrice always filled." },
   { id: "extralabor", label: "Extra labor $", key: "Extra labor", sec: "*", items: ["Labor"], uom: "Ea.", conf: "sure", note: "Fixed $ → UnitPrice always filled." },
 ];
 const FG_MAP_KEY = "kp-fg-map-v1", FG_PRICE_KEY = "kp-fg-prices-v1";
@@ -4382,8 +4391,7 @@ function migrateState(d) {
   if (!("foamType" in d)) S.foamType = "oc"; // jobs saved before 29ag: open cell, never inherit the previous job's pick
   if (!("ccFoamDepth" in d)) S.ccFoamDepth = "2";
   // 29as: closed-cell depths are 1–5" in half inches — any saved 6" pick becomes 5"
-  ["ccFoamDepth", "ccDepth", "porchRoofCc", "porchCeilCc", "garageRoofCc", "garageCeilCc", "houseRoofCc", "crawlSubCc"].forEach(k => { if (String(S[k]) === "6") S[k] = "5"; });
-  ["walls", "interiorWalls", "rims", "gables", "cants", "betweenFloors", "foamRoofs", "garageCeils"].forEach(k => { if (Array.isArray(S[k])) S[k].forEach(r => { if (r && String(r.ccDepth) === "6") r.ccDepth = "5"; }); });
+  // PREP: old 6" → 5" migration removed (6" is now a real depth)
   ["houseRoofCc", "crawlSubFoam", "crawlSubCc"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
   // 29as: "Garage block gable" work area removed — an old job's block SF moves to a normal gable row marked for house wrap
   if (d.garageBlockAsGable && d.garageFoamRoof && n(d.garageRoofFlat) > 0) {
@@ -4719,7 +4727,7 @@ function syncSaveDock() {
 // ---- 29az: Training mode — first-timer walkthrough. Step cards with example pictures only:
 // never reads into, changes or saves the open job, drafts, the Library or prices (no S writes, no storage writes).
 // Text is tailored per copy (APP_EDITION / ALLOW_OWNER_SWITCH / which tabs exist); no dollar figures anywhere.
-const TRAIN_FG_BANNER = "FieldGroove import — work in progress. Not available yet, and it won't affect your takeoffs. You'll be notified when it's ready.";
+const TRAIN_FG_BANNER = "FieldGroove export is on. Check FieldGroove's import preview before you confirm.";
 const TRAIN_ICON = '<svg class="train-ico" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 9 12 4 2 9l10 5 10-5Z"/><path d="M6 11.2V16c0 1.1 2.7 3 6 3s6-1.9 6-3v-4.8"/><path d="M22 9v6"/></svg>';
 let TRAIN_I = 0;
 function trainNotice() { const d = fpVerifyNotice(); d.removeAttribute("role"); return d.outerHTML; } // same notice, minus role=alert inside the example
@@ -4912,7 +4920,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-30d";
+const APP_BUILD = "2026-10-30e";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
