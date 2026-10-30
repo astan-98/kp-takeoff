@@ -263,10 +263,14 @@ html, body { overscroll-behavior-y: none; overflow-x: clip; max-width: 100%; }
 .train-launch .tl-txt { flex: 1; min-width: 0; }
 .train-launch .tl-txt b { display: block; font-size: 1rem; }
 .train-launch .tl-txt small { display: block; color: var(--text2); font-size: .8rem; margin-top: 2px; }
+.train-launch-sm { min-height: 48px; padding: 8px 12px; gap: 10px; box-shadow: none; } /* 29ba: compact relaunch card at the top of Pricing */
+.train-launch-sm .tl-txt b { font-size: .92rem; }
 .train-launch .tl-chev { color: var(--accent-ink); font-size: 1.6rem; line-height: 1; }
 .train-bar-ico { width: 60px; color: var(--accent-ink); display: flex; }
 .train-modal .xl-title { font-size: .9rem; }
 .train-card { max-width: 560px; margin: 0 auto; font-size: 1rem; line-height: 1.45; }
+.train-sec { display: inline-block; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 3px 10px; margin-top: 2px; } /* 29ba: where in the app this step is */
+.train-demo input, .train-demo select { pointer-events: none; }
 .train-card h3 { font-size: 1.3rem; margin: 4px 0 10px; }
 .train-card p { margin: 0 0 10px; }
 .train-card ul { margin: 0 0 10px; padding-left: 20px; }
@@ -642,6 +646,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
   </section>
 
   <section id="tab-pricing" class="tabs-panel">
+    <button type="button" class="train-launch train-launch-sm hidden" id="btnTrainingPricing"><svg class="train-ico" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 9 12 4 2 9l10 5 10-5Z"/><path d="M6 11.2V16c0 1.1 2.7 3 6 3s6-1.9 6-3v-4.8"/><path d="M22 9v6"/></svg><span class="tl-txt"><b>Training</b><small>Replay the step-by-step walkthrough</small></span><span class="tl-chev" aria-hidden="true">›</span></button>
     <div class="section">
       <h2>Pricing / ballpark</h2>
       <p class="cap">Enter FieldGroove unit prices at 40% margin once. Live total scales by margin÷40. Not a final invoice.</p>
@@ -4647,6 +4652,8 @@ function wireInputs() {
   // 29av: "View Excel takeoff" removed from the pinned bar (Excel tab in the nav still opens it)
   $("btnNewJob").onclick = newJob;
   $("btnTraining").onclick = () => trainOpen(0); // 29az: training walkthrough (read-only)
+  $("btnTrainingPricing").onclick = () => trainOpen(0); // 29ba: after the first Finish the launcher lives on Pricing
+  trainPlaceLauncher();
   ["input", "change"].forEach(ev => $("woDate").addEventListener(ev, () => { S.woDateManual = true; })); // 29av: the owner's edit sticks
   // 29au: same handler as the Customer/builder New job (one code path), then show the Wizard if another tab was open
   $("btnNewJobTop").onclick = () => { $("btnNewJob").click(); const w = document.querySelector('.nav-btn[data-tab="wizard"]'); if (w && !w.classList.contains("active")) w.click(); window.scrollTo(0, 0); };
@@ -4707,95 +4714,202 @@ function trainCheck(label, on) { return '<label class="toggle-row fp-plat-check"
 function trainOwnerStep() {
   const seg = $("seg-owner");
   const btns = seg ? Array.from(seg.querySelectorAll("button")).filter(b => !b.classList.contains("hidden")).map(b => b.textContent.trim()) : [];
-  if (APP_EDITION === "choice") return { title: "Whose job? — this copy is Blake's",
-    html: "<p>Every job made on this copy is <b>Blake's job</b>. There's no job selector here, so there's nothing to pick — the app fills it in for you.</p>" +
-      "<p>Each rep's copy is locked to its own owner the same way, and new rep copies start locked automatically.</p>" };
-  if (ALLOW_OWNER_SWITCH) return { title: "Whose job? — the job lock",
-    html: "<p>At the top of <b>Measure</b>, <b>Whose job?</b> picks who the job belongs to. Only the owner's and coworker's copies can switch between the owner's, coworker's and office's jobs.</p>" +
-      "<p>Every other rep's copy is locked to its own owner. Blake's Choice copy has no job selector at all, and any new rep copy starts locked automatically.</p>" +
+  if (APP_EDITION === "choice") return { sec: "Measure · Job header", title: "Whose job?",
+    html: "<p>Every job on this copy is <b>Blake's job</b>. There's no job selector, so there's nothing to pick.</p>" };
+  if (ALLOW_OWNER_SWITCH) return { sec: "Measure · Job header", title: "Whose job?",
+    html: "<p><b>Whose job?</b> picks who the job belongs to. Only the owner's and coworker's copies can switch between the owner's, coworker's and office's jobs. Every other rep's copy, Blake's included, is locked to its own owner, and new rep copies start locked automatically.</p>" +
       trainDemo(trainSeg(btns.length ? btns : ["the owner's job", "office's job"], 0), "on this copy") };
-  return { title: "Whose job? — this copy is locked",
-    html: "<p>This copy is locked to <b>" + escHtml(ownerName()) + "'s jobs</b>, so there's no job selector to pick from. Every job you make here is yours.</p>" +
-      "<p>Only the owner's and coworker's copies can switch owners; new rep copies start locked automatically.</p>" };
+  return { sec: "Measure · Job header", title: "Whose job?",
+    html: "<p>This copy is locked to <b>" + escHtml(ownerName()) + "'s jobs</b>, so there's no job selector. Every job you make here is yours.</p>" };
 }
+// 29ba: insulation-first walkthrough in the order a rep measures a house; fireplace = 2 short steps near the end (fp: true).
 function trainSteps() {
+  const choice = APP_EDITION === "choice", who = choice ? "Office" : "office", woHead = choice ? "Work order" : "Work order → office";
   const tabs = Array.from(document.querySelectorAll(".bottom-nav .nav-btn"));
   const what = { wizard: "measure the house — every job starts here", output: "the finished takeoff, " + trainSheet() + " and the FieldGroove file",
     archive: "your saved jobs — search and reopen them", workorder: "builder lot-log work orders", pricing: "unit prices and the ballpark price" };
   const tabList = '<ul class="train-tabs">' + tabs.map(b => { const ic = b.querySelector("svg"); return "<li>" + (ic ? ic.outerHTML : "") + "<span><b>" + escHtml(b.textContent.trim()) + "</b> — " + escHtml(what[b.dataset.tab] || "") + "</span></li>"; }).join("") + "</ul>";
+  const ul = a => '<ul class="train-list">' + a.map(x => "<li>" + x + "</li>").join("") + "</ul>";
+  const fld = (label, inner) => '<div class="field"><label>' + escHtml(label) + "</label>" + inner + "</div>";
+  const inp = ph => '<input tabindex="-1" placeholder="' + escHtml(ph || "") + '">';
+  const sel = t => '<select tabindex="-1"><option>' + escHtml(t) + "</option></select>";
+  const M = "Measure", MJ = "Measure · Job header";
   return [
-    { title: "Welcome to training",
-      html: "<p>This walkthrough takes a brand-new user through a job from start to finish, including a fireplace.</p>" +
+    { sec: "Start", title: "Welcome to training",
+      html: "<p>This walks a brand-new rep through measuring a whole house in the app, in the order you'll do it on site, then the Summary, Library and Pricing tabs. A short fireplace part comes near the end.</p>" +
         "<p><b>Nothing here touches your jobs.</b> The pictures are examples only and nothing is saved.</p>" +
-        "<p>Tap <b>Next</b> and <b>Back</b> to move, or <b>✕</b> to close anytime. Open it again from the <b>Training</b> button at the top of the Measure tab.</p>" },
-    { title: "The tabs at the bottom", html: "<p>The bar at the bottom of the screen switches between the parts of the app:</p>" + tabList },
-    { title: "Step 1 — Open a new job",
-      html: "<p>Tap <b>＋ New job</b> at the top of the screen. It starts a fresh, empty job dated today.</p>" +
-        "<p>Your work autosaves as a draft while you go. When the job is done you'll tap <b>Save to Library</b> so it's kept.</p>" +
+        "<p>Tap <b>Next</b> and <b>Back</b> to move, or <b>✕</b> to close anytime. The <b>Training</b> button stays at the top of the Measure tab until you finish once, then it moves to the top of the <b>Pricing</b> tab.</p>" },
+    { sec: "Start", title: "The tabs at the bottom", html: "<p>The bar at the bottom of the screen switches between the parts of the app:</p>" + tabList +
+        "<p>You'll spend most of your time on <b>Measure</b>. It's one long page of bubbles — scroll down through it top to bottom.</p>" },
+    { sec: M, title: "Open a new job",
+      html: "<p>Tap <b>＋ New job</b> at the top of the screen. It starts a fresh, empty job dated today. There's also a <b>New job</b> button under Customer / builder.</p>" +
+        "<p>Everything you type autosaves as a draft while you go, so you won't lose work if the phone locks. When the job is done you'll tap <b>Save to Library</b>.</p>" +
         trainDemo('<button type="button" tabindex="-1" class="btn btn-primary btn-block">＋ New job</button>') },
-    { title: "Step 2 — Pick New construction",
-      html: "<p>Under <b>New construction or retro?</b> tap <b>New construction</b> for a house being built. Pick <b>Retro</b> for an existing house.</p>" +
-        trainDemo('<div class="field"><label>New construction or retro?</label>' + trainSeg(["New construction", "Retro"], 0) + "</div>") },
-    { title: "Step 3 — There's a fireplace",
-      html: "<p>Scroll down to the <b>Fireplace</b> section and turn on <b>Include fireplace on this job?</b></p>" +
-        trainDemo(trainSwitch("Include fireplace on this job?", true)) },
-    { title: "Fireplace type is automatic",
-      html: "<p>On a <b>New construction</b> job the fireplace is automatically <b>New construction</b>. There's no new-vs-retro choice to make.</p>" +
-        "<p>On a <b>Retro</b> job you still get to choose New construction or Retrofit, because a retro job can include a brand-new chase.</p>" +
-        "<p>An older job that was saved with a Retrofit fireplace keeps what was saved.</p>" +
-        trainDemo('<div class="field"><label>Fireplace job type</label><div class="fp-auto"><strong>New construction</strong><span>Automatic — this is a new construction insulation job.</span></div></div>', "new construction job") +
-        trainDemo('<div class="field"><label>Fireplace job type</label>' + trainSeg(["New construction", "Retrofit"], 0) + "</div>", "retro job") },
-    { title: "Step 4 — Model and rough opening",
-      html: "<p>Pick the fireplace under <b>Model / catalog</b>. Its spec rough opening (RO) fills in.</p>" +
-        "<p>Then type the framed opening you measured into <b>Measured H</b>, <b>W</b> and <b>D</b> (inches). The app checks it against the spec and shows PASS or FAIL.</p>" },
-    { title: "Step 5 — Hearth platform checkbox",
-      html: "<p>If the fireplace sits on a raised hearth platform, check <b>There will be a hearth platform</b>. Leave it unchecked if there isn't one.</p>" +
-        trainDemo(trainCheck("There will be a hearth platform", true)) },
-    { title: "Who's building the platform?",
-      html: "<p>Once it's checked, the app asks <b>Who is building the platform?</b> Pick one — it's required, and it tells the opening check where you measured from.</p>" +
-        "<ul><li><b>We're building it</b></li><li><b>Builder is building it</b></li><li><b>Already built</b></li></ul>" +
-        trainDemo('<div class="field"><label>Who is building the platform?</label>' + trainSeg([FP_PLATFORM_BY.us, FP_PLATFORM_BY.builder, FP_PLATFORM_BY.built], 0) + "</div>") },
-    { title: "How the opening check works",
-      html: "<ul class=\"train-list\"><li><b>Unchecked</b> or <b>Already built</b> — you measure the RO from the top of the platform (or the subfloor if there's none), so it's compared directly to the spec.</li>" +
-        "<li><b>We're building it</b> or <b>Builder is building it</b> — the platform isn't there yet, so you measure from the subfloor. The height needed is the spec height <b>plus</b> the platform height.</li></ul>" +
-        "<p>Width and depth are always compared straight to the spec.</p>" },
-    { title: "Platform height",
-      html: "<p>Type the platform height in <b>Hearth platform height (in)</b>.</p>" +
-        "<p>If you leave it blank, the app uses the model's spec platform height. If there's no spec height either, it's flagged as missing when you save.</p>" +
-        "<p>Only <b>We're building it</b> adds a hearth platform line to the takeoff. The other choices just change the opening check.</p>" },
-    { title: "The big yellow notice",
-      html: "<p>Every fireplace job shows this notice. It's at the top of the <b>Fireplace</b> section, again under the RO results, and on the <b>Summary</b> tab above " + escHtml(trainSheet()) + ".</p>" +
-        trainDemo(trainNotice()) },
-    { title: "The “I'll check the manual” popup",
-      html: "<p>On a fireplace job, when you <b>save</b>, <b>send</b>, or open " + escHtml(trainSheet()) + ", a popup shows the same notice first.</p>" +
-        "<p>Tap <b>I'll check the manual</b> to go on, or <b>Go back</b> to stay where you were. Then check the framing requirements in the manufacturer's install manual before ordering.</p>" +
-        trainDemo('<div class="train-pop"><div class="train-pop-title">Fireplace — check the manual</div>' + trainNotice() +
-          '<div class="grid2"><button type="button" tabindex="-1" class="btn btn-secondary">Go back</button><button type="button" tabindex="-1" class="btn btn-primary">I\'ll check the manual</button></div></div>') },
-    { title: "FieldGroove import",
+    { sec: MJ, title: "New construction or retro?",
+      html: "<p>The first question in the <b>Job header</b>. Tap <b>New construction</b> for a house being built, or <b>Retro</b> for an existing house.</p>" +
+        "<p><b>Retro</b> then asks <b>Attic retro</b> or <b>Crawl retro</b> and the path:</p>" +
+        ul(["<b>Attic retro path</b>: Suck out + blow, Suck out + foam, Batt removal + blow, Batt removal + foam, or Add Attic Blow.",
+          "<b>Crawl retro path</b>: Remove + replace, Touch-up (tuck / patch), Remove + encapsulation, or Crawl – new batts (no removal)."]) +
+        trainDemo(fld("New construction or retro?", trainSeg(["New construction", "Retro"], 0))) },
+    trainOwnerStep(),
+    { sec: MJ, title: "Package type",
+      html: "<p>On new construction, pick the <b>Package type</b>. It decides which areas the app asks about and what material each line uses:</p>" +
+        ul(["<b>Standard (blow + batts)</b> — blown attic, batt walls.", "<b>Total Bat (R38 batts, no blow)</b> — like Standard, but the attic goes in as R38 batts instead of blow.",
+          "<b>Foam Roofline + Batt Walls</b>, <b>Foam Roofline + Cellulose Walls</b>, <b>Foam Roofline + Spider Walls</b> — spray foam on the roof deck, walls as named.",
+          "<b>Total foam</b> — foam roofline and foam walls.", "<b>Crawl encapsulation</b> — crawl walls foamed, poly on the floor.", "<b>Custom mix</b> — pick the roofline/attic and wall materials yourself."]) +
+        trainDemo(fld("Package type", sel("Standard (blow + batts)"))) },
+    { sec: MJ, title: "What the package turns on",
+      html: "<p>Picking a package sets the usual answers for you. You can still change any of them.</p>" +
+        ul(["<b>Standard</b> and <b>Total Bat</b> turn on Dead air, Knee walls, Vaults, Baffles, Air seal and Walls.",
+          "<b>Foam roofline</b> packages turn on Gables and Walls. Dead air, vaults and knees are left out (the foam is on the roof deck), but baffles are still included on new construction.",
+          "Gables are only asked on foam roofline jobs."]) },
+    { sec: MJ, title: "Compare packages (Options A, B, C)",
+      html: "<p>Want to price the same house more than one way? Turn on <b>Compare packages (2–3 options)?</b> and tap 2 or 3 packages under <b>Options to price</b>.</p>" +
+        "<p>You measure once. The app asks for every area any option needs, and the Summary tab gives each option its own sheet — <b>Option A</b>, <b>Option B</b>, <b>Option C</b>.</p>" +
+        trainDemo(trainSwitch("Compare packages (2–3 options)?", true) + fld("Options to price (pick 2–3)", trainSeg(["Standard", "Total Bat", "Total foam"], 0))) },
+    { sec: MJ, title: "Foundation",
+      html: "<p>Pick the <b>Foundation</b>: Slab, Crawl space, Unfinished basement, or Finished basement (walls being done).</p>" +
+        ul(["<b>Slab</b> hides the basement and crawl bubbles.", "<b>Crawl space</b> hides the basement bubbles.",
+          "Basements can also turn on <b>House also has a crawl space</b>.", "Until you pick, nothing is hidden and the app reminds you to pick one."]) +
+        trainDemo(fld("Foundation", sel("Crawl space"))) },
+    { sec: "Measure · Customer / builder", title: "Customer / builder",
+      html: "<p>Fill in <b>Builder / customer</b>, <b>City</b>, <b>Job site address</b>, <b>State</b>, <b>Zip</b> and <b>Subdivision (optional)</b>.</p>" +
+        "<p>The city, state and zip also set the default roofline foam depth, so get them right.</p>" +
+        trainDemo('<div class="grid2">' + fld("Builder / customer", inp("Smith Homes")) + fld("City", inp("Gainesville")) + "</div>" + fld("Job site address", inp("123 Main St"))) },
+    { sec: "Measure · Customer / builder", title: "Customer (for FieldGroove) and billing",
+      html: "<p>Tap <b>Customer (for FieldGroove)</b> to open the customer box: First name, Last name, Company (blank = builder above if no name), Phone and Email.</p>" +
+        "<p><b>Billing address same as job site</b> — turn it off to type a separate billing address, city, state and zip.</p>" +
+        "<p>Below that: <b>Date measured</b> (today on a new job) and <b>Keywords / notes</b> — anything you type there is searchable in the Library later.</p>" +
+        trainDemo(trainSwitch("Billing address same as job site", true)) },
+    { sec: "Measure · Photos", title: "Photos",
+      html: "<p>Tap <b>📷 Add photo</b> to snap or pick photos. They save with the job and go along with the work order to " + who + ".</p>" },
+    { sec: "Measure · Job site access", title: "Job site access",
+      html: "<p>These answers print in the NOTES on the work order:</p>" +
+        ul(["<b>Scaffolding or ladder needed?</b> — Yes asks for the <b>Height / reason</b>.", "<b>Driveway access</b> — Easy, or May have trouble (with an optional note).",
+          "<b>Gate / lockbox code?</b> — Yes asks for the code."]) +
+        trainDemo(fld("Scaffolding or ladder needed?", trainSeg(["No", "Yes"], 1)) + fld("Driveway access", trainSeg(["Easy", "May have trouble"], 0))) },
+    { sec: "Measure · What's on this house?", title: "What's on this house?",
+      html: "<p>A list of switches — one per area. Turn on what this house has and turn off what it doesn't. Every area that's off is skipped, so its bubble never shows.</p>" +
+        "<p>Depending on the job you'll see: Dead air, Vaults, Knee walls, Rim / band, Walls, Interior walls, Between floors (sound), Gables, Cantilevers, Garage, Porch, Crawl, UFBC (basement ceiling), Crawl walls to foam, Dense-pack floors, Poured floor (skip poly) and Miscellaneous.</p>" +
+        "<p>Only the switches that fit the package and foundation show up.</p>" +
+        trainDemo(trainSwitch("Dead air", true) + trainSwitch("Vaults", true) + trainSwitch("Garage", false)) },
+    { sec: "Measure · Flat footprint", title: "Flat footprint",
+      html: "<p>Type the house's <b>Flat footprint SF (once)</b> — the flat floor area under the roof. The app uses it everywhere it can, so you only type it once.</p>" +
+        ul(["<b>Attic blow SF</b> = flat footprint minus dead air SF minus vault flat SF. On Total Bat it reads <b>Total Bat R38 dead air SF (no blow)</b>.",
+          "On foam roofline jobs, pick the <b>House roof pitch</b> instead. <b>Foam roof from flat</b> = flat footprint × the pitch factor (steeper roof = more SF)."]) +
+        trainDemo('<div class="field"><label>Flat footprint SF (once)</label><input tabindex="-1" value="2000"></div><div class="props"><span class="k">Attic blow SF</span><span class="v">1850 SF</span></div>') },
+    { sec: "Measure · Attic", title: "Attic blow",
+      html: ul(["<b>New construction</b> blow is always R-38 — nothing to pick.",
+        "<b>Retro</b> attic: the path says what happens first — suck out the old insulation, remove old batts, or just <b>Add Attic Blow</b> on top. Blow paths ask the <b>Blow R-value</b>: R-19, R-30, R-38 or R-49.",
+        "<b>Custom mix</b> with Blow attic or Batts attic gets its own bubble with SF and R-value."]) +
+        trainDemo(fld("Blow R-value", sel("R-38")), "retro") },
+    { sec: "Measure · Roofline foam", title: "Roofline foam",
+      html: "<p>On foam roofline jobs the <b>Spray foam type (job)</b> bubble picks <b>Open cell (default)</b>, <b>Closed cell</b>, or <b>Show both (compare)</b>.</p>" +
+        ul(["<b>Roofline foam depth (job)</b> fills in from the job site address: Athens-Clarke County 8\", Highlands NC 10\", everywhere else 5.5\". Pick a depth to override it.",
+          "Closed cell needs a <b>closed-cell depth</b> picked — the app warns you until you do.",
+          "<b>Extra roofline areas</b>: tap <b>Add roofline area</b> for each extra roof section (Flat SF + Pitch, its own depth)."]) +
+        trainDemo(fld("Foam type", sel("Open cell (default)"))) },
+    { sec: "Measure · Roofline foam", title: "Open cell vs closed cell (compare)",
+      html: "<p>Pick <b>Show both (compare)</b> to price every foam area two ways: <b>Option A</b> open cell and <b>Option B</b> closed cell at the depth you pick.</p>" +
+        "<p>Concrete basement walls and crawl walls stay closed cell in both. The Summary tab shows an <b>Open cell vs closed cell</b> table side by side.</p>" },
+    { sec: "Measure · Attic areas", title: "Dead air, vaults and knee walls",
+      html: ul(["<b>Dead air #</b>: SF and Batt width (R38). Tap <b>Add dead air</b> for more.",
+        "<b>Vault #</b>: Type — Open vault (R38) or Closed / decked vault (R30) — then Flat SF, Pitch and Batt width. Tap <b>Add vault</b> for more.",
+        "<b>Knee #</b>: Shape (Rectangle or Triangle), Height ft, LF and Stud spacing. The app shows the SF (L × H, or L × H ÷ 2 for a triangle). <b>Wrap</b> is on by default. Tap <b>Add knee</b> for more."]) +
+        "<p>These are skipped on foam roofline jobs.</p>" },
+    { sec: "Measure · Baffles", title: "Baffles",
+      html: "<p>Count the baffles yourself and type the <b>Baffle count</b>, then pick the <b>Baffle width</b> (16\" or 24\"). The app doesn't count them for you.</p>" +
+        "<p>On new construction baffles are always included, so a blank count gets flagged when you save.</p>" +
+        trainDemo(fld("Baffle count", '<input tabindex="-1" value="40">') + fld("Baffle width", trainSeg(['16"', '24"'], 1))) },
+    { sec: "Measure · Walls", title: "Exterior walls",
+      html: "<p>Each <b>Wall #</b> bubble is one wall area:</p>" +
+        ul(["<b>Type</b>: 2x4 exterior (R-13), 2x6 exterior (R-19), Garage exterior — basement walls too when the foundation has them.",
+          "<b>Stud spacing</b> (16, 19 or 24 OC), <b>Height</b> (8', 9', 10', 12' or Custom) and <b>Cavities</b> — the number of stud bays. The app turns cavities into SF.",
+          "<b>Material mode</b>: Batt, Foam, Cellulose, Spider, ComfortBat or Acoustical. The package sets the default.",
+          "Batts are unfaced by default — turn on <b>Kraft faced (default unfaced)</b> for kraft.",
+          "Tap <b>Add wall area</b> for each different wall."]) +
+        trainDemo(fld("Type", sel("2x4 exterior (R-13)")) + fld("Cavities", '<input tabindex="-1" value="120">') + trainSwitch("Kraft faced (default unfaced)", false)) },
+    { sec: "Measure · Walls", title: "Basement walls",
+      html: "<p>With a basement foundation, daylight and concrete walls get their own bubbles.</p>" +
+        ul(["<b>Daylight basement (R-19)</b> walls are measured like exterior walls.",
+          "<b>Concrete basement (R-13)</b> walls get R-13 batts, or 1\" closed cell on Total foam. For unframed concrete, turn on <b>Measure by linear feet × wall height</b> — that's closed cell foam."]) },
+    { sec: "Measure · Interior walls", title: "Interior walls",
+      html: "<p>Interior walls have their own bubble. Enter <b>Cavities</b>, or <b>or Linear feet</b> and the app works out the cavities.</p>" +
+        "<p><b>Material</b> starts at <b>Sound batts (R-13)</b>. Other choices: AcousticalBat / rock wool, Cellulose (netted), Spider (netted), Open-cell foam.</p>" +
+        trainDemo(fld("Material", sel("Sound batts (R-13)"))) },
+    { sec: "Measure · Rim / band", title: "Rim / band",
+      html: "<p>Type the rim joist length in <b>LF</b>. The app multiplies it by 1.2 for the SF (shown in the bubble title). Tap <b>Add rim</b> for more.</p>" +
+        "<p>On new construction foam roofline jobs (not Total foam), you can turn on <b>Foam band/rim joist (instead of R19 batts)</b>.</p>" +
+        trainDemo('<div class="row-title">Rim #1 · ×1.2 → 180</div>' + fld("LF", '<input tabindex="-1" value="150">')) },
+    { sec: "Measure · Garage, porch, gables", title: "Garage, porch, gables and cantilevers",
+      html: ul(["<b>Garage ceiling</b>: Garage ceiling SF and <b>Ceiling mat</b> (R19, R30 or R38 batts, blown R30 or R38, or 5\" open-cell foam). Tap <b>Add area</b> for another ceiling. On foam roofline jobs, <b>Foam garage roofline</b> asks its flat SF and pitch.",
+        "<b>Porch</b> (foam roofline jobs): <b>Porch flat SF</b>, then <b>Porch roofline (foam)?</b> with pitch and depth, and <b>Porch ceiling?</b> with its material. No ceiling? It asks <b>Gabled off with house wrap?</b>",
+        "<b>Gable #</b> (foam roofline jobs): shape, length and height.", "<b>Cantilever #</b>: SF and material."]) },
+    { sec: "Measure · Floors and crawl", title: "Floors, crawl and basement ceiling",
+      html: ul(["<b>Between floors (sound)</b>: the floor SF between levels and the material (R13 sound batts to start).",
+        "<b>Crawl</b>: Crawl SF (blank = the flat footprint) and the material.", "<b>UFBC (unfinished basement ceiling)</b>: SF and batt R-value.",
+        "<b>Crawl walls to foam</b> and <b>Poured floor (skip poly)</b> on crawl encapsulation; <b>Dense-pack floors</b> on dense-pack packages.",
+        "Crawl retro <b>Touch-up</b>: type the <b>Crawl touch-up patch SF</b> under the flat footprint."]) },
+    { sec: "Measure · Air sealing / extra labor", title: "Air sealing and extra labor",
+      html: ul(["<b>Air seal?</b> adds the air sealing package (caulk & foam at the base plate, openings and penetrations) as one line. When it's on, <b>Air seal add-on $</b> is for air seal labor that runs over the package.",
+        "<b>Extra labor $</b> (with an optional note) is a job-wide labor add — a fixed amount, on every option when you compare."]) +
+        trainDemo(trainSwitch("Air seal?", true)) },
+    { sec: "Measure · Miscellaneous", title: "Miscellaneous",
+      html: "<p>For anything out of the ordinary, turn on <b>Miscellaneous</b> and fill a <b>Misc item #</b>: Material (required), Description / notes, Quantity and Unit of measure. Each one becomes its own line.</p>" },
+    { sec: M, title: "Save to Library and the empty-fields check",
+      html: "<p>The <b>Save to Library</b> button stays pinned at the bottom of the screen. Tap it when the job is measured.</p>" +
+        "<p>If something's blank — a baffle count, a wall's cavities — a <b>⚠ Some fields are empty</b> sheet lists it. Tap <b>Go back</b> to fill it in, or <b>Continue anyway</b>.</p>" +
+        trainDemo('<button type="button" tabindex="-1" class="btn btn-primary btn-block">Save to Library</button>') },
+    { sec: "Summary tab", title: "Summary — the Excel takeoff",
+      html: "<p><b>Excel takeoff (primary)</b> lists every line: Work area · Product · Description · Footage · Bags. Switch to <b>FG-style (secondary)</b> for the FieldGroove view.</p>" +
+        ul(["Comparing packages? Switch between options, then <b>Export this option (.xlsx)</b> or <b>Export all options</b>.", "<b>Copy Excel CSV</b> copies the table as text."]) +
+        trainDemo(trainSeg(["Excel (primary)", "FG-style (secondary)"], 0)) },
+    { sec: "Summary tab", title: woHead,
+      html: "<p>Further down the Summary tab, the work order sheet fills in from the job. Check <b>Rep</b>, <b>Date measured</b> (fills in with the day the job was created — change it if you need to and your change sticks) and <b>Notes</b>.</p>" +
+        "<p>Tap <b>Work order → " + who + "</b> to preview the sheet, zoom in, and share it — photos go along.</p>" +
+        trainDemo('<button type="button" tabindex="-1" class="btn btn-primary btn-block">Work order → ' + who + "</button>") },
+    { sec: "Summary tab", title: "FieldGroove import",
       html: '<div class="train-banner" id="trainFgBanner">' + escHtml(TRAIN_FG_BANNER) + "</div>" +
         "<p>You can skip the <b>FieldGroove</b> part of the Summary tab for now. Measure and save your jobs as usual.</p>" },
-    trainOwnerStep(),
-    { title: "Foam pricing basics",
-      html: "<p>Prices live on the <b>Pricing</b> tab. Turn on <b>Edit price library</b> to see them.</p>" +
-        "<ul class=\"train-list\"><li>Foam is priced <b>per square foot</b>, at a <b>40% margin</b> by default. Pick another margin for a job under <b>Margin for this job</b>.</li>" +
-        "<li>A price you save on your phone is used instead of the built-in one.</li>" +
-        "<li>A foam depth with no price yet makes the ballpark show <b>incomplete</b> until a price is entered.</li></ul>" +
-        "<p>The ballpark is a rough number, not a final invoice.</p>" },
-    { title: "You're ready",
-      html: "<p>That's a whole job: <b>＋ New job</b> → New construction → measure → fireplace and platform → check the yellow notice → <b>Save to Library</b>.</p>" +
-        "<p>If something's missing when you save, the app lists it so you can fill it in. Open training again anytime from the <b>Training</b> button on the Measure tab.</p>" }
+    { sec: "Library tab", title: "Library — find and reopen jobs",
+      html: "<p>Every job you save goes in the <b>Library</b>.</p>" +
+        ul(["<b>Free-text search</b> plus Builder, City, " + (ALLOW_OWNER_SWITCH ? "Owner, " : "") + "Package contains, and From / To dates. <b>Today</b>, <b>Yesterday</b> and <b>Any date</b> are quick date filters.",
+          "Each job has <b>Open</b> (load it back to keep working), <b>Send to " + who + "</b> and <b>Delete</b>.",
+          "<b>Select</b> lets you pick several jobs and send them together.",
+          "<b>Back up Library</b> saves everything to one file; <b>Restore from backup</b> brings it back."]) },
+    { sec: "Pricing tab", title: "Pricing — foam and ballpark",
+      html: ul(["Turn on <b>Edit price library (40% unit prices)</b> to see the prices. Foam is priced <b>per square foot</b>, at a <b>40% margin</b>.",
+        "A price you save on your phone is used instead of the built-in one.", "A depth with no price yet makes the ballpark say <b>incomplete</b> until a price is entered.",
+        "<b>Show ballpark price</b> shows a rough total. <b>Margin for this job (floor 30%)</b>: 30%, 35%, 40%, 45%, 50% or Custom.", "The ballpark is a rough number, not a final invoice."]) +
+        trainDemo(fld("Margin for this job (floor 30%)", trainSeg(["30%", "35%", "40%", "45%", "50%", "Custom"], 2))) },
+    { sec: "Fireplace", fp: true, title: "Fireplace — turn it on and measure",
+      html: ul(["In the <b>Fireplace</b> section, turn on <b>Include fireplace on this job?</b> and pick the <b>Model / catalog</b>.",
+        "Type the framed opening into <b>Measured H</b>, <b>W</b> and <b>D</b> — the app shows PASS or FAIL against the spec.",
+        "Hearth platform? Check <b>There will be a hearth platform</b> and pick who's building it — " + escHtml(FP_PLATFORM_BY.us) + ", " + escHtml(FP_PLATFORM_BY.builder) + ", or " + escHtml(FP_PLATFORM_BY.built) + "."]) },
+    { sec: "Fireplace", fp: true, title: "Fireplace — check the manual",
+      html: "<p>Every fireplace job shows this yellow notice. Saving, sending, or opening " + escHtml(trainSheet()) + " on a fireplace job pops it up first — tap <b>I'll check the manual</b> to go on, or <b>Go back</b>.</p>" +
+        trainDemo(trainNotice()) },
+    { sec: "Done", title: "You're ready",
+      html: "<p>That's a whole job: <b>＋ New job</b> → Job header → Customer / builder → What's on this house? → measure each bubble → <b>Save to Library</b> → Summary.</p>" +
+        "<p>After you tap <b>Finish</b>, open training again anytime from the <b>Training</b> button at the top of the <b>Pricing</b> tab.</p>" }
   ];
 }
 function trainClose() { const m = $("trainModal"); if (m) m.remove(); document.removeEventListener("keydown", trainKey);
   if (!$("missModal") && !$("twoPreview") && !$("batchModal") && !$("fpVerifyModal") && !$("photoModal")) document.body.classList.remove("xl-open"); }
-function trainKey(e) { if (!$("trainModal")) return; if (e.key === "Escape") trainClose(); else if (e.key === "ArrowRight") trainGo(1); else if (e.key === "ArrowLeft") trainGo(-1); }
-function trainGo(d) { const n = trainSteps().length, j = TRAIN_I + d; if (j >= n) { trainClose(); return; } if (j < 0) return; TRAIN_I = j; trainRender(); }
+function trainKey(e) { if (!$("trainModal")) return; if (e.key === "Escape") trainClose(); else if (e.key === "ArrowRight") { if (TRAIN_I < trainSteps().length - 1) trainGo(1); } else if (e.key === "ArrowLeft") trainGo(-1); }
+function trainGo(d) { const n = trainSteps().length, j = TRAIN_I + d; if (j >= n) { trainFinish(); return; } if (j < 0) return; TRAIN_I = j; trainRender(); }
+// 29ba: only tapping Finish on the last step counts as completed (✕ / Esc don't) → launcher moves from Measure to Pricing for good
+const TRAIN_DONE_KEY = "choice-training-done-v1";
+function trainDone() { return lsGet(TRAIN_DONE_KEY) === "1"; }
+function trainFinish() { lsSet(TRAIN_DONE_KEY, "1"); trainClose(); trainPlaceLauncher(); }
+function trainPlaceLauncher() { const done = trainDone(), a = $("btnTraining"), b = $("btnTrainingPricing");
+  if (a) a.classList.toggle("hidden", done); if (b) b.classList.toggle("hidden", !done); }
 function trainRender() {
   const m = $("trainModal"); if (!m) return;
   const steps = trainSteps(), st = steps[TRAIN_I], last = TRAIN_I === steps.length - 1;
   m.querySelector(".xl-title").textContent = "Training · " + (TRAIN_I + 1) + " of " + steps.length;
   const body = m.querySelector(".train-body");
-  body.innerHTML = '<div class="train-card" data-step="' + TRAIN_I + '"><h3 id="trainTitle">' + escHtml(st.title) + "</h3>" + st.html + "</div>";
+  body.innerHTML = '<div class="train-card" data-step="' + TRAIN_I + '" data-fp="' + (st.fp ? 1 : 0) + '">' + (st.sec ? '<div class="train-sec">' + escHtml(st.sec) + "</div>" : "") + '<h3 id="trainTitle">' + escHtml(st.title) + "</h3>" + st.html + "</div>";
   body.scrollTop = 0;
   m.querySelector(".train-dots").innerHTML = steps.map((_, i) => '<span class="' + (i === TRAIN_I ? "on" : i < TRAIN_I ? "done" : "") + '"></span>').join("");
   const back = $("trainBack"); back.disabled = TRAIN_I === 0;
@@ -4813,7 +4927,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-29az";
+const APP_BUILD = "2026-10-29ba";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
