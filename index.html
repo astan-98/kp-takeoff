@@ -3831,7 +3831,7 @@ function renderArchive() {
     del.onclick = () => {
       if (!confirm("Delete this takeoff from the Library?")) return;
       const full = (S._fullJobs || []).find(x => x.id === j.id), pids = ((full && full.draft && full.draft.photos) || []).map(x => x && x.id).filter(Boolean);
-      idbDelete(j.id).then(() => { setStatus("Deleted from Library."); refreshArchive(); photoForget(pids, j.id); }).catch(() => setStatus("Delete failed."));
+      idbDelete(j.id).then(() => { cloudMarkDeleted(j.id); setStatus("Deleted from Library."); refreshArchive(); photoForget(pids, j.id); }).catch(() => setStatus("Delete failed.")); // 30b: sync won't re-add it
     };
     const send = el("button", "btn btn-secondary btn-sm"); send.type = "button"; send.textContent = "Send to " + twoWho("walls").name;
     send.onclick = ev => { ev.stopPropagation(); archSendOne(j.id); };
@@ -4966,7 +4966,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-30a";
+const APP_BUILD = "2026-10-30b";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -5434,6 +5434,8 @@ const CLOUD_COPY = APP_EDITION === "asher" ? "kp" : APP_EDITION; // kp / lance /
 const CLOUD_QUEUE_KEY = CLOUD_COPY + "-cloud-queue-v1", CLOUD_LAST_KEY = CLOUD_COPY + "-cloud-last-v1";
 const CLOUD_ALL_KEY = CLOUD_COPY + "-cloud-all-v1"; // 30a: set once every Library job on this device has been sent (or queued)
 let CLOUD_CATCHUP_MS = 3000, CLOUD_ALL_BUSY = null;
+const CLOUD_DEL_KEY = CLOUD_COPY + "-cloud-deleted-v1"; // 30b: { jobId: deletedAt } — jobs deleted on this device; auto-sync won't bring them back
+let CLOUD_SYNC_MIN_MS = 120000, CLOUD_SYNC_AT = 0, CLOUD_SYNC_BUSY = null;
 let cloudFetch = (u, o) => fetch(u, o); // swapped in tests
 let CLOUD_BUSY = null, CLOUD_ERR = "";
 function cloudOn() { return !!String(BACKUP_URL || "").trim(); }
@@ -5451,6 +5453,7 @@ function cloudPayload(job, totalSf) {
     package: job.packageLabel || "", totalSf: totalSf == null ? "" : totalSf, job: job };
 }
 function cloudQueueJob(job, totalSf) {
+  if (job && job.id != null) cloudUndelete(job.id); // saved again here → no longer "deleted on this device"
   if (!cloudOn() || !job || job.id == null) return Promise.resolve(null);
   const q = cloudQueue().filter(p => p && p.jobId !== job.id); // one entry per job: the newest save replaces an unsent older one
   q.push(cloudPayload(job, totalSf)); cloudSetQueue(q); cloudRender();
@@ -5550,7 +5553,7 @@ function cloudRestore(opts) {
       const plan = cloudMergePlan(local, d.jobs);
       if (!ask("Cloud backup has " + d.jobs.length + " takeoff" + (d.jobs.length === 1 ? "" : "s") + " for this app:\n• " + plan.added + " not on this phone (will be added)\n• " +
         plan.replaced + " saved later in the cloud (will be updated)\n• " + plan.kept + " already up to date or newer here (left alone)\n\nMerge into this phone's Library? Nothing here gets deleted, and newer jobs on this phone are never overwritten.")) return null;
-      return (plan.puts.length ? dbWrite(openDb, STORE, os => plan.puts.forEach(j => os.put(j))) : Promise.resolve()).then(() => plan);
+      return (plan.puts.length ? dbWrite(openDb, STORE, os => plan.puts.forEach(j => os.put(j))) : Promise.resolve()).then(() => { plan.puts.forEach(j => cloudUndelete(j.id)); return plan; });
     });
   });
 }
@@ -5562,12 +5565,67 @@ function runCloudRestore() {
     refreshArchive();
   }).catch(e => backupStatus("Cloud restore failed: " + (e && e.message || e) + " Nothing was changed."));
 }
+/* ---------- 30b: automatic pull-down sync (phone + computer match without tapping) ----------
+   On app open and whenever the app comes back to the screen (at most once every 2 min): send anything pending, then
+   quietly GET this copy's jobs and merge with the restore rules — add missing, update only when the cloud copy was saved
+   later, never delete, never overwrite a newer local job. No prompt. Skips the job open on screen right now, and jobs
+   deleted on this device (unless the cloud has a save made after the delete). Offline / errors: silent. */
+function cloudDeleted() { try { const d = JSON.parse(lsGet(CLOUD_DEL_KEY) || "{}"); return d && typeof d === "object" && !Array.isArray(d) ? d : {}; } catch (e) { return {}; } }
+function cloudMarkDeleted(id) {
+  if (id == null) return;
+  const d = cloudDeleted(); d[id] = new Date().toISOString(); lsSet(CLOUD_DEL_KEY, JSON.stringify(d));
+  cloudSetQueue(cloudQueue().filter(p => p && p.jobId !== id)); // don't upload a job that was just deleted
+}
+function cloudUndelete(id) { const d = cloudDeleted(); if (d[id] !== undefined) { delete d[id]; lsSet(CLOUD_DEL_KEY, JSON.stringify(d)); } }
+function cloudSyncPlan(local, remote, opts) {
+  opts = opts || {};
+  const del = opts.deleted || {};
+  const rem = (remote || []).filter(j => j && j.id != null && j.id !== opts.skipId && !(del[j.id] !== undefined && !(String(j.savedAt || "") > String(del[j.id]))));
+  return cloudMergePlan(local, rem);
+}
+let CLOUD_SYNC_WIRED = false;
+function cloudSync(opts) {
+  opts = opts || {};
+  if (!cloudOn()) return Promise.resolve(null);
+  if (CLOUD_SYNC_BUSY) return CLOUD_SYNC_BUSY;
+  const now = Date.now();
+  if (!opts.force && CLOUD_SYNC_AT && now - CLOUD_SYNC_AT < CLOUD_SYNC_MIN_MS) return Promise.resolve(null);
+  if (navigator.onLine === false) return Promise.resolve(null);
+  CLOUD_SYNC_AT = now;
+  const u = BACKUP_URL + (BACKUP_URL.indexOf("?") >= 0 ? "&" : "?") + "token=" + encodeURIComponent(BACKUP_TOKEN) + "&copy=" + encodeURIComponent(CLOUD_COPY);
+  CLOUD_SYNC_BUSY = Promise.resolve(cloudFlush()).catch(() => null)
+    .then(() => cloudFetch(u, { method: "GET", redirect: "follow" })).then(r => r.text()).then(t => {
+      const d = JSON.parse(t);
+      if (!d || d.ok !== true || !Array.isArray(d.jobs)) return null;
+      return dbReadAll(openDb, STORE).then(local => {
+        const plan = cloudSyncPlan(local, d.jobs, { skipId: S.jobId, deleted: cloudDeleted() });
+        if (!plan.puts.length) return plan;
+        return dbWrite(openDb, STORE, os => plan.puts.forEach(j => os.put(j))).then(() => {
+          const k = plan.puts.length;
+          refreshArchive();
+          cloudRender();
+          const el = $("cloudStatus"); if (el) el.textContent = "Synced " + k + " job" + (k === 1 ? "" : "s") + " from cloud";
+          return plan;
+        });
+      });
+    }).catch(() => null) // offline / script error: silent, try again next time
+    .then(r => { CLOUD_SYNC_BUSY = null; return r; });
+  return CLOUD_SYNC_BUSY;
+}
 function wireCloud() {
   const b = $("btnCloudRestore"); if (b) b.onclick = runCloudRestore;
   const a = $("btnCloudAll"); if (a) a.onclick = () => cloudBackupAll();
   window.addEventListener("online", () => { CLOUD_ERR = ""; cloudFlush(); });
   cloudRender();
   if (cloudOn() && cloudQueue().length) cloudFlush(); // app open: retry anything left from last time
+  if (!CLOUD_SYNC_WIRED) { // 30b: pull on open + when the app comes back on screen (throttled inside cloudSync)
+    CLOUD_SYNC_WIRED = true;
+    const back = () => { if (!document.hidden) cloudSync(); };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("focus", back);
+    window.addEventListener("pageshow", back);
+  }
+  cloudSync();
   // 30a: one-time catch-up — first open with backup on: send every job already in this device's Library (quietly), once per copy
   if (cloudOn() && !lsGet(CLOUD_ALL_KEY)) setTimeout(() => { if (!lsGet(CLOUD_ALL_KEY)) cloudBackupAll({ silent: true }); }, CLOUD_CATCHUP_MS);
 }
