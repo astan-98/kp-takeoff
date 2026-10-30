@@ -1555,7 +1555,7 @@ const S = {
   walls: [{ id: uid(), name: "", kind: "ext_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: "batt" }],
   gables: [{ id: uid(), name: "", shape: "triangle", length: "", height: "", wrap: false }],
   cants: [{ id: uid(), name: "", sf: "", material: "r30" }],
-  garageLivingAbove: false, garageCeilingSf: "", garageCeilMat: "r19", garageCeilOc: "16", garageCeils: [],
+  garageLivingAbove: false, garageCeilingSf: "", garageCeilMat: "", garageCeilOc: "16", garageCeils: [], garageCeilAuto: true,
   roofFoamDepth: "", porchRoofDepth: "", garageRoofDepth: "",
   foamType: "oc", foamView: "oc", ccFoamDepth: "", ccNoDefault: true, porchRoofFoam: "", porchRoofCc: "", porchCeilFoam: "", porchCeilCc: "", garageRoofFoam: "", garageRoofCc: "", garageCeilFoam: "", garageCeilCc: "",
   garageFoamRoof: false, garageRoofFlat: "", garageRoofPitch: "6", garageRoofCustomRise: "", houseRoofCc: "", crawlSubFoam: "", crawlSubCc: "",
@@ -1709,6 +1709,14 @@ const CANT_MATS = {
   foam55: ['5.5" open-cell foam', "Open-cell spray foam", '5.5" OC', "Open-cell foam (roofline)"],
   cc2: ['2" closed-cell foam', "Closed-cell spray foam", '2" CC', 'Closed-cell foam 2"'],
 };
+// 30t: Asher — foam over garage roofline -> garage ceiling SF = garage roofline FLAT SF (no pitch), material required, optional 2-section split
+function syncGarageCeil() {
+  if (!S.hasGarage || !S.garageFoamRoof || S.garageCeilAuto === false) return;
+  const total = n(S.garageRoofFlat); if (!(total > 0)) return;
+  if (!Array.isArray(S.garageCeils)) S.garageCeils = [];
+  if (!S.garageCeils.length) S.garageCeilingSf = String(round2(total));
+  else S.garageCeils[0].sf = String(round2(Math.max(0, total - n(S.garageCeilingSf))));
+}
 const GARAGE_CEIL_MATS = {
   r19: ["R19 batts", "R-19 fiberglass batts", "R19", "R-19 fiberglass batts"],
   r30: ["R30 batts", "R-30 fiberglass batts", "R30", "R-30 fiberglass batts"],
@@ -2407,12 +2415,12 @@ function buildLinesForPackage(p, tag) {
     S.foamRoofs.forEach(r => {
       const f = n(r.flatSf); if (f <= 0) return;
       usedExplicit = true;
-      // 30s: Asher — roofline foam qty = FLAT footprint, never pitched
-      push(lines, { area: "Roofline", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthFor(r.depth) + '" OC', footage: round2(f), unit: "SF", notes: noteTag + "Flat SF (no pitch)" });
+      const factor = resolvePitchFactor(r.pitch, r.customRise); // 30t: roofline foam back to pitched SF (Asher)
+      push(lines, { area: "Roofline", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthFor(r.depth) + '" OC', footage: round2(f * factor), unit: "SF", notes: noteTag + "flat×" + factor.toFixed(3) });
       applyFoamType(lines[lines.length - 1], r, "roof");
     });
     if (!usedExplicit && flat > 0 && (!customAttic || PR.onlyAttic)) {
-      push(lines, { area: "Roofline", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthJob() + '" OC', footage: round2(flat), unit: "SF", notes: noteTag + "Flat SF (no pitch)" });
+      push(lines, { area: "Roofline", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthJob() + '" OC', footage: round2(flat * housePitchFactor), unit: "SF", notes: noteTag + "flat×" + housePitchFactor.toFixed(3) });
       applyFoamType(lines[lines.length - 1], { ccDepth: S.houseRoofCc }, "roof");
     }
   }
@@ -2421,7 +2429,7 @@ function buildLinesForPackage(p, tag) {
     const pf = n(S.porchFlat);
     if (S.includePorchRoof && pf > 0) {
       const factor = resolvePitchFactor(S.porchRoofPitch, S.porchRoofCustomRise);
-      push(lines, { area: "Porch roofline", assembly: "Porch roof foam", product: "Open-cell spray foam", description: roofDepthFor(S.porchRoofDepth) + '" OC', footage: round2(pf), unit: "SF", notes: noteTag + "Flat SF (no pitch)" });
+      push(lines, { area: "Porch roofline", assembly: "Porch roof foam", product: "Open-cell spray foam", description: roofDepthFor(S.porchRoofDepth) + '" OC', footage: round2(pf * factor), unit: "SF", notes: noteTag + "flat " + fmt(pf) + " ×" + factor.toFixed(3) });
       applyFoamType(lines[lines.length - 1], { foamType: S.porchRoofFoam, ccDepth: S.porchRoofCc }, "porch roof");
     }
     if (S.includePorchCeiling) {
@@ -2563,13 +2571,15 @@ function buildLinesForPackage(p, tag) {
   }
 
   if (S.hasGarage && F.canAskGarage) {
+    if (F.showFoamRoofPath) syncGarageCeil();
     if (S.garageFoamRoof && F.showFoamRoofPath && n(S.garageRoofFlat) > 0) {
       const factor = resolvePitchFactor(S.garageRoofPitch, S.garageRoofCustomRise);
-      push(lines, { area: "Garage roofline", assembly: "Garage roof foam", product: "Open-cell spray foam", description: roofDepthFor(S.garageRoofDepth) + '" OC', footage: round2(n(S.garageRoofFlat)), unit: "SF", notes: noteTag + "Flat SF (no pitch)" });
+      push(lines, { area: "Garage roofline", assembly: "Garage roof foam", product: "Open-cell spray foam", description: roofDepthFor(S.garageRoofDepth) + '" OC', footage: round2(n(S.garageRoofFlat) * factor), unit: "SF", notes: noteTag });
       applyFoamType(lines[lines.length - 1], { foamType: S.garageRoofFoam, ccDepth: S.garageRoofCc }, "garage roof");
     }
     [{ sf: S.garageCeilingSf, mat: S.garageCeilMat, oc: S.garageCeilOc, foamType: S.garageCeilFoam, ccDepth: S.garageCeilCc }].concat(Array.isArray(S.garageCeils) ? S.garageCeils : []).forEach(g => {
       if (!(n(g.sf) > 0)) return;
+      if (!totalFoam && !GARAGE_CEIL_MATS[g.mat]) return; // 30t: material required — no line until picked (flagged as missing)
       const m = totalFoam ? GARAGE_CEIL_MATS.foam5 : (GARAGE_CEIL_MATS[g.mat] || GARAGE_CEIL_MATS.r19);
       push(lines, { area: "Garage ceiling", assembly: "Garage ceiling", product: m[1], description: m[2] + (/^R-\d+ fiberglass batts$/.test(m[1]) ? "/" + battW(g.oc, "16") : ""), priceKey: m[3],
         footage: round2(n(g.sf)), unit: "SF", notes: noteTag });
@@ -3317,14 +3327,17 @@ function renderAssemblyEditors() {
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">Garage ceiling</div>';
     if (!Array.isArray(S.garageCeils)) S.garageCeils = [];
+    if (F.showFoamRoofPath) syncGarageCeil();
     const multi = S.garageCeils.length > 0;
+    const gcAuto = F.showFoamRoofPath && S.garageFoamRoof && S.garageCeilAuto !== false && n(S.garageRoofFlat) > 0;
     const GC_RETIRED = ["blow_r30", "blow_r38"]; // 29ba: we don't blow garage ceilings — not offered; saved jobs keep theirs
     const gcMatOpts = cur => Object.keys(GARAGE_CEIL_MATS).filter(k => !GC_RETIRED.includes(k) || k === cur).map(k => [k, GARAGE_CEIL_MATS[k][0] + (GC_RETIRED.includes(k) ? " (saved — no longer offered)" : "")]);
     const gcFields = (label, get, set) => {
       if (multi) card.appendChild(el("div", "row-title", label));
-      card.appendChild(fieldInput(multi ? "SF" : "Garage ceiling SF", get("sf"), v => { set("sf", v); schedule(); }, "number"));
-      const mat = GARAGE_CEIL_MATS[get("mat")] ? get("mat") : "r19";
-      card.appendChild(fieldSelect("Ceiling mat", mat, gcMatOpts(mat), v => { set("mat", v); render(); }));
+      if (gcAuto && label === "Ceiling area #2") card.appendChild(el("p", "cap", "SF " + fmt(n(get("sf"))) + " (rest of garage roofline flat SF)"));
+      else card.appendChild(fieldInput(multi ? "SF" : "Garage ceiling SF", get("sf"), v => { set("sf", v); if (gcAuto && !multi) S.garageCeilAuto = false; if (multi) syncGarageCeil(); schedule(); }, "number"));
+      const mat = GARAGE_CEIL_MATS[get("mat")] ? get("mat") : "";
+      card.appendChild(fieldSelect("Ceiling material (required)", mat, [["", "Select material…"]].concat(gcMatOpts(mat)), v => { set("mat", v); render(); }));
       if (battUse.notTotalFoam && /^r\d+$/.test(mat)) card.appendChild(fieldSelect("Batt width", battW(get("oc"), "16"), BATT_W_CHOICES, v => { set("oc", v); render(); }));
       if (mat === "foam5" || anyTotalFoam) {
         const proxy = { foamType: get("foamType"), ccDepth: get("ccDepth") };
@@ -3334,20 +3347,23 @@ function renderAssemblyEditors() {
       }
     };
     const mainKey = { sf: "garageCeilingSf", mat: "garageCeilMat", oc: "garageCeilOc", foamType: "garageCeilFoam", ccDepth: "garageCeilCc" };
+    if (gcAuto) card.appendChild(el("p", "cap", "Auto-filled from garage roofline flat SF " + fmt(n(S.garageRoofFlat)) + " (no pitch)."));
+    else if (F.showFoamRoofPath && S.garageFoamRoof && S.garageCeilAuto === false) card.appendChild(addBtn("Use garage roofline flat SF", () => { S.garageCeilAuto = true; render(); }));
     gcFields("Ceiling area #1", k => S[mainKey[k]], (k, v) => { S[mainKey[k]] = v; });
     S.garageCeils.forEach((g, idx) => {
       gcFields("Ceiling area #" + (idx + 2), k => g[k], (k, v) => { g[k] = v; });
       card.appendChild(addBtn("Remove area", () => { S.garageCeils.splice(idx, 1); render(); }));
     });
-    card.appendChild(addBtn("Add area", () => { S.garageCeils.push({ id: uid(), sf: "", mat: GARAGE_CEIL_MATS[S.garageCeilMat] && !GC_RETIRED.includes(S.garageCeilMat) ? S.garageCeilMat : "r19", oc: "16" }); render(); }));
+    if (!S.garageCeils.length) card.appendChild(addBtn("Split into 2 sections (different OC / material)", () => { S.garageCeils.push({ id: uid(), sf: "", mat: GARAGE_CEIL_MATS[S.garageCeilMat] && !GC_RETIRED.includes(S.garageCeilMat) ? S.garageCeilMat : "", oc: "24" }); if (gcAuto) S.garageCeilingSf = String(round2(n(S.garageRoofFlat) * 2 / 3)); render(); }));
     let rc = null;
     if (F.showFoamRoofPath) {
     rc = el("div", "row-card"); rc.innerHTML = '<div class="row-title">Garage roofline</div>';
     const fr = el("div", "toggle-row"); fr.appendChild(el("span", null, "Foam garage roofline"));
     const sw = el("button", "switch" + (S.garageFoamRoof ? " on" : "")); sw.type = "button";
-    sw.onclick = () => { S.garageFoamRoof = !S.garageFoamRoof; render(); }; fr.appendChild(sw); rc.appendChild(fr);
+    sw.onclick = () => { S.garageFoamRoof = !S.garageFoamRoof; if (S.garageFoamRoof) S.garageCeilAuto = true; render(); }; fr.appendChild(sw); rc.appendChild(fr);
     if (S.garageFoamRoof) {
       rc.appendChild(fieldInput("Garage roofline flat SF", S.garageRoofFlat, v => { S.garageRoofFlat = v; schedule(); }, "number"));
+      rc.lastChild.querySelector("input").onchange = () => render(); // 30t: refresh auto-filled garage ceiling SF
       rc.appendChild(fieldSelect("Garage roofline pitch", S.garageRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.garageRoofPitch = v; render(); }));
       foamTypeControls(rc, S, "garageRoofFoam", "garageRoofCc");
       if (foamTypeFor(S.garageRoofFoam) !== "cc") rc.appendChild(roofDepthSelect("Garage roofline foam depth", S.garageRoofDepth, v => { S.garageRoofDepth = v; render(); }));
@@ -3368,7 +3384,7 @@ function renderAssemblyEditors() {
     const out = el("p", "cap");
     const showPorch = () => {
       const pf = n(S.porchFlat), fac = resolvePitchFactor(S.porchRoofPitch, S.porchRoofCustomRise);
-      out.textContent = (S.includePorchRoof ? "Roofline " + fmt(round2(pf)) + " SF (flat, no pitch)" : "No roofline") +
+      out.textContent = (S.includePorchRoof ? "Roofline " + fmt(round2(pf * fac)) + " SF (flat × " + fac.toFixed(3) + ")" : "No roofline") +
         " · " + (S.includePorchCeiling ? "Ceiling " + fmt(round2(pf)) + " SF" : "No ceiling");
     };
     card.appendChild(fieldInput("Porch flat SF", S.porchFlat, v => { S.porchFlat = v; showPorch(); schedule(); }, "number"));
@@ -3991,6 +4007,8 @@ function missingFields() {
     const roofOn = F.showFoamRoofPath && S.garageFoamRoof;
     if (roofOn && blank(S.garageRoofFlat)) add("Garage roofline", "Flat SF", "Garage roofline", "Garage roofline flat SF");
     if (!roofOn && blank(S.garageCeilingSf) && !(S.garageCeils || []).some(g => n(g.sf) > 0)) add("Garage ceiling", "SF", "Garage ceiling", (S.garageCeils || []).length ? "SF" : "Garage ceiling SF");
+    let gcTF = false; try { gcTF = pkgProfile(S.pkg).totalFoam; } catch (e) {}
+    if (!gcTF) [{ sf: S.garageCeilingSf, mat: S.garageCeilMat }].concat(S.garageCeils || []).forEach((g, i) => { if (n(g.sf) > 0 && !GARAGE_CEIL_MATS[g.mat]) add("Garage ceiling", "Material (area #" + (i + 1) + ")", "Garage ceiling", "Ceiling material (required)"); });
   }
   if (S.hasPorch && F.canAskPorch && blank(S.porchFlat)) add("Porch", "Flat SF", "Porch", "Porch flat SF");
   if (S.hasUfbc && F.canAskUfbc && blank(S.ufbcSf)) add("UFBC", "SF", "UFBC (unfinished basement ceiling)", "UFBC SF");
@@ -4287,7 +4305,7 @@ function renderLiveOnly() {
   const da = (!F.canAskDeadVaultKnees || !S.hasDeadAir) ? 0 : S.deadAir.reduce((s, r) => s + n(r.sf), 0);
   const vf = (!F.canAskDeadVaultKnees || !S.hasVaults) ? 0 : S.vaults.reduce((s, r) => s + n(r.flatSf), 0);
   const atticBlow = Math.max(0, flat - da - vf);
-  const foam = flat; // 30s: roofline foam = flat footprint (no pitch)
+  const foam = flat * resolvePitchFactor(S.housePitch, S.houseCustomRise); // 30t: pitched again
   $("atticBlowLive").textContent = fmt(atticBlow) + " SF";
   if ($("atticBlowLiveLabel")) $("atticBlowLiveLabel").textContent = totalBatOn(optionsOn() ? optionPkgs()[S.optionView | 0] : S.pkg) ? "Total Batt R38 dead air SF (no blow)" : "Attic blow SF";
   $("foamRoofLive").textContent = fmt(foam) + " SF";
@@ -4562,7 +4580,9 @@ function migrateState(d) {
   delete S.customRoof; delete S.customWalls;
   // trimmed material lists (build g): cellulose etc. → nearest valid option
   if (Array.isArray(S.cants)) S.cants.forEach(c => { if (!CANT_MATS[c.material]) c.material = "r30"; if (c.material === "cc2") c.material = "foam55"; }); // 29as: no 2" CC cantilever
-  if (!GARAGE_CEIL_MATS[S.garageCeilMat]) S.garageCeilMat = "r19";
+  if (!GARAGE_CEIL_MATS[S.garageCeilMat] && !(d.garageCeilMat === "" || !("garageCeilMat" in d))) S.garageCeilMat = "r19"; // 30t: blank = not picked yet
+  if (!GARAGE_CEIL_MATS[S.garageCeilMat]) S.garageCeilMat = "";
+  if (typeof S.garageCeilAuto !== "boolean") S.garageCeilAuto = !("garageCeilingSf" in d) || !(n(d.garageCeilingSf) > 0); // old jobs with typed SF keep it
   if (!Array.isArray(S.garageCeils)) S.garageCeils = [];
   S.garageCeils.forEach(g => { if (!GARAGE_CEIL_MATS[g.mat]) g.mat = "r19"; g.oc = battW(g.oc, "16"); });
   if (Array.isArray(S.betweenFloors)) S.betweenFloors.forEach(b => { if (BETWEEN_FLOOR_MIGRATE[b.mat]) b.mat = BETWEEN_FLOOR_MIGRATE[b.mat]; if (!BETWEEN_FLOOR_MATS[b.mat]) b.mat = "r13_sound"; });
@@ -4703,7 +4723,7 @@ function newJob() {
   S.hasDeadAir = false; S.hasVaults = false; S.hasKnees = false; S.hasBaffles = false;
   S.hasRim = false; S.hasWalls = true; S.hasInteriorWalls = false; S.hasGables = false; S.hasCants = false;
   S.interiorWalls = [newInteriorWall()];
-  S.hasGarage = false; S.garageCeils = []; S.hasPorch = false; S.hasBasementWalls = false;
+  S.hasGarage = false; S.garageCeils = []; S.garageCeilingSf = ""; S.garageCeilMat = ""; S.garageCeilAuto = true; S.hasPorch = false; S.hasBasementWalls = false;
   S.hasSubfloor = false; S.hasDense = false; S.hasCrawlWalls = false;
   S.crawlSubR = "R-19"; S.crawlSubOc = "16"; S.hasUfbc = false; S.hasSepWalls = false; S.ufbcSf = ""; S.ufbcR = "R-19"; S.ufbcOc = "16"; S.subfloorOverride = "";
   S.hasMisc = false; S.misc = [newMiscItem()];
@@ -5097,7 +5117,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-30s";
+const APP_BUILD = "2026-10-30t";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
