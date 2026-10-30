@@ -613,7 +613,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <input type="file" id="restoreFile" accept=".json,application/json" class="hidden">
       <div class="hidden" id="cloudBox" style="margin-top:10px">
         <p class="cap" id="cloudStatus" style="margin:0 0 6px"></p>
-        <button type="button" class="btn btn-secondary btn-block" id="btnCloudRestore">Restore from cloud</button>
+        <div class="grid2">
+          <button type="button" class="btn btn-secondary" id="btnCloudAll">Back up all to cloud</button>
+          <button type="button" class="btn btn-secondary" id="btnCloudRestore">Restore from cloud</button>
+        </div>
       </div>
       <p class="status" id="backupStatus"></p>
     </div>
@@ -4963,7 +4966,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-29bb";
+const APP_BUILD = "2026-10-30a";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -5429,6 +5432,8 @@ let BACKUP_URL = "https://script.google.com/macros/s/AKfycbzvc7ST1UVtsglLBf_QoCl
 let BACKUP_TOKEN = "JNZjDp7OziL3cisRjGA_KXCivfMT1_WZ"; // shared secret, must match TOKEN in kp-backup-Code.gs
 const CLOUD_COPY = APP_EDITION === "asher" ? "kp" : APP_EDITION; // kp / lance / choice / sky — folder + column in the sheet
 const CLOUD_QUEUE_KEY = CLOUD_COPY + "-cloud-queue-v1", CLOUD_LAST_KEY = CLOUD_COPY + "-cloud-last-v1";
+const CLOUD_ALL_KEY = CLOUD_COPY + "-cloud-all-v1"; // 30a: set once every Library job on this device has been sent (or queued)
+let CLOUD_CATCHUP_MS = 3000, CLOUD_ALL_BUSY = null;
 let cloudFetch = (u, o) => fetch(u, o); // swapped in tests
 let CLOUD_BUSY = null, CLOUD_ERR = "";
 function cloudOn() { return !!String(BACKUP_URL || "").trim(); }
@@ -5458,17 +5463,59 @@ function cloudFlush() {
     const q = cloudQueue(); if (!q.length) return Promise.resolve(true);
     if (navigator.onLine === false) { CLOUD_ERR = "offline"; return Promise.resolve(false); }
     const p = q[0];
-    return cloudFetch(BACKUP_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, redirect: "follow",
-        body: JSON.stringify(Object.assign({ token: BACKUP_TOKEN }, p)) })
-      .then(r => r.text().then(t => { let d = null; try { d = JSON.parse(t); } catch (e) {} if (!r.ok || !d || d.ok !== true) throw new Error((d && d.error) || ("HTTP " + r.status)); }))
-      .then(() => {
-        cloudSetQueue(cloudQueue().filter(x => !(x && x.jobId === p.jobId && x.savedAt === p.savedAt))); // a newer save of the same job stays queued
-        lsSet(CLOUD_LAST_KEY, new Date().toISOString()); CLOUD_ERR = ""; return step();
-      }, e => { CLOUD_ERR = (e && e.message) || "network error"; return false; });
+    return cloudSend(p).then(ok => ok ? step() : false);
   };
   cloudRender("sending");
   CLOUD_BUSY = step().then(v => { CLOUD_BUSY = null; cloudRender(); return v; });
   return CLOUD_BUSY;
+}
+// one POST; resolves true (stored in the sheet) or false (sets CLOUD_ERR). On success drops that exact version from the queue.
+function cloudSend(p) {
+  if (navigator.onLine === false) { CLOUD_ERR = "offline"; return Promise.resolve(false); }
+  return cloudFetch(BACKUP_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, redirect: "follow",
+      body: JSON.stringify(Object.assign({ token: BACKUP_TOKEN }, p)) })
+    .then(r => r.text().then(t => { let d = null; try { d = JSON.parse(t); } catch (e) {} if (!r.ok || !d || d.ok !== true) throw new Error((d && d.error) || ("HTTP " + r.status)); }))
+    .then(() => {
+      cloudSetQueue(cloudQueue().filter(x => !(x && x.jobId === p.jobId && x.savedAt === p.savedAt))); // a newer save of the same job stays queued
+      lsSet(CLOUD_LAST_KEY, new Date().toISOString()); CLOUD_ERR = ""; return true;
+    }, e => { CLOUD_ERR = (e && e.message) || "network error"; return false; });
+}
+// 30a: total SF for a job already in the Library (its saved FieldGroove rows carry unit + qty)
+function cloudJobSf(j) { return round2(((j && j.fgRows) || []).filter(r => r && r.unit === "SF").reduce((a, r) => a + n(r.qty), 0)); }
+// put these jobs in the pending queue (one entry per job, replacing any older one)
+function cloudQueueMany(jobs) {
+  const ids = new Set(jobs.map(j => j.id)), q = cloudQueue().filter(p => p && !ids.has(p.jobId));
+  jobs.forEach(j => q.push(cloudPayload(j, cloudJobSf(j)))); cloudSetQueue(q);
+}
+/* 30a: "Back up all to cloud" — every saved Library job, one at a time, through the same payload (the sheet upserts by copy + job id,
+   so re-sending never makes duplicate rows). Failures go into the pending queue. opts.silent = the one-time automatic catch-up. */
+function cloudBackupAll(opts) {
+  opts = opts || {};
+  if (!cloudOn()) return Promise.resolve(null);
+  if (CLOUD_ALL_BUSY) return CLOUD_ALL_BUSY;
+  const ask = opts.confirm || (m => window.confirm(m));
+  const say = opts.silent ? (t => { const el = $("cloudStatus"); if (el) el.textContent = "Cloud backup: " + t; }) : backupStatus;
+  const run = dbReadAll(openDb, STORE).then(all => {
+    const jobs = (all || []).filter(j => j && j.id != null);
+    if (!jobs.length) { lsSet(CLOUD_ALL_KEY, new Date().toISOString()); if (!opts.silent) backupStatus("No saved takeoffs to back up."); return { sent: 0, pending: 0, total: 0 }; }
+    if (!opts.silent && !ask("Send " + jobs.length + " saved takeoff" + (jobs.length === 1 ? "" : "s") + " to the cloud backup?")) { backupStatus("Cloud backup cancelled — nothing sent."); return null; }
+    let i = 0, sent = 0; const failed = [];
+    const next = () => {
+      if (i >= jobs.length) return Promise.resolve();
+      const j = jobs[i++];
+      say("Backing up " + i + " of " + jobs.length + "…");
+      return cloudSend(cloudPayload(j, cloudJobSf(j))).then(ok => { if (ok) sent++; else failed.push(j); return next(); });
+    };
+    return next().then(() => {
+      if (failed.length) cloudQueueMany(failed);
+      lsSet(CLOUD_ALL_KEY, new Date().toISOString());
+      const msg = failed.length ? sent + " backed up, " + failed.length + " pending" : "Backed up " + sent + " ✓";
+      if (!opts.silent) backupStatus(msg);
+      return { sent, pending: failed.length, total: jobs.length };
+    });
+  }).catch(e => { if (!opts.silent) backupStatus("Cloud backup failed: " + (e && e.message || e)); return null; });
+  CLOUD_ALL_BUSY = run.then(r => { CLOUD_ALL_BUSY = null; cloudRender(); return r; });
+  return CLOUD_ALL_BUSY;
 }
 function cloudRender(state) {
   const box = $("cloudBox"), el = $("cloudStatus"); if (!box || !el) return;
@@ -5517,9 +5564,12 @@ function runCloudRestore() {
 }
 function wireCloud() {
   const b = $("btnCloudRestore"); if (b) b.onclick = runCloudRestore;
+  const a = $("btnCloudAll"); if (a) a.onclick = () => cloudBackupAll();
   window.addEventListener("online", () => { CLOUD_ERR = ""; cloudFlush(); });
   cloudRender();
   if (cloudOn() && cloudQueue().length) cloudFlush(); // app open: retry anything left from last time
+  // 30a: one-time catch-up — first open with backup on: send every job already in this device's Library (quietly), once per copy
+  if (cloudOn() && !lsGet(CLOUD_ALL_KEY)) setTimeout(() => { if (!lsGet(CLOUD_ALL_KEY)) cloudBackupAll({ silent: true }); }, CLOUD_CATCHUP_MS);
 }
 function wireBackup() {
   const b = $("btnBackup"), r = $("btnRestore"), f = $("restoreFile");
