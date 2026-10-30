@@ -1894,11 +1894,13 @@ function fgBuildRows(foamChoice) {
   }));
   return { rows, skipped: Array.from(skipped), flags: Array.from(flags), estimates: ests.map(e => e.name) };
 }
+// 30g: FieldGroove's import step does not decode &quot; — write inch marks as a raw " exactly like FG's own template (only & < > escaped)
+function fgXmlEsc(t) { return String(t == null ? "" : t).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
 function fgXlsx(rows) {
   const colL = i => { let s = ""; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
   const cell = (ref, v, style) => (typeof v === "number")
     ? '<c r="' + ref + '"' + (style ? ' s="' + style + '"' : "") + '><v>' + v + "</v></c>"
-    : '<c r="' + ref + '" t="inlineStr"' + (style ? ' s="' + style + '"' : "") + "><is><t xml:space=\"preserve\">" + xmlEsc(v) + "</t></is></c>";
+    : '<c r="' + ref + '" t="inlineStr"' + (style ? ' s="' + style + '"' : "") + "><is><t xml:space=\"preserve\">" + fgXmlEsc(v) + "</t></is></c>";
   const out = ['<row r="1">' + FG_HEADERS.map((h, i) => cell(colL(i) + "1", h, 1)).join("") + "</row>"];
   rows.forEach((R, k) => {
     const r = k + 2;
@@ -4980,7 +4982,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-30f";
+const APP_BUILD = "2026-10-30g";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
