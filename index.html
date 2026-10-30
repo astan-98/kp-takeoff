@@ -531,6 +531,8 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 
     <div class="section" id="sec-footprint">
       <h2>Flat footprint</h2>
+      <div id="metalDims" class="hidden"></div>
+      <div id="houseFootprint">
       <div class="field"><label>Flat footprint SF (once)</label><input id="flatSf" type="number" inputmode="decimal" min="0" step="any"></div>
       <div id="pitchBlock" class="hidden">
         <div class="field"><label>House roof pitch</label><select id="housePitch"></select></div>
@@ -539,6 +541,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       </div>
       <div id="blowLiveBlock" class="props"><span class="k" id="atticBlowLiveLabel">Attic blow SF</span><span class="v" id="atticBlowLive">0 SF</span></div>
       <div id="touchupField" class="field hidden"><label>Crawl touch-up patch SF</label><input id="touchupPatchSf" type="number" inputmode="decimal"></div>
+      </div>
     </div>
 
     <!-- 29at: every work area is its own bubble (built in renderAssemblyEditors, measuring-routine order) -->
@@ -1562,7 +1565,7 @@ const S = {
   hasGarage: false, hasPorch: false, hasBasementWalls: false, hasSepWalls: false,
   hasSubfloor: false, hasDense: false, hasCrawlWalls: false,
   hasMisc: false, misc: [newMiscItem()],
-  hasMetal: false, hasMetalRoof: true, hasMetalWalls: true, hasMetalGables: false, metalRoofFlat: "", metalRoofPitch: "1", metalRoofCustomRise: "", metalRoofCc: "", metalWallPerim: "", metalWallHeight: "", metalWallCc: "", metalGableSf: "", metalGableCc: "", // 30u: metal building
+  hasMetal: false, hasMetalRoof: true, hasMetalWalls: true, hasMetalGables: true, metalLen: "", metalWid: "", metalDeducts: [], metalRoofFoam: "", metalWallFoam: "", metalGableFoam: "", metalRoofBattR: "r19", metalWallBattR: "r13", metalGableBattR: "r13", metalRoofOc: "16", metalWallOc: "16", metalGableOc: "16", metalRoofFlat: "", metalRoofPitch: "1", metalRoofCustomRise: "", metalRoofCc: "", metalWallPerim: "", metalWallHeight: "", metalWallCc: "", metalGableSf: "", metalGableCc: "", // 30u: metal building
   interiorWalls: [newInteriorWall()],
   deadAir: [{ id: uid(), name: "", sf: "" }],
   vaults: [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }],
@@ -1646,7 +1649,7 @@ function flags(pkgArg) {
     // optional toggle (default off) on every attic retro, foam retro included.
     bafflesRequired: isNew,
     canAskBaffles: isNew || isAtticRetro,
-    bafflesOn: isNew || (isAtticRetro && !!S.hasBaffles),
+    bafflesOn: isNew || (isAtticRetro && !!S.hasBaffles), // 30w: metal = neither (no baffles)
     canAskWalls: isNew,
     canAskGables: showFoamRoofPath,
     canAskCants: isNew,
@@ -1732,12 +1735,51 @@ const CANT_MATS = {
    Edit METAL_TOGGLES only (label, state key). Each key = one work area on the Metal building card.
    Current placeholder set = the 30u metal card areas (closed-cell roof / walls / gables) + Miscellaneous. */
 const METAL_TOGGLES = [
-  ["Metal roof", "hasMetalRoof"],
-  ["Metal walls", "hasMetalWalls"],
-  ["Metal gables", "hasMetalGables"],
-  ["Miscellaneous", "hasMisc"],
+  ["Roofline", "hasMetalRoof"],
+  ["Gables", "hasMetalGables"],
+  ["Walls", "hasMetalWalls"],
 ];
-function METAL_KEEP_LINE(L) { return /^Metal building/.test(L.assembly || "") || L.assembly === "Miscellaneous" || L.assembly === "Extra labor"; }
+// 30w: metal packages — no blown. Total Batt / Total Foam / Foam Roofline + Batt Walls only.
+const METAL_PKGS = ["total_bat", "total_foam", "hybrid_foam_batts"];
+const METAL_CC_DEPTHS = CC_DEPTH_CHOICES.filter(d => n(d) >= 1 && n(d) <= 8); // dropdown 1"–8" by 0.5"
+const METAL_WALL_HEIGHTS = Array.from({ length: 23 }, (_, i) => String(8 + i)); // 8–30 ft
+function renderMetalDims() {
+  const box = $("metalDims"); if (!box) return;
+  box.innerHTML = ""; if (S.jobMode !== "metal") return;
+  const addBtn = (label, fn) => { const b = el("button", "btn btn-secondary btn-sm"); b.type = "button"; b.textContent = label; b.onclick = fn; return b; };
+  const D = metalDims(), num = (label, key) => { const f = fieldInput(label, S[key], v => { S[key] = v; schedule(); }, "number"); f.querySelector("input").onchange = () => render(); return f; };
+  const prop = (k, v) => { const d = el("div", "props"); d.innerHTML = '<span class="k">' + k + '</span><span class="v">' + v + "</span>"; return d; };
+  const g2 = el("div", "grid2"); g2.appendChild(num("Building length ft", "metalLen")); g2.appendChild(num("Building width ft", "metalWid")); box.appendChild(g2);
+  box.appendChild(prop("Flat footprint (L × W)", fmt(round2(D.flat)) + " SF"));
+  box.appendChild(fieldSelect("Roof pitch", S.metalRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.metalRoofPitch = v; render(); }));
+  if (S.metalRoofPitch === "custom") box.appendChild(num("Custom rise (over 12)", "metalRoofCustomRise"));
+  box.appendChild(prop("Roofline (flat × pitch)", fmt(round2(D.roof)) + " SF"));
+  box.appendChild(prop("Perimeter (2 × (L + W))", fmt(round2(D.perim)) + " LF"));
+  box.appendChild(fieldSelect("Wall height", S.metalWallHeight, [["", "Pick height…"]].concat(METAL_WALL_HEIGHTS.map(h => [h, h + " ft"])), v => { S.metalWallHeight = v; render(); }));
+  box.appendChild(prop("Wall SF (perimeter × height)", fmt(round2(D.wallGross)) + " SF"));
+  box.appendChild(el("div", "row-title", "Deductions (doors / windows / openings)"));
+  if (!Array.isArray(S.metalDeducts)) S.metalDeducts = [];
+  S.metalDeducts.forEach((r, i) => {
+    const g = el("div", "grid2");
+    const f = (label, k) => { const x = fieldInput(label, r[k], v => { r[k] = v; schedule(); }, k === "label" ? "text" : "number"); x.querySelector("input").onchange = () => render(); return x; };
+    g.appendChild(f("Opening #" + (i + 1), "label")); g.appendChild(f("Qty", "qty")); g.appendChild(f("Width ft", "w")); g.appendChild(f("Height ft", "h"));
+    box.appendChild(g); box.appendChild(addBtn("Remove opening #" + (i + 1), () => { S.metalDeducts.splice(i, 1); render(); }));
+  });
+  box.appendChild(addBtn("Add deduction", () => { S.metalDeducts.push({ id: uid(), label: "", qty: "1", w: "", h: "" }); render(); }));
+  box.appendChild(prop("Net wall SF", fmt(round2(D.wallNet)) + " SF" + (D.ded > 0 ? " (−" + fmt(round2(D.ded)) + ")" : "")));
+  const gf = fieldInput("Gable SF (blank = auto " + fmt(round2(D.gableAuto)) + ")", S.metalGableSf, v => { S.metalGableSf = v; schedule(); }, "number"); gf.querySelector("input").onchange = () => render(); box.appendChild(gf);
+}
+function METAL_KEEP_LINE(L) { return /^Metal building/.test(L.assembly || "") || L.assembly === "Extra labor" || L.assembly === "Air seal (caulk & foam)"; }
+function metalDims() {
+  const L = n(S.metalLen), W = n(S.metalWid), flat = L * W, perim = 2 * (L + W);
+  const pf = resolvePitchFactor(S.metalRoofPitch, S.metalRoofCustomRise), rise = Math.sqrt(Math.max(0, (pf * 12) ** 2 - 144));
+  const ded = (S.metalDeducts || []).reduce((a, r) => a + n(r.w) * n(r.h) * (n(r.qty) || 1), 0);
+  const wallGross = perim * n(S.metalWallHeight), wallNet = Math.max(0, wallGross - ded);
+  const gableAuto = W * W * rise / 24; // two triangle gable ends
+  const gable = String(S.metalGableSf || "").trim() !== "" ? n(S.metalGableSf) : gableAuto;
+  return { L, W, flat, perim, pf, rise, roof: flat * pf, ded, wallGross, wallNet, gableAuto, gable };
+}
+function metalAreaUsesFoam(area) { const p = S.pkg; return p === "total_foam" || (p === "hybrid_foam_batts" && area !== "wall"); }
 // 30t: Asher — foam over garage roofline -> garage ceiling SF = garage roofline FLAT SF (no pitch), material required, optional 2-section split
 function syncGarageCeil() {
   if (!S.hasGarage || !S.garageFoamRoof || S.garageCeilAuto === false) return;
@@ -1815,6 +1857,7 @@ const FG_RULES = [
   { id: "bf_r13", label: "Between floors R13 sound batts", key: "R-13 fiberglass batts", sec: ["Between floors (sound)"], items: ["R13/{W} UF" + OC], conf: "sure", note: "19\" → no R13 19\" item, flagged." },
   { id: "bf_r19", label: "Between floors R19 batts", key: "R-19 fiberglass batts", sec: ["Between floors (sound)"], items: ["R19/{W} UF" + OC], conf: "sure", note: "" },
   { id: "cant_batts", label: "Cantilever batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Cantilever"], items: ["R{r}/{W} UF" + OC], kraftItems: ["R{r}/{W} KRAFT" + OC, "R{r}/{W} UF" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the cantilever is marked Kraft faced. Width picker default 16\"; R38/19 kraft → UF (no kraft)." },
+  { id: "metal_batts", wall24: true, label: "Metal building batts (roof / walls / gables)", key: "R-{r} fiberglass batts", sec: ["Metal building roof", "Metal building walls", "Metal building gables"], items: ["R{r}/{W} UF" + OC], conf: "sure", note: "30w: unfaced, width from the batt width picker." },
   { id: "garage_batts", label: "Garage ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Garage ceiling"], items: ["R{r}/{W} UF" + OC], conf: "sure", note: "Unfaced (installed from below); width picker default 16\"." },
   { id: "porch_batts", label: "Porch ceiling batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Porch ceiling"], items: ["R{r}/{W} UF" + OC], conf: "sure", note: "Width picker default 16\"." },
   // —— rock wool ——
@@ -2617,15 +2660,23 @@ function buildLinesForPackage(p, tag) {
     });
   }
 
-  // 30u: metal building — closed-cell foam on roof (flat × pitch), walls (perimeter × eave height) and gables; CC depth picked per area
+  // 30w: metal building — roofline (flat L×W × pitch), gables (auto from width + pitch), walls (perimeter × height − deductions); foam OC/CC or batts by package
   if (S.jobMode === "metal") {
-    const mb = (assembly, sf, cc, note) => { if (!(sf > 0)) return;
-      push(lines, { area: "Metal building", assembly, product: "Open-cell spray foam", description: "foam", footage: round2(sf), unit: "SF", notes: noteTag + note });
-      applyFoamType(lines[lines.length - 1], { foamType: "cc", ccDepth: cc }, "metal building", true); };
-    const rf = resolvePitchFactor(S.metalRoofPitch, S.metalRoofCustomRise);
-    if (S.hasMetalRoof !== false) mb("Metal building roof", n(S.metalRoofFlat) * rf, S.metalRoofCc, "flat " + fmt(n(S.metalRoofFlat)) + " ×" + rf.toFixed(3));
-    if (S.hasMetalWalls !== false) mb("Metal building walls", n(S.metalWallPerim) * n(S.metalWallHeight), S.metalWallCc, fmt(n(S.metalWallPerim)) + " LF × " + fmt(n(S.metalWallHeight)) + " ft");
-    if (S.hasMetalGables !== false) mb("Metal building gables", n(S.metalGableSf), S.metalGableCc, "");
+    const D = metalDims();
+    const area = (key, assembly, sf, note, depthDesc) => {
+      if (!(sf > 0)) return;
+      const k = key[0].toUpperCase() + key.slice(1);
+      if (metalAreaUsesFoam(key)) {
+        push(lines, { area: "Metal building", assembly, product: "Open-cell spray foam", description: depthDesc, footage: round2(sf), unit: "SF", notes: noteTag + note });
+        applyFoamType(lines[lines.length - 1], { foamType: S["metal" + k + "Foam"], ccDepth: S["metal" + k + "Cc"] }, "metal " + key);
+      } else {
+        const r = String(S["metal" + k + "BattR"] || "r19").replace(/\D/g, "") || "19";
+        push(lines, { area: "Metal building", assembly, product: "R-" + r + " fiberglass batts", description: "R" + r + "/" + battW(S["metal" + k + "Oc"], "16"), priceKey: "R-" + r + " fiberglass batts", footage: round2(sf), unit: "SF", notes: noteTag + note });
+      }
+    };
+    if (S.hasMetalRoof) area("roof", "Metal building roof", D.roof, "flat " + fmt(D.flat) + " (" + fmt(D.L) + "×" + fmt(D.W) + ") ×" + D.pf.toFixed(3), roofDepthJob() + '" OC');
+    if (S.hasMetalGables) area("gable", "Metal building gables", D.gable, String(S.metalGableSf || "").trim() ? "entered" : "auto from width + pitch", '3.5" open cell');
+    if (S.hasMetalWalls) area("wall", "Metal building walls", D.wallNet, fmt(D.perim) + " LF × " + fmt(n(S.metalWallHeight)) + " ft" + (D.ded > 0 ? " − " + fmt(D.ded) + " SF deductions" : ""), '3.5" open cell');
   }
 
   if (S.hasDense && F.canAskDense) {
@@ -3417,27 +3468,26 @@ function renderAssemblyEditors() {
     SEC = 30; box.appendChild(card);
   }
   if (S.jobMode === "metal" && (S.hasMetalRoof || S.hasMetalWalls || S.hasMetalGables)) {
-    const card = el("div", "row-card"); card.innerHTML = '<div class="row-title">Metal building</div>';
-    card.appendChild(el("p", "cap", "Closed-cell foam. Pick a depth for each area."));
-    const ccRow = (key, label) => { card.appendChild(ccDepthPicker(label + " closed-cell depth", ccValid(S[key]) ? String(S[key]) : "", v => { S[key] = v; render(); }, null)); };
-    if (S.hasMetalRoof) {
-    card.appendChild(el("div", "row-title", "Roof"));
-    card.appendChild(fieldInput("Metal roof flat SF", S.metalRoofFlat, v => { S.metalRoofFlat = v; schedule(); }, "number"));
-    card.appendChild(fieldSelect("Metal roof pitch", S.metalRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.metalRoofPitch = v; render(); }));
-    if (n(S.metalRoofFlat) > 0) ccRow("metalRoofCc", "Roof");
-    }
-    if (S.hasMetalWalls) {
-    card.appendChild(el("div", "row-title", "Walls"));
-    card.appendChild(fieldInput("Wall perimeter LF", S.metalWallPerim, v => { S.metalWallPerim = v; schedule(); }, "number"));
-    card.appendChild(fieldInput("Eave height ft", S.metalWallHeight, v => { S.metalWallHeight = v; schedule(); }, "number"));
-    if (n(S.metalWallPerim) * n(S.metalWallHeight) > 0) ccRow("metalWallCc", "Walls");
-    }
-    if (S.hasMetalGables) {
-    card.appendChild(el("div", "row-title", "Gables"));
-    card.appendChild(fieldInput("Gable SF (both ends)", S.metalGableSf, v => { S.metalGableSf = v; schedule(); }, "number"));
-    if (n(S.metalGableSf) > 0) ccRow("metalGableCc", "Gables");
-    }
-    Array.from(card.querySelectorAll("input")).forEach(i => { i.addEventListener("change", () => render()); });
+    const D = metalDims();
+    const card = el("div", "row-card"); card.innerHTML = '<div class="row-title">Metal building — materials</div>';
+    const matRow = (key, title, sf, battOpts) => {
+      const k = key[0].toUpperCase() + key.slice(1);
+      card.appendChild(el("div", "row-title", title + " — " + fmt(round2(sf)) + " SF"));
+      if (metalAreaUsesFoam(key)) {
+        const tk = "metal" + k + "Foam", dk = "metal" + k + "Cc";
+        card.appendChild(fieldSelect(title + " foam", S[tk] === "oc" || S[tk] === "cc" ? S[tk] : "", [["", "Job default — " + (foamCompareOn() ? "compare both" : foamTypeJob() === "cc" ? "Closed cell" : "Open cell")], ["oc", "Open cell"], ["cc", "Closed cell"]], v => { S[tk] = v; render(); }));
+        const optB = foamCompareOn() && S[tk] !== "oc" && S[tk] !== "cc";
+        if (foamTypeFor(S[tk]) === "cc" || optB) card.appendChild(fieldSelect(title + " closed-cell depth" + (optB ? " (Option B)" : ""), METAL_CC_DEPTHS.includes(String(S[dk])) ? String(S[dk]) : "",
+          [["", ccDepthJob() ? "Job default " + ccDepthJob() + '"' : "Pick depth…"]].concat(METAL_CC_DEPTHS.map(d => [d, d + '"'])), v => { S[dk] = v; render(); }));
+      } else {
+        const rk = "metal" + k + "BattR", ok = "metal" + k + "Oc";
+        card.appendChild(fieldSelect(title + " batts", battOpts.some(o => o[0] === S[rk]) ? S[rk] : battOpts[0][0], battOpts, v => { S[rk] = v; render(); }));
+        card.appendChild(fieldSelect("Batt width", battW(S[ok], "16"), BATT_W_CHOICES, v => { S[ok] = v; render(); }));
+      }
+    };
+    if (S.hasMetalRoof) matRow("roof", "Roofline", D.roof, [["r19", "R19"], ["r30", "R30"], ["r38", "R38"]]);
+    if (S.hasMetalGables) matRow("gable", "Gables", D.gable, [["r13", "R13"], ["r19", "R19"]]);
+    if (S.hasMetalWalls) matRow("wall", "Walls", D.wallNet, [["r13", "R13"], ["r19", "R19"]]);
     SEC = 31; box.appendChild(card);
   }
   SEC = 32;
@@ -4082,10 +4132,10 @@ function missingFields() {
   if (S.hasUfbc && F.canAskUfbc && blank(S.ufbcSf)) add("UFBC", "SF", "UFBC (unfinished basement ceiling)", "UFBC SF");
   if (F.canAskCrawlEncap && S.hasCrawlWalls) (S.crawlWalls || []).forEach((r, i) => { if (blank(r.length)) add("Crawl wall #" + (i + 1), "Length", "Crawl wall #" + (i + 1)); else if (blank(r.height)) add("Crawl wall #" + (i + 1), "Height", "Crawl wall #" + (i + 1)); });
   if (S.hasDense && F.canAskDense) (S.dense || []).forEach((r, i) => { if (blank(r.sf)) add("Dense-pack #" + (i + 1), "Flat SF", "Dense-pack #" + (i + 1)); });
-  if (S.jobMode === "metal") { // 30v
-    if (S.hasMetalRoof && !(n(S.metalRoofFlat) > 0)) add("Metal building", "Roof flat SF", "Metal building", "Metal roof flat SF");
-    if (S.hasMetalWalls && !(n(S.metalWallPerim) * n(S.metalWallHeight) > 0)) add("Metal building", "Wall perimeter + eave height", "Metal building", "Wall perimeter LF");
-    if (S.hasMetalGables && !(n(S.metalGableSf) > 0)) add("Metal building", "Gable SF", "Metal building", "Gable SF (both ends)");
+  if (S.jobMode === "metal") { // 30w
+    if (!(n(S.metalLen) > 0)) add("Metal building", "Length", "Flat footprint", "Building length ft");
+    else if (!(n(S.metalWid) > 0)) add("Metal building", "Width", "Flat footprint", "Building width ft");
+    if (S.hasMetalWalls && !(n(S.metalWallHeight) > 0)) add("Metal building", "Wall height", "Flat footprint", "Wall height");
   }
   if (S.hasMisc) (S.misc || []).forEach((r, i) => { if (!String(r.material || "").trim()) add("Misc item #" + (i + 1), "Material", "Misc item #" + (i + 1), "Material (required)"); });
   // 29ay: hearth platform — who builds it (required once the box is checked); height needed when it's added to the RO and no spec height exists
@@ -4449,7 +4499,7 @@ function render() {
   $("marginCustom").value = S.marginCustom;
 
   bindSeg("seg-owner", () => S.owner, v => { if (!ALLOW_OWNER_SWITCH) { S.owner = HOME_OWNER; return; } S.owner = v; S.outputView = v === "sky" ? "excel" : "fg"; render(); });
-  bindSeg("seg-mode", () => S.jobMode, v => { S.hasMetal = v === "metal"; if (v === "retro" && S.jobMode !== "retro") S.hasBaffles = false; const toNew = v === "new" && S.jobMode !== "new"; S.jobMode = v; if (toNew && fpApplyNcDefault() && S.includeFp) loadFpSpecs(); render(); }); // 29an: retro baffles default off; 29az: choosing New construction → NC fireplace
+  bindSeg("seg-mode", () => S.jobMode, v => { S.hasMetal = v === "metal"; if (v === "metal" && S.jobMode !== "metal") { S.airSealed = false; if (!METAL_PKGS.includes(S.pkg)) S.pkg = "total_foam"; } if (v === "retro" && S.jobMode !== "retro") S.hasBaffles = false; const toNew = v === "new" && S.jobMode !== "new"; S.jobMode = v; if (toNew && fpApplyNcDefault() && S.includeFp) loadFpSpecs(); render(); }); // 29an: retro baffles default off; 29az: choosing New construction → NC fireplace
   bindSeg("seg-retroScope", () => S.retroScope, v => { S.retroScope = v; render(); });
   bindSeg("seg-outputView", () => S.outputView, v => { S.outputView = v; render(); });
 
@@ -4458,12 +4508,16 @@ function render() {
   toggleField("gasIdk", !!S.includeFp && S.gasType === "idk");
   toggleField("retroBlock", S.jobMode === "retro");
   toggleField("pkgField", S.jobMode === "new");
-  toggleField("pkgField", S.jobMode === "new" && !S.compareOn);
+  toggleField("pkgField", (S.jobMode === "new" && !S.compareOn) || S.jobMode === "metal"); // 30w: metal picks Total Batt / Total Foam / Foam Roofline + Batt Walls
   toggleField("optionsBlock", S.jobMode === "new");
   toggleField("optionChipsWrap", S.jobMode === "new" && !!S.compareOn);
   setSwitch($("compareOn"), !!S.compareOn);
   toggleField("foundationField", S.jobMode === "new");
-  ["sec-footprint", "sec-wrapup", "sec-fp"].forEach(id => toggleField(id, S.jobMode !== "metal")); // 30v: metal job hides house-only sections
+  toggleField("sec-fp", S.jobMode !== "metal"); // 30v: no fireplace on metal jobs (air seal + extra labor stay)
+  toggleField("houseFootprint", S.jobMode !== "metal"); toggleField("metalDims", S.jobMode === "metal"); // 30w: L × W first in the flat-footprint spot
+  if (S.jobMode === "metal") { const D = metalDims(); S.flatSf = D.flat > 0 ? String(round2(D.flat)) : ""; } // air seal (if turned on) = flat L×W
+  Array.from($("pkg").options).forEach(o => { const hide = S.jobMode === "metal" && !METAL_PKGS.includes(o.value); o.hidden = hide; o.disabled = hide; });
+  renderMetalDims();
   $("foundation").value = foundationOf();
   toggleField("foundationAsk", S.jobMode === "new" && !foundationOf());
   toggleField("basementCrawlRow", S.jobMode === "new" && (foundationOf() === "unfinished" || foundationOf() === "finished"));
@@ -4594,7 +4648,9 @@ function migrateState(d) {
   if (!Array.isArray(S.misc) || !S.misc.length) S.misc = [newMiscItem()];
   if (typeof S.hasMisc !== "boolean") S.hasMisc = false;
   if (typeof S.hasMetal !== "boolean") S.hasMetal = false;
-  ["hasMetalRoof", "hasMetalWalls"].forEach(k => { if (typeof S[k] !== "boolean") S[k] = true; }); if (typeof S.hasMetalGables !== "boolean") S.hasMetalGables = false;
+  ["hasMetalRoof", "hasMetalWalls"].forEach(k => { if (typeof S[k] !== "boolean") S[k] = true; }); if (typeof S.hasMetalGables !== "boolean") S.hasMetalGables = true;
+  ["metalLen", "metalWid", "metalRoofFoam", "metalWallFoam", "metalGableFoam"].forEach(k => { if (typeof S[k] !== "string") S[k] = ""; }); if (!Array.isArray(S.metalDeducts)) S.metalDeducts = [];
+  [["metalRoofBattR", "r19"], ["metalWallBattR", "r13"], ["metalGableBattR", "r13"], ["metalRoofOc", "16"], ["metalWallOc", "16"], ["metalGableOc", "16"]].forEach(([k, v]) => { if (typeof S[k] !== "string" || !S[k]) S[k] = v; });
   if (S.hasMetal && S.jobMode !== "metal") { S.jobMode = "metal"; S.hasMetalGables = n(S.metalGableSf) > 0; } // 30u job saved with the old switch -> metal job type
   ["metalRoofFlat", "metalRoofCustomRise", "metalRoofCc", "metalWallPerim", "metalWallHeight", "metalWallCc", "metalGableSf", "metalGableCc"].forEach(k => { if (typeof S[k] !== "string") S[k] = ""; });
   if (typeof S.metalRoofPitch !== "string" || !S.metalRoofPitch) S.metalRoofPitch = "1";
@@ -4806,7 +4862,7 @@ function newJob() {
   S.hasSubfloor = false; S.hasDense = false; S.hasCrawlWalls = false;
   S.crawlSubR = "R-19"; S.crawlSubOc = "16"; S.hasUfbc = false; S.hasSepWalls = false; S.ufbcSf = ""; S.ufbcR = "R-19"; S.ufbcOc = "16"; S.subfloorOverride = "";
   S.hasMisc = false; S.misc = [newMiscItem()];
-  S.hasMetal = false; S.hasMetalRoof = true; S.hasMetalWalls = true; S.hasMetalGables = false; S.metalRoofFlat = ""; S.metalRoofPitch = "1"; S.metalRoofCustomRise = ""; S.metalRoofCc = ""; S.metalWallPerim = ""; S.metalWallHeight = ""; S.metalWallCc = ""; S.metalGableSf = ""; S.metalGableCc = "";
+  S.hasMetal = false; S.hasMetalRoof = true; S.hasMetalWalls = true; S.hasMetalGables = true; S.metalLen = ""; S.metalWid = ""; S.metalDeducts = []; S.metalRoofFoam = ""; S.metalWallFoam = ""; S.metalGableFoam = ""; S.metalRoofBattR = "r19"; S.metalWallBattR = "r13"; S.metalGableBattR = "r13"; S.metalRoofOc = "16"; S.metalWallOc = "16"; S.metalGableOc = "16"; S.metalRoofFlat = ""; S.metalRoofPitch = "1"; S.metalRoofCustomRise = ""; S.metalRoofCc = ""; S.metalWallPerim = ""; S.metalWallHeight = ""; S.metalWallCc = ""; S.metalGableSf = ""; S.metalGableCc = "";
   S.deadAir = [{ id: uid(), name: "", sf: "" }];
   S.vaults = [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }];
   S.knees = [{ id: uid(), name: "", height: "8", lf: "", oc: "16", shape: "rectangle", wrap: true }];
@@ -5228,7 +5284,7 @@ function calcInit() {
   $("calcClose").onclick = () => $("calcModal").classList.add("hidden");
   $("calcModal").addEventListener("click", e => { if (e.target.id === "calcModal") $("calcModal").classList.add("hidden"); });
 }
-const APP_BUILD = "2026-10-30v";
+const APP_BUILD = "2026-10-30w";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
