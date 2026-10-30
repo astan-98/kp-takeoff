@@ -222,13 +222,18 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 #saveDockRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .calc-modal { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; }
 .calc-modal.hidden { display: none; }
-.calc-box { background: var(--bg2); color: var(--text); width: 100%; max-width: 420px; border-radius: 16px 16px 0 0; padding: 12px 12px calc(12px + var(--safe-b)); }
+.calc-box { background: var(--bg2); color: var(--text); width: 100%; max-width: 560px; border-radius: 16px 16px 0 0; padding: 6px 14px calc(14px + var(--safe-b));
+  height: calc(100dvh - var(--safe-t) - 16px); display: flex; flex-direction: column; touch-action: none; transition: transform .2s ease; } /* 30z: near full-screen sheet */
+.calc-box.dragging { transition: none; }
+.calc-grab { width: 44px; height: 5px; border-radius: 3px; background: var(--border); margin: 4px auto 8px; flex: 0 0 auto; }
+.calc-box .calc-keys { flex: 1 1 auto; grid-auto-rows: 1fr; }
+.calc-box .calc-disp { font-size: 3rem; }
 .calc-top { display: flex; justify-content: space-between; align-items: center; font-weight: 800; margin-bottom: 6px; }
 .calc-top .btn { width: auto; }
 .calc-expr { min-height: 1.2em; text-align: right; color: var(--text2); font-size: .95rem; word-break: break-all; }
 .calc-disp { text-align: right; font-size: 2.2rem; font-weight: 800; padding: 4px 2px 10px; word-break: break-all; }
 .calc-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.calc-keys button { font-size: 1.35rem; padding: 14px 0; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-weight: 700; }
+.calc-keys button { font-size: 1.7rem; padding: 0; min-height: 56px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-weight: 700; }
 .calc-keys button.op { background: var(--accent-soft); }
 .calc-keys button.eq { background: var(--accent); color: #fff; }
 body.has-save-dock { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 72px); }
@@ -786,7 +791,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 </main>
 
 <div class="save-dock hidden" id="saveDock"><div id="saveDockRow"><button type="button" class="btn btn-primary" id="btnSaveDock">Save to Library</button><button type="button" class="btn" id="btnCalcDock" aria-label="Calculator">🧮 Calculator</button></div></div>
-<div class="calc-modal hidden" id="calcModal" role="dialog" aria-label="Calculator"><div class="calc-box"><div class="calc-top"><span>Calculator</span><button type="button" class="btn" id="calcClose">Close</button></div>
+<div class="calc-modal hidden" id="calcModal" role="dialog" aria-label="Calculator"><div class="calc-box" id="calcBox"><div class="calc-grab" aria-hidden="true"></div><div class="calc-top"><span>Calculator</span><button type="button" class="btn" id="calcClose">Close</button></div>
 <div class="calc-expr" id="calcExpr"></div><div class="calc-disp" id="calcDisp">0</div><div class="calc-keys" id="calcKeys"></div></div></div>
 <nav class="bottom-nav">
   <!-- 29aw: tab labels Measure / Summary / Library / Pricing (internal data-tab keys unchanged); approved Lucide line icons (ISC), currentColor -->
@@ -1565,7 +1570,7 @@ const S = {
   hasGarage: false, hasPorch: false, hasBasementWalls: false, hasSepWalls: false,
   hasSubfloor: false, hasDense: false, hasCrawlWalls: false,
   hasMisc: false, misc: [newMiscItem()],
-  hasMetal: false, hasMetalRoof: true, hasMetalWalls: true, hasMetalGables: true, metalLen: "", metalWid: "", metalIrregular: false, metalFlatManual: "", metalPerimManual: "", metalDeducts: [], metalRoofFoam: "oc", metalWallFoam: "oc", metalGableFoam: "oc", metalRoofBattR: "r19", metalWallBattR: "r13", metalGableBattR: "r13", metalRoofOc: "16", metalWallOc: "16", metalGableOc: "16", metalRoofFlat: "", metalRoofPitch: "1", metalRoofCustomRise: "", metalRoofCc: "", metalWallPerim: "", metalWallHeight: "", metalWallCc: "", metalGableSf: "", metalGableCc: "", // 30u: metal building
+  hasMetal: false, hasMetalRoof: true, hasMetalWalls: true, hasMetalGables: true, metalLen: "", metalWid: "", metalFoam: "oc", metalCc: "", metalIrregular: false, metalFlatManual: "", metalPerimManual: "", metalDeducts: [], metalRoofFoam: "oc", metalWallFoam: "oc", metalGableFoam: "oc", metalRoofBattR: "r19", metalWallBattR: "r13", metalGableBattR: "r13", metalRoofOc: "16", metalWallOc: "16", metalGableOc: "16", metalRoofFlat: "", metalRoofPitch: "1", metalRoofCustomRise: "", metalRoofCc: "", metalWallPerim: "", metalWallHeight: "", metalWallCc: "", metalGableSf: "", metalGableCc: "", // 30u: metal building
   interiorWalls: [newInteriorWall()],
   deadAir: [{ id: uid(), name: "", sf: "" }],
   vaults: [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }],
@@ -1738,6 +1743,7 @@ const METAL_TOGGLES = [
   ["Roofline", "hasMetalRoof"],
   ["Gables", "hasMetalGables"],
   ["Walls", "hasMetalWalls"],
+  ["Miscellaneous", "hasMisc"], // 30z: off by default; custom measurements / work areas / materials / units
 ];
 // 30w: metal packages — no blown. Total Batt / Total Foam / Foam Roofline + Batt Walls only.
 const METAL_PKGS = ["total_bat", "total_foam", "hybrid_foam_batts"];
@@ -1748,9 +1754,11 @@ function renderMetalDims() { const b = $("metalDims"); if (b) b.innerHTML = ""; 
 function metalFoamSync() {
   if (S.jobMode !== "metal") return;
   const areas = [["Roof", "hasMetalRoof", "roof"], ["Gable", "hasMetalGables", "gable"], ["Wall", "hasMetalWalls", "wall"]].filter(([, h, k]) => S[h] && metalAreaUsesFoam(k));
-  S.foamType = areas.some(([k]) => S["metal" + k + "Foam"] === "both") ? "both" : "oc";
+  const f = ["oc", "cc", "both"].includes(S.metalFoam) ? S.metalFoam : "oc"; // 30z: one metal foam choice (flat footprint bubble) for every foam area
+  ["Roof", "Gable", "Wall"].forEach(k => { S["metal" + k + "Foam"] = f; S["metal" + k + "Cc"] = S.metalCc || ""; });
+  S.foamType = f === "both" && areas.length ? "both" : "oc";
 }
-function METAL_KEEP_LINE(L) { return /^Metal building/.test(L.assembly || "") || L.assembly === "Extra labor" || L.assembly === "Air seal (caulk & foam)"; }
+function METAL_KEEP_LINE(L) { return /^Metal building/.test(L.assembly || "") || L.assembly === "Extra labor" || L.assembly === "Miscellaneous" || L.assembly === "Air seal (caulk & foam)"; }
 function metalDims() {
   const irr = !!S.metalIrregular, L = irr ? 0 : n(S.metalLen), W = irr ? 0 : n(S.metalWid); // 30y: irregular = manual flat SF + wall LF
   const flat = irr ? n(S.metalFlatManual) : L * W, perim = irr ? n(S.metalPerimManual) : 2 * (L + W);
@@ -2675,7 +2683,7 @@ function buildLinesForPackage(p, tag) {
     miscFilled().forEach(r => {
       const u = miscUnit(r);
       const notes = (r.notes || "").trim();
-      push(lines, { area: "Misc", assembly: "Miscellaneous", product: r.material.trim(),
+      push(lines, { area: String(r.workArea || "").trim() || "Misc", assembly: "Miscellaneous", product: r.material.trim(),
         description: notes ? notes + " (" + u + ")" : u, footage: round2(n(r.qty)), unit: u, notes: noteTag + "Manual entry" });
     });
   }
@@ -3458,6 +3466,8 @@ function renderAssemblyEditors() {
     const mat = (card, key, title, battOpts) => {
       const k = key[0].toUpperCase() + key.slice(1);
       if (metalAreaUsesFoam(key)) {
+        card.appendChild(el("p", "cap", title + ": spray foam — " + ({ oc: "open cell", cc: "closed cell " + (S.metalCc ? S.metalCc + '"' : "(pick depth)"), both: "show both" }[S.metalFoam] || "open cell") + " (set in Flat footprint)."));
+        return;
         const tk = "metal" + k + "Foam", dk = "metal" + k + "Cc", cur = ["oc", "cc", "both"].includes(S[tk]) ? S[tk] : "oc";
         card.appendChild(fieldSelect(title + " spray foam", cur, [["oc", "Open cell"], ["cc", "Closed cell"], ["both", "Show both (compare)"]], v => { S[tk] = v; metalFoamSync(); render(); }));
         if (cur !== "oc") card.appendChild(fieldSelect(title + " closed-cell depth", METAL_CC_DEPTHS.includes(String(S[dk])) ? String(S[dk]) : "", [["", "Pick depth…"]].concat(METAL_CC_DEPTHS.map(d => [d, d + '"'])), v => { S[dk] = v; render(); }));
@@ -3479,9 +3489,17 @@ function renderAssemblyEditors() {
     if (S.metalIrregular) num(card, "Flat footprint SF (enter manually)", "metalFlatManual"); else prop(card, "Flat footprint (L × W)", fmt(round2(D.flat)) + " SF");
     card.appendChild(fieldSelect("Pitch factor", S.metalRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.metalRoofPitch = v; render(); }));
     if (S.metalRoofPitch === "custom") num(card, "Custom rise (over 12)", "metalRoofCustomRise");
-    prop(card, "Pitched SF (flat × pitch)", fmt(round2(D.roof)) + " SF"); box.appendChild(card);
+    if (S.hasMetalRoof) { prop(card, "Roofline SF (flat × pitch)", fmt(round2(D.roof)) + " SF"); mat(card, "roof", "Roofline", [["r19", "R19"], ["r30", "R30"], ["r38", "R38"]]); }
+    else prop(card, "Pitched SF (flat × pitch)", fmt(round2(D.roof)) + " SF");
+    if (["roof", "gable", "wall"].some(k => S["hasMetal" + (k === "roof" ? "Roof" : k === "gable" ? "Gables" : "Walls")] && metalAreaUsesFoam(k))) { // 30z: one foam type for the building
+      const cur = ["oc", "cc", "both"].includes(S.metalFoam) ? S.metalFoam : "oc";
+      card.appendChild(fieldSelect("Spray foam type", cur, [["oc", "Open cell"], ["cc", "Closed cell"], ["both", "Show both (compare)"]], v => { S.metalFoam = v; metalFoamSync(); render(); }));
+      if (cur !== "oc") { card.appendChild(fieldSelect("Closed-cell depth", METAL_CC_DEPTHS.includes(String(S.metalCc)) ? String(S.metalCc) : "", [["", "Pick depth…"]].concat(METAL_CC_DEPTHS.map(d => [d, d + '"'])), v => { S.metalCc = v; metalFoamSync(); render(); }));
+        if (!METAL_CC_DEPTHS.includes(String(S.metalCc))) card.appendChild(ccPickWarn("Pick the closed-cell depth.")); }
+    }
+    box.appendChild(card);
     if (S.hasMetalWalls) {
-      SEC = 1.3; card = el("div", "row-card");
+      SEC = 1.4; card = el("div", "row-card");
       if (S.metalIrregular) num(card, "Wall linear footage LF (enter manually)", "metalPerimManual"); else prop(card, "Perimeter (2 × (L + W))", fmt(round2(D.perim)) + " LF");
       card.appendChild(fieldSelect("Wall height", S.metalWallHeight, [["", "Pick height…"]].concat(METAL_WALL_HEIGHTS.map(h => [h, h + " ft"])), v => { S.metalWallHeight = v; render(); }));
       prop(card, "Wall SF (perimeter × height)", fmt(round2(D.wallGross)) + " SF");
@@ -3497,9 +3515,8 @@ function renderAssemblyEditors() {
       prop(card, "Net wall SF", fmt(round2(D.wallNet)) + " SF" + (D.ded > 0 ? " (−" + fmt(round2(D.ded)) + ")" : ""));
       mat(card, "wall", "Walls", [["r13", "R13"], ["r19", "R19"]]); box.appendChild(card);
     }
-    if (S.hasMetalRoof) { SEC = 1.4; card = el("div", "row-card"); prop(card, "Roofline SF (flat × pitch)", fmt(round2(D.roof)) + " SF"); mat(card, "roof", "Roofline", [["r19", "R19"], ["r30", "R30"], ["r38", "R38"]]); box.appendChild(card); }
     if (S.hasMetalGables) {
-      SEC = 1.5; card = el("div", "row-card");
+      SEC = 1.3; card = el("div", "row-card");
       const gf = fieldInput(S.metalIrregular ? "Gable SF (enter manually)" : "Gable SF (blank = auto " + fmt(round2(D.gableAuto)) + " from width + pitch)", S.metalGableSf, v => { S.metalGableSf = v; schedule(); }, "number"); gf.querySelector("input").onchange = () => render(); card.appendChild(gf);
       mat(card, "gable", "Gables", [["r13", "R13"], ["r19", "R19"]]); box.appendChild(card);
     }
@@ -3628,6 +3645,7 @@ function renderAssemblyEditors() {
       const card = el("div", "row-card");
       card.innerHTML = '<div class="row-title">Misc item #' + (idx+1) + '</div>';
       card.appendChild(fieldInput("Material (required)", r.material, v => { r.material = v; schedule(); }));
+      card.appendChild(fieldInput("Work area (optional)", r.workArea || "", v => { r.workArea = v; schedule(); })); // 30z
       card.appendChild(fieldInput("Description / notes (optional)", r.notes, v => { r.notes = v; schedule(); }));
       const g = el("div", "grid2");
       g.appendChild(fieldInput("Quantity", r.qty, v => { r.qty = v; schedule(); }, "number"));
@@ -3654,7 +3672,7 @@ function renderAssemblyEditors() {
     box.appendChild(b);
   });
 }
-const BUBBLE_TITLES = { 1.1: "Building size", 1.2: "Flat footprint", 1.3: "Walls", 1.4: "Roofline", 1.5: "Gables", 2: "Spray foam type", 5: "Attic", 10: "Roofline", 12: "Dead air", 13: "Vaults", 14: "Knee walls", 20: "Garage roofline", 30: "Garage ceiling", 31: "Metal building",
+const BUBBLE_TITLES = { 1.1: "Building size", 1.2: "Flat footprint + roofline", 1.3: "Gables", 1.4: "Walls", 2: "Spray foam type", 5: "Attic", 10: "Roofline", 12: "Dead air", 13: "Vaults", 14: "Knee walls", 20: "Garage roofline", 30: "Garage ceiling", 31: "Metal building",
   32: "Porch", 35: "Cantilevers", 40: "Gables", 50: "Baffles", 60: "Walls", 62: "Interior walls", 64: "Between floors", 66: "Dense-pack floors",
   80: "Daylight walls", 81: "Concrete walls", 82: "UFBC (unfinished basement ceiling)", 83: "Separation walls", 84: "Crawl – new batts", 85: "Crawl touch-up", 86: "Crawl space", 87: "Crawl walls", 95: "Miscellaneous", 99: "Bands / rim" };
 
@@ -4516,7 +4534,7 @@ function render() {
   $("marginCustom").value = S.marginCustom;
 
   bindSeg("seg-owner", () => S.owner, v => { if (!ALLOW_OWNER_SWITCH) { S.owner = HOME_OWNER; return; } S.owner = v; S.outputView = v === "sky" ? "excel" : "fg"; render(); });
-  bindSeg("seg-mode", () => S.jobMode, v => { S.hasMetal = v === "metal"; if (v === "metal" && S.jobMode !== "metal") { S.airSealed = false; if (!METAL_PKGS.includes(S.pkg)) S.pkg = "total_foam"; } if (v === "retro" && S.jobMode !== "retro") S.hasBaffles = false; const toNew = v === "new" && S.jobMode !== "new"; S.jobMode = v; if (toNew && fpApplyNcDefault() && S.includeFp) loadFpSpecs(); render(); }); // 29an: retro baffles default off; 29az: choosing New construction → NC fireplace
+  bindSeg("seg-mode", () => S.jobMode, v => { S.hasMetal = v === "metal"; if (v === "metal" && S.jobMode !== "metal") { S.airSealed = false; S.hasMisc = false; if (!METAL_PKGS.includes(S.pkg)) S.pkg = "total_foam"; } if (v === "retro" && S.jobMode !== "retro") S.hasBaffles = false; const toNew = v === "new" && S.jobMode !== "new"; S.jobMode = v; if (toNew && fpApplyNcDefault() && S.includeFp) loadFpSpecs(); render(); }); // 29an: retro baffles default off; 29az: choosing New construction → NC fireplace
   bindSeg("seg-retroScope", () => S.retroScope, v => { S.retroScope = v; render(); });
   bindSeg("seg-outputView", () => S.outputView, v => { S.outputView = v; render(); });
 
@@ -4668,6 +4686,8 @@ function migrateState(d) {
   if (typeof S.hasMetal !== "boolean") S.hasMetal = false;
   ["hasMetalRoof", "hasMetalWalls"].forEach(k => { if (typeof S[k] !== "boolean") S[k] = true; }); if (typeof S.hasMetalGables !== "boolean") S.hasMetalGables = true;
   if (typeof S.metalIrregular !== "boolean") S.metalIrregular = false;
+  if (!["oc", "cc", "both"].includes(S.metalFoam)) S.metalFoam = ["both", "cc"].find(v => [S.metalRoofFoam, S.metalWallFoam, S.metalGableFoam].includes(v)) || "oc";
+  if (typeof S.metalCc !== "string") S.metalCc = S.metalRoofCc || S.metalWallCc || S.metalGableCc || "";
   ["metalLen", "metalWid", "metalFlatManual", "metalPerimManual", "metalRoofFoam", "metalWallFoam", "metalGableFoam"].forEach(k => { if (typeof S[k] !== "string") S[k] = ""; }); if (!Array.isArray(S.metalDeducts)) S.metalDeducts = [];
   [["metalRoofBattR", "r19"], ["metalWallBattR", "r13"], ["metalGableBattR", "r13"], ["metalRoofOc", "16"], ["metalWallOc", "16"], ["metalGableOc", "16"]].forEach(([k, v]) => { if (typeof S[k] !== "string" || !S[k]) S[k] = v; });
   if (S.hasMetal && S.jobMode !== "metal") { S.jobMode = "metal"; S.hasMetalGables = n(S.metalGableSf) > 0; } // 30u job saved with the old switch -> metal job type
@@ -4881,7 +4901,7 @@ function newJob() {
   S.hasSubfloor = false; S.hasDense = false; S.hasCrawlWalls = false;
   S.crawlSubR = "R-19"; S.crawlSubOc = "16"; S.hasUfbc = false; S.hasSepWalls = false; S.ufbcSf = ""; S.ufbcR = "R-19"; S.ufbcOc = "16"; S.subfloorOverride = "";
   S.hasMisc = false; S.misc = [newMiscItem()];
-  S.hasMetal = false; S.hasMetalRoof = true; S.hasMetalWalls = true; S.hasMetalGables = true; S.metalLen = ""; S.metalWid = ""; S.metalIrregular = false; S.metalFlatManual = ""; S.metalPerimManual = ""; S.metalDeducts = []; S.metalRoofFoam = "oc"; S.metalWallFoam = "oc"; S.metalGableFoam = "oc"; S.metalRoofBattR = "r19"; S.metalWallBattR = "r13"; S.metalGableBattR = "r13"; S.metalRoofOc = "16"; S.metalWallOc = "16"; S.metalGableOc = "16"; S.metalRoofFlat = ""; S.metalRoofPitch = "1"; S.metalRoofCustomRise = ""; S.metalRoofCc = ""; S.metalWallPerim = ""; S.metalWallHeight = ""; S.metalWallCc = ""; S.metalGableSf = ""; S.metalGableCc = "";
+  S.hasMetal = false; S.hasMetalRoof = true; S.hasMetalWalls = true; S.hasMetalGables = true; S.metalLen = ""; S.metalWid = ""; S.metalFoam = "oc"; S.metalCc = ""; S.metalIrregular = false; S.metalFlatManual = ""; S.metalPerimManual = ""; S.metalDeducts = []; S.metalRoofFoam = "oc"; S.metalWallFoam = "oc"; S.metalGableFoam = "oc"; S.metalRoofBattR = "r19"; S.metalWallBattR = "r13"; S.metalGableBattR = "r13"; S.metalRoofOc = "16"; S.metalWallOc = "16"; S.metalGableOc = "16"; S.metalRoofFlat = ""; S.metalRoofPitch = "1"; S.metalRoofCustomRise = ""; S.metalRoofCc = ""; S.metalWallPerim = ""; S.metalWallHeight = ""; S.metalWallCc = ""; S.metalGableSf = ""; S.metalGableCc = "";
   S.deadAir = [{ id: uid(), name: "", sf: "" }];
   S.vaults = [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }];
   S.knees = [{ id: uid(), name: "", height: "8", lf: "", oc: "16", shape: "rectangle", wrap: true }];
@@ -5294,16 +5314,28 @@ function calcPress(k) {
   else CALC.expr += k;
   calcShow();
 }
+function calcClose() { $("calcModal").classList.add("hidden"); }
 function calcInit() {
   const keys = ["C", "(", ")", "÷", "7", "8", "9", "×", "4", "5", "6", "−", "1", "2", "3", "+", "%", "0", ".", "⌫", "="];
   const box = $("calcKeys"); if (!box || box.childNodes.length) return;
   keys.forEach(k => { const b = document.createElement("button"); b.type = "button"; b.textContent = k; b.className = k === "=" ? "eq" : /[÷×−+()%C⌫]/.test(k) ? "op" : "";
     if (k === "=") b.style.gridColumn = "span 4"; b.onclick = () => calcPress(k); box.appendChild(b); });
   $("btnCalcDock").onclick = () => { $("calcModal").classList.remove("hidden"); calcShow(); };
-  $("calcClose").onclick = () => $("calcModal").classList.add("hidden");
+  $("calcClose").onclick = () => calcClose();
   $("calcModal").addEventListener("click", e => { if (e.target.id === "calcModal") $("calcModal").classList.add("hidden"); });
+  // 30z: swipe down to close (touch + mouse/pen); Close button stays as fallback
+  const bx = $("calcBox"); let y0 = null, dy = 0;
+  const start = y => { y0 = y; dy = 0; bx.classList.add("dragging"); };
+  const move = y => { if (y0 == null) return; dy = Math.max(0, y - y0); bx.style.transform = dy ? "translateY(" + dy + "px)" : ""; };
+  const end = () => { if (y0 == null) return; bx.classList.remove("dragging"); const close = dy > 90; y0 = null; bx.style.transform = ""; if (close) calcClose(); };
+  bx.addEventListener("touchstart", e => { if (e.touches.length === 1) start(e.touches[0].clientY); }, { passive: true });
+  bx.addEventListener("touchmove", e => { if (e.touches.length === 1) move(e.touches[0].clientY); }, { passive: true });
+  bx.addEventListener("touchend", end); bx.addEventListener("touchcancel", end);
+  bx.addEventListener("pointerdown", e => { if (e.pointerType !== "touch") start(e.clientY); });
+  window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
+  window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30y";
+const APP_BUILD = "2026-10-30z";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
