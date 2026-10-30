@@ -419,10 +419,6 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       </div>
       <div class="field"><label>Date measured</label><input id="dateMeasured" type="date"></div>
       <div class="field"><label>Keywords / notes</label><input id="keywords" placeholder="searchable notes"></div>
-      <div class="grid2" style="margin-top:10px">
-        <button type="button" class="btn btn-primary" id="btnSaveArchive">Save to Library</button>
-        <button type="button" class="btn btn-secondary" id="btnNewJob">New job</button>
-      </div>
       <p class="status" id="statusNote"></p>
     </div>
 
@@ -5185,19 +5181,17 @@ function wireInputs() {
   $("showPriceLib").onclick = () => { S.showPriceLib = !S.showPriceLib; render(); };
 
   // 29as K: every Save to archive (pinned one included) checks for empty fields first
-  $("btnSaveArchive").onclick = guardedSave;
   $("btnSaveArchive2").onclick = guardedSave;
   $("btnSaveDock").onclick = guardedSave; // 29as: pinned copy, same action
   calcInit(); // 30u
   syncSaveDock();
   // 29av: "View Excel takeoff" removed from the pinned bar (Excel tab in the nav still opens it)
-  $("btnNewJob").onclick = newJob;
   $("btnTraining").onclick = () => trainOpen(0); // 29az: training walkthrough (read-only)
   $("btnTrainingPricing").onclick = () => trainOpen(0); // 29ba: after the first Finish the launcher lives on Pricing
   trainPlaceLauncher();
   ["input", "change"].forEach(ev => $("woDate").addEventListener(ev, () => { S.woDateManual = true; })); // 29av: Asher's edit sticks
   // 29au: same handler as the Customer/builder New job (one code path), then show the Wizard if another tab was open
-  $("btnNewJobTop").onclick = () => { $("btnNewJob").click(); const w = document.querySelector('.nav-btn[data-tab="wizard"]'); if (w && !w.classList.contains("active")) w.click(); window.scrollTo(0, 0); };
+  $("btnNewJobTop").onclick = () => { newJob(); /* 30ak: Customer-bubble New job / Save buttons removed; header New job + bottom Save to Library stay */ const w = document.querySelector('.nav-btn[data-tab="wizard"]'); if (w && !w.classList.contains("active")) w.click(); window.scrollTo(0, 0); };
   $("btnPreviewWo").onclick = () => { if (!(twoLines().length > 0 || twoFpDetails().length > 0)) { setStatus("No lines on this takeoff yet."); return; } twoPreview(undefined, true); }; // 30o
   $("btnCopyCsv").onclick = () => {
     const text = buildExcelCsv();
@@ -5273,7 +5267,7 @@ function trainSteps() {
     { sec: "Start", title: "The tabs at the bottom", html: "<p>The bar at the bottom of the screen switches between the parts of the app:</p>" + tabList +
         "<p>You'll spend most of your time on <b>Measure</b>. It's one long page of sections — scroll down through it top to bottom.</p>" },
     { sec: M, title: "Open a new job",
-      html: "<p>Tap <b>＋ New job</b> at the top of the screen. It starts a fresh, empty job dated today. There's also a <b>New job</b> button under Customer / builder.</p>" +
+      html: "<p>Tap <b>＋ New job</b> at the top of the screen. It starts a fresh, empty job dated today.</p>" +
         "<p>Everything you type autosaves as a draft while you go, so you won't lose work if the phone locks. When the job is done you'll tap <b>Save to Library</b>.</p>" +
         trainDemo('<button type="button" tabindex="-1" class="btn btn-primary btn-block">＋ New job</button>') },
     { sec: MJ, title: "New construction or retro?",
@@ -5480,7 +5474,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30aj";
+const APP_BUILD = "2026-10-30ak";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
