@@ -150,6 +150,9 @@ button { cursor: pointer; border: none; background: none; }
   padding: 12px; margin-bottom: 10px;
 }
 .row-card .row-title { font-weight: 700; font-size: .9rem; margin-bottom: 8px; }
+.row-card > .row-edit-btn { float: right; margin: -4px 0 0 8px; min-height: 0; padding: 3px 12px; }
+.row-card.rc-collapsed > :not(.row-title):not(.row-edit-btn) { display: none; }
+.row-card.rc-collapsed .row-title { margin-bottom: 0; }
 .props { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: .88rem; margin: 10px 0; }
 .props .k { color: var(--text2); }
 .props .v { font-weight: 700; text-align: right; }
@@ -3125,6 +3128,49 @@ function pitchSelectHtml(selected) {
   return PITCH_OPTIONS.map(o => '<option value="' + o.value + '"' + (o.value === selected ? " selected" : "") + ">" + o.label + "</option>").join("");
 }
 
+// 30ag: wall reassignment helpers
+const wallCat = k => /^ext_/.test(k) ? "exterior" : isSepKind(k) ? "sep" : k;
+const wallStud = r => r.kind === undefined ? (r.stud === "2x6" ? "2x6" : "2x4") : /2x6/.test(r.kind) ? "2x6" : /2x4/.test(r.kind) ? "2x4" : (r.stud === "2x6" || (!r.stud && r.kind === "daylight") ? "2x6" : "2x4");
+function reassignWallTo(r, from, cat) {
+  const stud = wallStud(from === "interior" ? { stud: r.stud } : r);
+  const spec = { oc: r.oc || "16", height: r.height || "8", customHeight: r.customHeight || "", cavities: r.cavities || "", materialMode: r.materialMode || "batt" };
+  ["foamType", "ccDepth", "kraft", "measureLf", "lfHeight"].forEach(k => { if (r[k] !== undefined) spec[k] = r[k]; });
+  const kind = cat === "exterior" ? "ext_" + stud : cat === "sep" ? "sep_" + stud : cat;
+  if (from === "interior") {
+    const i = S.interiorWalls.indexOf(r); if (i < 0) return;
+    S.interiorWalls.splice(i, 1); if (!S.interiorWalls.length) S.interiorWalls.push(newInteriorWall());
+    S.walls.push(Object.assign({ id: r.id || uid(), name: r.name || "", kind, stud }, spec)); S.hasWalls = true;
+  } else if (cat === "interior") {
+    const i = S.walls.indexOf(r); if (i < 0) return;
+    S.walls.splice(i, 1);
+    const w = Object.assign(newInteriorWall(), spec, { id: r.id || uid(), stud, lf: "" });
+    const blank = Array.isArray(S.interiorWalls) && S.interiorWalls.length === 1 && !n(S.interiorWalls[0].cavities) && !n(S.interiorWalls[0].lf);
+    if (!Array.isArray(S.interiorWalls) || blank) S.interiorWalls = [];
+    S.interiorWalls.push(w); S.hasInteriorWalls = true;
+  } else { r.kind = kind; r.stud = stud; }
+  if (kind === "daylight" || kind === "concrete") S.hasBasementWalls = true;
+  render();
+}
+
+// 30ag: Asher — a filled measurement card collapses to its title line with an Edit button; Edit opens it, Done closes it.
+const EDIT_OPEN = new Set(), EDIT_PREF = { collapse: true };
+function addEditButtons(box) {
+  const seen = {};
+  Array.from(box.children).forEach(card => {
+    if (!card.classList || !card.classList.contains("row-card")) return;
+    const t = card.querySelector(".row-title"); if (!t) return;
+    const base = (card.dataset.ord || "") + "|" + t.textContent.split(/ · | → /)[0].trim();
+    seen[base] = (seen[base] || 0) + 1; const key = base + "#" + seen[base];
+    const filled = Array.from(card.querySelectorAll("input")).some(i => i.type !== "hidden" && i.type !== "checkbox" && String(i.value).trim() !== "" && n(i.value) !== 0);
+    if (!filled) return;
+    const open = EDIT_OPEN.has(key);
+    const b = document.createElement("button"); b.type = "button"; b.className = "btn btn-secondary btn-sm row-edit-btn"; b.textContent = open ? "Done" : "Edit";
+    b.onclick = () => { if (EDIT_OPEN.has(key)) EDIT_OPEN.delete(key); else EDIT_OPEN.add(key); render(); };
+    card.insertBefore(b, t);
+    if (!open && EDIT_PREF.collapse) card.classList.add("rc-collapsed");
+  });
+}
+
 function renderAssemblyEditors() {
   const F = flags();
   const box = $("assemblyEditors");
@@ -3133,6 +3179,17 @@ function renderAssemblyEditors() {
   // UI order only: Excel / Sky / FieldGroove line order comes from buildLinesForPackage and is unchanged.
   let SEC = 0; const _append = c => Node.prototype.appendChild.call(box, c);
   box.appendChild = c => { if (c && c.nodeType === 1) c.dataset.ord = String(SEC); return _append(c); };
+
+  // 30ag: Asher — Reassign ANY wall entry to another wall type / bubble; size, OC, height, cavities, material stay identical.
+  function reassignWall(card, r, from) {
+    if (APP_EDITION !== "asher") return;
+    const cur = from === "interior" ? "interior" : wallCat(r.kind);
+    const cats = [["exterior", "Exterior walls"], ["interior", "Interior walls"], ["garage_ext", "Garage exterior walls"], ["daylight", "Daylight basement walls"], ["concrete", "Concrete basement walls"]];
+    if (F.sepWalls) cats.push(["sep", "Basement separation walls"]);
+    const opts = [["", "— Move to… —"]].concat(cats.filter(c => c[0] !== cur));
+    const f = fieldSelect("Reassign to", "", opts, v => { if (v) reassignWallTo(r, from, v); });
+    f.classList.add("reassign-field"); card.appendChild(f);
+  }
 
   function addBtn(label, fn) {
     const b = el("button", "btn btn-secondary btn-sm");
@@ -3319,6 +3376,7 @@ function renderAssemblyEditors() {
         kr.appendChild(ks); card.appendChild(kr);
       }
       if (r.materialMode === "foam" || ((r.materialMode || "batt") === "batt" && anyTotalFoam)) foamTypeControls(card, r, "foamType", "ccDepth", r.kind === "concrete", cDflt);
+      reassignWall(card, r, "wall");
       box.appendChild(card);
     };
     const h = el("div", "divider"); box.appendChild(h);
@@ -3357,8 +3415,9 @@ function renderAssemblyEditors() {
   SEC = 62;
   if (S.hasInteriorWalls && F.canAskWalls) {
     box.appendChild(el("div", "divider"));
-    box.appendChild(el("p", "cap", "Interior walls — enter cavities (or linear feet → cavities = LF×12÷OC). 16 OC = 12×15×h÷144 · 19 OC = 12×18×h÷144 · 24 OC = 12×24×h÷144"));
+    box.appendChild(el("p", "cap", "Interior walls — enter cavities. 16 OC = 12×15×h÷144 · 19 OC = 12×18×h÷144 · 24 OC = 12×24×h÷144"));
     if (!Array.isArray(S.interiorWalls) || !S.interiorWalls.length) S.interiorWalls = [newInteriorWall()];
+    S.interiorWalls.forEach(r => { if (n(r.lf) > 0) { if (!(n(r.cavities) > 0)) r.cavities = String(interiorCavities(r)); r.lf = ""; } }); // 30ag: old LF entries become cavities
     S.interiorWalls.forEach((r, idx) => {
       const card = el("div", "row-card");
       const sf = round2(interiorWallSf(r));
@@ -3368,11 +3427,10 @@ function renderAssemblyEditors() {
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
       const g = el("div", "grid2");
-      g.appendChild(fieldInput("Cavities", r.cavities, v => { r.cavities = v; schedule(); }, "number"));
-      g.appendChild(fieldInput("or Linear feet", r.lf, v => { r.lf = v; schedule(); }, "number"));
-      card.appendChild(g);
+      card.appendChild(fieldInput("Cavities", r.cavities, v => { r.cavities = v; schedule(); }, "number")); // 30ag: no linear feet option on interior walls
       card.appendChild(fieldSelect("Material", r.materialMode, r.stud === "2x6" ? INTERIOR_MAT_OPTIONS.map(o => o[0] === "batt" ? ["batt", "Batts (R-19)"] : o) : INTERIOR_MAT_OPTIONS, v => { r.materialMode = v; render(); }));
       if (r.materialMode === "foam") foamTypeControls(card, r, "foamType", "ccDepth");
+      reassignWall(card, r, "interior");
       if (S.interiorWalls.length > 1) {
         const rm = el("button", "btn btn-secondary btn-sm"); rm.type = "button"; rm.textContent = "Remove";
         rm.onclick = () => { S.interiorWalls.splice(idx, 1); render(); };
@@ -3703,6 +3761,7 @@ function renderAssemblyEditors() {
     box.appendChild(addBtn("Add item", () => { S.misc.push(newMiscItem()); render(); }));
   }
   delete box.appendChild;
+  if (APP_EDITION === "asher") addEditButtons(box); // 30ag
   // 29at: one bubble per work area — cards with the same SEC go in one .section, in measuring-routine order
   const groups = new Map();
   Array.from(box.children).map((c, i) => [Number(c.dataset.ord) || 0, i, c]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).forEach(([o, , c]) => { if (!groups.has(o)) groups.set(o, []); groups.get(o).push(c); });
@@ -5382,7 +5441,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30af";
+const APP_BUILD = "2026-10-30ag";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
