@@ -1565,7 +1565,7 @@ const S = {
   hasGarage: false, hasPorch: false, hasBasementWalls: false, hasSepWalls: false,
   hasSubfloor: false, hasDense: false, hasCrawlWalls: false,
   hasMisc: false, misc: [newMiscItem()],
-  hasMetal: false, hasMetalRoof: true, hasMetalWalls: true, hasMetalGables: true, metalLen: "", metalWid: "", metalDeducts: [], metalRoofFoam: "", metalWallFoam: "", metalGableFoam: "", metalRoofBattR: "r19", metalWallBattR: "r13", metalGableBattR: "r13", metalRoofOc: "16", metalWallOc: "16", metalGableOc: "16", metalRoofFlat: "", metalRoofPitch: "1", metalRoofCustomRise: "", metalRoofCc: "", metalWallPerim: "", metalWallHeight: "", metalWallCc: "", metalGableSf: "", metalGableCc: "", // 30u: metal building
+  hasMetal: false, hasMetalRoof: true, hasMetalWalls: true, hasMetalGables: true, metalLen: "", metalWid: "", metalDeducts: [], metalRoofFoam: "oc", metalWallFoam: "oc", metalGableFoam: "oc", metalRoofBattR: "r19", metalWallBattR: "r13", metalGableBattR: "r13", metalRoofOc: "16", metalWallOc: "16", metalGableOc: "16", metalRoofFlat: "", metalRoofPitch: "1", metalRoofCustomRise: "", metalRoofCc: "", metalWallPerim: "", metalWallHeight: "", metalWallCc: "", metalGableSf: "", metalGableCc: "", // 30u: metal building
   interiorWalls: [newInteriorWall()],
   deadAir: [{ id: uid(), name: "", sf: "" }],
   vaults: [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }],
@@ -1743,31 +1743,12 @@ const METAL_TOGGLES = [
 const METAL_PKGS = ["total_bat", "total_foam", "hybrid_foam_batts"];
 const METAL_CC_DEPTHS = CC_DEPTH_CHOICES.filter(d => n(d) >= 1 && n(d) <= 8); // dropdown 1"–8" by 0.5"
 const METAL_WALL_HEIGHTS = Array.from({ length: 23 }, (_, i) => String(8 + i)); // 8–30 ft
-function renderMetalDims() {
-  const box = $("metalDims"); if (!box) return;
-  box.innerHTML = ""; if (S.jobMode !== "metal") return;
-  const addBtn = (label, fn) => { const b = el("button", "btn btn-secondary btn-sm"); b.type = "button"; b.textContent = label; b.onclick = fn; return b; };
-  const D = metalDims(), num = (label, key) => { const f = fieldInput(label, S[key], v => { S[key] = v; schedule(); }, "number"); f.querySelector("input").onchange = () => render(); return f; };
-  const prop = (k, v) => { const d = el("div", "props"); d.innerHTML = '<span class="k">' + k + '</span><span class="v">' + v + "</span>"; return d; };
-  const g2 = el("div", "grid2"); g2.appendChild(num("Building length ft", "metalLen")); g2.appendChild(num("Building width ft", "metalWid")); box.appendChild(g2);
-  box.appendChild(prop("Flat footprint (L × W)", fmt(round2(D.flat)) + " SF"));
-  box.appendChild(fieldSelect("Roof pitch", S.metalRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.metalRoofPitch = v; render(); }));
-  if (S.metalRoofPitch === "custom") box.appendChild(num("Custom rise (over 12)", "metalRoofCustomRise"));
-  box.appendChild(prop("Roofline (flat × pitch)", fmt(round2(D.roof)) + " SF"));
-  box.appendChild(prop("Perimeter (2 × (L + W))", fmt(round2(D.perim)) + " LF"));
-  box.appendChild(fieldSelect("Wall height", S.metalWallHeight, [["", "Pick height…"]].concat(METAL_WALL_HEIGHTS.map(h => [h, h + " ft"])), v => { S.metalWallHeight = v; render(); }));
-  box.appendChild(prop("Wall SF (perimeter × height)", fmt(round2(D.wallGross)) + " SF"));
-  box.appendChild(el("div", "row-title", "Deductions (doors / windows / openings)"));
-  if (!Array.isArray(S.metalDeducts)) S.metalDeducts = [];
-  S.metalDeducts.forEach((r, i) => {
-    const g = el("div", "grid2");
-    const f = (label, k) => { const x = fieldInput(label, r[k], v => { r[k] = v; schedule(); }, k === "label" ? "text" : "number"); x.querySelector("input").onchange = () => render(); return x; };
-    g.appendChild(f("Opening #" + (i + 1), "label")); g.appendChild(f("Qty", "qty")); g.appendChild(f("Width ft", "w")); g.appendChild(f("Height ft", "h"));
-    box.appendChild(g); box.appendChild(addBtn("Remove opening #" + (i + 1), () => { S.metalDeducts.splice(i, 1); render(); }));
-  });
-  box.appendChild(addBtn("Add deduction", () => { S.metalDeducts.push({ id: uid(), label: "", qty: "1", w: "", h: "" }); render(); }));
-  box.appendChild(prop("Net wall SF", fmt(round2(D.wallNet)) + " SF" + (D.ded > 0 ? " (−" + fmt(round2(D.ded)) + ")" : "")));
-  const gf = fieldInput("Gable SF (blank = auto " + fmt(round2(D.gableAuto)) + ")", S.metalGableSf, v => { S.metalGableSf = v; schedule(); }, "number"); gf.querySelector("input").onchange = () => render(); box.appendChild(gf);
+function renderMetalDims() { const b = $("metalDims"); if (b) b.innerHTML = ""; } // 30x: metal entry moved into bubbles
+// 30x: metal foam = one control per area (oc / cc / both). Any "both" → job compare on; area rows keep their own type.
+function metalFoamSync() {
+  if (S.jobMode !== "metal") return;
+  const areas = [["Roof", "hasMetalRoof", "roof"], ["Gable", "hasMetalGables", "gable"], ["Wall", "hasMetalWalls", "wall"]].filter(([, h, k]) => S[h] && metalAreaUsesFoam(k));
+  S.foamType = areas.some(([k]) => S["metal" + k + "Foam"] === "both") ? "both" : "oc";
 }
 function METAL_KEEP_LINE(L) { return /^Metal building/.test(L.assembly || "") || L.assembly === "Extra labor" || L.assembly === "Air seal (caulk & foam)"; }
 function metalDims() {
@@ -2668,7 +2649,7 @@ function buildLinesForPackage(p, tag) {
       const k = key[0].toUpperCase() + key.slice(1);
       if (metalAreaUsesFoam(key)) {
         push(lines, { area: "Metal building", assembly, product: "Open-cell spray foam", description: depthDesc, footage: round2(sf), unit: "SF", notes: noteTag + note });
-        applyFoamType(lines[lines.length - 1], { foamType: S["metal" + k + "Foam"], ccDepth: S["metal" + k + "Cc"] }, "metal " + key);
+        const ft = S["metal" + k + "Foam"]; applyFoamType(lines[lines.length - 1], { foamType: ft === "both" ? "" : (ft === "cc" ? "cc" : "oc"), ccDepth: S["metal" + k + "Cc"] }, "metal " + key);
       } else {
         const r = String(S["metal" + k + "BattR"] || "r19").replace(/\D/g, "") || "19";
         push(lines, { area: "Metal building", assembly, product: "R-" + r + " fiberglass batts", description: "R" + r + "/" + battW(S["metal" + k + "Oc"], "16"), priceKey: "R-" + r + " fiberglass batts", footage: round2(sf), unit: "SF", notes: noteTag + note });
@@ -3166,7 +3147,7 @@ function renderAssemblyEditors() {
   SEC = 1; // 29as: closed-cell line(s) with no depth picked — say so up top
   try { const miss = (foamCompareOn() ? withFoam("cc", allLines) : allLines()).filter(L => L._ccMissing); if (miss.length) box.appendChild(ccPickWarn(miss.length + " closed-cell area(s) have no depth yet — " + Array.from(new Set(miss.map(L => L.area))).join(", ") + ". Nothing is guessed; the ballpark stays incomplete until picked.")); } catch (e) {}
   SEC = 2;
-  if (jobHasFoam) {
+  if (jobHasFoam && S.jobMode !== "metal") { // 30x: metal jobs pick foam per area (one combined control)
     const card = el("div", "row-card");
     card.innerHTML = '<div class="row-title">Spray foam type (job)</div>';
     card.appendChild(fieldSelect("Foam type", foamCompareOn() ? "both" : foamTypeJob(), [["oc", "Open cell (default)"], ["cc", "Closed cell"], ["both", "Show both (compare)"]], v => { S.foamType = v; render(); }));
@@ -3467,28 +3448,54 @@ function renderAssemblyEditors() {
     if (rc) { SEC = 20; box.appendChild(rc); } // garage roofline before garage ceiling
     SEC = 30; box.appendChild(card);
   }
-  if (S.jobMode === "metal" && (S.hasMetalRoof || S.hasMetalWalls || S.hasMetalGables)) {
+  if (S.jobMode === "metal") { // 30x: metal = separate bubbles: Building size → Flat footprint → Walls → Roofline → Gables
+    metalFoamSync();
     const D = metalDims();
-    const card = el("div", "row-card"); card.innerHTML = '<div class="row-title">Metal building — materials</div>';
-    const matRow = (key, title, sf, battOpts) => {
+    const num = (card, label, key) => { const f = fieldInput(label, S[key], v => { S[key] = v; schedule(); }, "number"); f.querySelector("input").onchange = () => render(); card.appendChild(f); };
+    const prop = (card, k, v) => { const d = el("div", "props"); d.innerHTML = '<span class="k">' + k + '</span><span class="v">' + v + "</span>"; card.appendChild(d); };
+    // one combined foam control per area: Open cell / Closed cell / Show both (+ closed-cell depth dropdown 1–8")
+    const mat = (card, key, title, battOpts) => {
       const k = key[0].toUpperCase() + key.slice(1);
-      card.appendChild(el("div", "row-title", title + " — " + fmt(round2(sf)) + " SF"));
       if (metalAreaUsesFoam(key)) {
-        const tk = "metal" + k + "Foam", dk = "metal" + k + "Cc";
-        card.appendChild(fieldSelect(title + " foam", S[tk] === "oc" || S[tk] === "cc" ? S[tk] : "", [["", "Job default — " + (foamCompareOn() ? "compare both" : foamTypeJob() === "cc" ? "Closed cell" : "Open cell")], ["oc", "Open cell"], ["cc", "Closed cell"]], v => { S[tk] = v; render(); }));
-        const optB = foamCompareOn() && S[tk] !== "oc" && S[tk] !== "cc";
-        if (foamTypeFor(S[tk]) === "cc" || optB) card.appendChild(fieldSelect(title + " closed-cell depth" + (optB ? " (Option B)" : ""), METAL_CC_DEPTHS.includes(String(S[dk])) ? String(S[dk]) : "",
-          [["", ccDepthJob() ? "Job default " + ccDepthJob() + '"' : "Pick depth…"]].concat(METAL_CC_DEPTHS.map(d => [d, d + '"'])), v => { S[dk] = v; render(); }));
+        const tk = "metal" + k + "Foam", dk = "metal" + k + "Cc", cur = ["oc", "cc", "both"].includes(S[tk]) ? S[tk] : "oc";
+        card.appendChild(fieldSelect(title + " spray foam", cur, [["oc", "Open cell"], ["cc", "Closed cell"], ["both", "Show both (compare)"]], v => { S[tk] = v; metalFoamSync(); render(); }));
+        if (cur !== "oc") card.appendChild(fieldSelect(title + " closed-cell depth", METAL_CC_DEPTHS.includes(String(S[dk])) ? String(S[dk]) : "", [["", "Pick depth…"]].concat(METAL_CC_DEPTHS.map(d => [d, d + '"'])), v => { S[dk] = v; render(); }));
+        if (cur !== "oc" && !METAL_CC_DEPTHS.includes(String(S[dk]))) card.appendChild(ccPickWarn("Pick the closed-cell depth for " + title.toLowerCase() + "."));
       } else {
         const rk = "metal" + k + "BattR", ok = "metal" + k + "Oc";
         card.appendChild(fieldSelect(title + " batts", battOpts.some(o => o[0] === S[rk]) ? S[rk] : battOpts[0][0], battOpts, v => { S[rk] = v; render(); }));
         card.appendChild(fieldSelect("Batt width", battW(S[ok], "16"), BATT_W_CHOICES, v => { S[ok] = v; render(); }));
       }
     };
-    if (S.hasMetalRoof) matRow("roof", "Roofline", D.roof, [["r19", "R19"], ["r30", "R30"], ["r38", "R38"]]);
-    if (S.hasMetalGables) matRow("gable", "Gables", D.gable, [["r13", "R13"], ["r19", "R19"]]);
-    if (S.hasMetalWalls) matRow("wall", "Walls", D.wallNet, [["r13", "R13"], ["r19", "R19"]]);
-    SEC = 31; box.appendChild(card);
+    let card;
+    SEC = 1.1; card = el("div", "row-card"); { const g2 = el("div", "grid2"); num(g2, "Building length ft", "metalLen"); num(g2, "Building width ft", "metalWid"); card.appendChild(g2); } box.appendChild(card);
+    SEC = 1.2; card = el("div", "row-card"); prop(card, "Flat footprint (L × W)", fmt(round2(D.flat)) + " SF");
+    card.appendChild(fieldSelect("Pitch factor", S.metalRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.metalRoofPitch = v; render(); }));
+    if (S.metalRoofPitch === "custom") num(card, "Custom rise (over 12)", "metalRoofCustomRise");
+    prop(card, "Pitched SF (flat × pitch)", fmt(round2(D.roof)) + " SF"); box.appendChild(card);
+    if (S.hasMetalWalls) {
+      SEC = 1.3; card = el("div", "row-card");
+      prop(card, "Perimeter (2 × (L + W))", fmt(round2(D.perim)) + " LF");
+      card.appendChild(fieldSelect("Wall height", S.metalWallHeight, [["", "Pick height…"]].concat(METAL_WALL_HEIGHTS.map(h => [h, h + " ft"])), v => { S.metalWallHeight = v; render(); }));
+      prop(card, "Wall SF (perimeter × height)", fmt(round2(D.wallGross)) + " SF");
+      card.appendChild(el("div", "row-title", "Deductions (doors / windows / openings)"));
+      if (!Array.isArray(S.metalDeducts)) S.metalDeducts = [];
+      S.metalDeducts.forEach((r, i) => {
+        const g = el("div", "grid2");
+        const f = (label, k2) => { const x = fieldInput(label, r[k2], v => { r[k2] = v; schedule(); }, k2 === "label" ? "text" : "number"); x.querySelector("input").onchange = () => render(); return x; };
+        g.appendChild(f("Opening #" + (i + 1), "label")); g.appendChild(f("Qty", "qty")); g.appendChild(f("Width ft", "w")); g.appendChild(f("Height ft", "h"));
+        card.appendChild(g); card.appendChild(addBtn("Remove opening #" + (i + 1), () => { S.metalDeducts.splice(i, 1); render(); }));
+      });
+      card.appendChild(addBtn("Add deduction", () => { S.metalDeducts.push({ id: uid(), label: "", qty: "1", w: "", h: "" }); render(); }));
+      prop(card, "Net wall SF", fmt(round2(D.wallNet)) + " SF" + (D.ded > 0 ? " (−" + fmt(round2(D.ded)) + ")" : ""));
+      mat(card, "wall", "Walls", [["r13", "R13"], ["r19", "R19"]]); box.appendChild(card);
+    }
+    if (S.hasMetalRoof) { SEC = 1.4; card = el("div", "row-card"); prop(card, "Roofline SF (flat × pitch)", fmt(round2(D.roof)) + " SF"); mat(card, "roof", "Roofline", [["r19", "R19"], ["r30", "R30"], ["r38", "R38"]]); box.appendChild(card); }
+    if (S.hasMetalGables) {
+      SEC = 1.5; card = el("div", "row-card");
+      const gf = fieldInput("Gable SF (blank = auto " + fmt(round2(D.gableAuto)) + " from width + pitch)", S.metalGableSf, v => { S.metalGableSf = v; schedule(); }, "number"); gf.querySelector("input").onchange = () => render(); card.appendChild(gf);
+      mat(card, "gable", "Gables", [["r13", "R13"], ["r19", "R19"]]); box.appendChild(card);
+    }
   }
   SEC = 32;
   if (S.hasPorch && F.canAskPorch) {
@@ -3640,7 +3647,7 @@ function renderAssemblyEditors() {
     box.appendChild(b);
   });
 }
-const BUBBLE_TITLES = { 2: "Spray foam type", 5: "Attic", 10: "Roofline", 12: "Dead air", 13: "Vaults", 14: "Knee walls", 20: "Garage roofline", 30: "Garage ceiling", 31: "Metal building",
+const BUBBLE_TITLES = { 1.1: "Building size", 1.2: "Flat footprint", 1.3: "Walls", 1.4: "Roofline", 1.5: "Gables", 2: "Spray foam type", 5: "Attic", 10: "Roofline", 12: "Dead air", 13: "Vaults", 14: "Knee walls", 20: "Garage roofline", 30: "Garage ceiling", 31: "Metal building",
   32: "Porch", 35: "Cantilevers", 40: "Gables", 50: "Baffles", 60: "Walls", 62: "Interior walls", 64: "Between floors", 66: "Dense-pack floors",
   80: "Daylight walls", 81: "Concrete walls", 82: "UFBC (unfinished basement ceiling)", 83: "Separation walls", 84: "Crawl – new batts", 85: "Crawl touch-up", 86: "Crawl space", 87: "Crawl walls", 95: "Miscellaneous", 99: "Bands / rim" };
 
@@ -4514,7 +4521,8 @@ function render() {
   setSwitch($("compareOn"), !!S.compareOn);
   toggleField("foundationField", S.jobMode === "new");
   toggleField("sec-fp", S.jobMode !== "metal"); // 30v: no fireplace on metal jobs (air seal + extra labor stay)
-  toggleField("houseFootprint", S.jobMode !== "metal"); toggleField("metalDims", S.jobMode === "metal"); // 30w: L × W first in the flat-footprint spot
+  toggleField("sec-footprint", S.jobMode !== "metal"); toggleField("houseFootprint", true); toggleField("metalDims", false); // 30x: metal L × W etc. are their own bubbles
+  metalFoamSync();
   if (S.jobMode === "metal") { const D = metalDims(); S.flatSf = D.flat > 0 ? String(round2(D.flat)) : ""; } // air seal (if turned on) = flat L×W
   Array.from($("pkg").options).forEach(o => { const hide = S.jobMode === "metal" && !METAL_PKGS.includes(o.value); o.hidden = hide; o.disabled = hide; });
   renderMetalDims();
@@ -4862,7 +4870,7 @@ function newJob() {
   S.hasSubfloor = false; S.hasDense = false; S.hasCrawlWalls = false;
   S.crawlSubR = "R-19"; S.crawlSubOc = "16"; S.hasUfbc = false; S.hasSepWalls = false; S.ufbcSf = ""; S.ufbcR = "R-19"; S.ufbcOc = "16"; S.subfloorOverride = "";
   S.hasMisc = false; S.misc = [newMiscItem()];
-  S.hasMetal = false; S.hasMetalRoof = true; S.hasMetalWalls = true; S.hasMetalGables = true; S.metalLen = ""; S.metalWid = ""; S.metalDeducts = []; S.metalRoofFoam = ""; S.metalWallFoam = ""; S.metalGableFoam = ""; S.metalRoofBattR = "r19"; S.metalWallBattR = "r13"; S.metalGableBattR = "r13"; S.metalRoofOc = "16"; S.metalWallOc = "16"; S.metalGableOc = "16"; S.metalRoofFlat = ""; S.metalRoofPitch = "1"; S.metalRoofCustomRise = ""; S.metalRoofCc = ""; S.metalWallPerim = ""; S.metalWallHeight = ""; S.metalWallCc = ""; S.metalGableSf = ""; S.metalGableCc = "";
+  S.hasMetal = false; S.hasMetalRoof = true; S.hasMetalWalls = true; S.hasMetalGables = true; S.metalLen = ""; S.metalWid = ""; S.metalDeducts = []; S.metalRoofFoam = "oc"; S.metalWallFoam = "oc"; S.metalGableFoam = "oc"; S.metalRoofBattR = "r19"; S.metalWallBattR = "r13"; S.metalGableBattR = "r13"; S.metalRoofOc = "16"; S.metalWallOc = "16"; S.metalGableOc = "16"; S.metalRoofFlat = ""; S.metalRoofPitch = "1"; S.metalRoofCustomRise = ""; S.metalRoofCc = ""; S.metalWallPerim = ""; S.metalWallHeight = ""; S.metalWallCc = ""; S.metalGableSf = ""; S.metalGableCc = "";
   S.deadAir = [{ id: uid(), name: "", sf: "" }];
   S.vaults = [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }];
   S.knees = [{ id: uid(), name: "", height: "8", lf: "", oc: "16", shape: "rectangle", wrap: true }];
@@ -5284,7 +5292,7 @@ function calcInit() {
   $("calcClose").onclick = () => $("calcModal").classList.add("hidden");
   $("calcModal").addEventListener("click", e => { if (e.target.id === "calcModal") $("calcModal").classList.add("hidden"); });
 }
-const APP_BUILD = "2026-10-30w";
+const APP_BUILD = "2026-10-30x";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
