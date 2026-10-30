@@ -5492,7 +5492,31 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30al";
+const APP_BUILD = "2026-10-30am";
+// 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
+// foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
+(function autoUpdate() {
+  if (typeof APP_EDITION === "undefined" || !(APP_EDITION === "asher" || APP_EDITION === "lance")) return;
+  if (!/^https?:$/.test(location.protocol)) return;
+  let pending = null, busy = false;
+  const idle = () => !document.hidden ? !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) && !document.querySelector(".xl-modal,.calc-sheet.open,#missModal") : true;
+  const apply = () => {
+    if (!pending || !idle()) return;
+    const k = "kp-autoupd-" + pending; if (sessionStorage.getItem(k)) return; // one reload per new build (no loops)
+    sessionStorage.setItem(k, "1");
+    try { if (typeof saveDraft === "function") saveDraft(); } catch (e) {}
+    const u = new URL(location.href); u.searchParams.set("v", pending); location.replace(u.toString());
+  };
+  const check = () => {
+    if (busy) return; busy = true;
+    fetch(new URL("version.json", location.href).toString() + "?t=" + Date.now(), { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null).then(j => { if (j && j.build && j.build !== APP_BUILD) { pending = j.build; apply(); } })
+      .catch(() => {}).then(() => { busy = false; });
+  };
+  setTimeout(check, 8000); setInterval(check, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); else apply(); });
+  document.addEventListener("focusout", () => setTimeout(apply, 1500), true);
+})();
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
