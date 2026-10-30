@@ -1570,7 +1570,7 @@ const S = {
   hasGarage: false, hasPorch: false, hasBasementWalls: false, hasSepWalls: false,
   hasSubfloor: false, hasDense: false, hasCrawlWalls: false,
   hasMisc: false, misc: [newMiscItem()],
-  hasMetal: false, hasMetalRoof: true, hasMetalWalls: true, hasMetalGables: true, metalLen: "", metalWid: "", metalFoam: "oc", metalCc: "", metalIrregular: false, metalFlatManual: "", metalPerimManual: "", metalDeducts: [], metalRoofFoam: "oc", metalWallFoam: "oc", metalGableFoam: "oc", metalRoofBattR: "r19", metalWallBattR: "r13", metalGableBattR: "r13", metalRoofOc: "16", metalWallOc: "16", metalGableOc: "16", metalRoofFlat: "", metalRoofPitch: "1", metalRoofCustomRise: "", metalRoofCc: "", metalWallPerim: "", metalWallHeight: "", metalWallCc: "", metalGableSf: "", metalGableCc: "", // 30u: metal building
+  hasMetal: false, hasMetalRoof: true, hasMetalWalls: true, hasMetalGables: true, metalLen: "", metalWid: "", metalGables: [], metalFoam: "oc", metalCc: "", metalIrregular: false, metalFlatManual: "", metalPerimManual: "", metalDeducts: [], metalRoofFoam: "oc", metalWallFoam: "oc", metalGableFoam: "oc", metalRoofBattR: "r19", metalWallBattR: "r13", metalGableBattR: "r13", metalRoofOc: "16", metalWallOc: "16", metalGableOc: "16", metalRoofFlat: "", metalRoofPitch: "1", metalRoofCustomRise: "", metalRoofCc: "", metalWallPerim: "", metalWallHeight: "", metalWallCc: "", metalGableSf: "", metalGableCc: "", // 30u: metal building
   interiorWalls: [newInteriorWall()],
   deadAir: [{ id: uid(), name: "", sf: "" }],
   vaults: [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }],
@@ -1765,10 +1765,12 @@ function metalDims() {
   const pf = resolvePitchFactor(S.metalRoofPitch, S.metalRoofCustomRise), rise = Math.sqrt(Math.max(0, (pf * 12) ** 2 - 144));
   const ded = (S.metalDeducts || []).reduce((a, r) => a + n(r.w) * n(r.h) * (n(r.qty) || 1), 0);
   const wallGross = perim * n(S.metalWallHeight), wallNet = Math.max(0, wallGross - ded);
-  const gableAuto = W * W * rise / 24; // two triangle gable ends
-  const gable = String(S.metalGableSf || "").trim() !== "" ? n(S.metalGableSf) : gableAuto;
+  const gableAuto = W * W * rise / 24; // two triangle gable ends (hint only)
+  const gable = (S.metalGables || []).reduce((a, g) => a + metalGableSfOf(g), 0); // 30ab: gable rows (triangle / rectangle), as many as needed
   return { irr, L, W, flat, perim, pf, rise, roof: flat * pf, ded, wallGross, wallNet, gableAuto, gable };
 }
+function metalGableSfOf(g) { const a = n(g.length) * n(g.height); return g.shape === "rectangle" ? a : a / 2; }
+function newMetalGable() { return { id: uid(), shape: "triangle", length: "", height: "", foam: "", cc: "" }; }
 function metalAreaUsesFoam(area) { const p = S.pkg; return p === "total_foam" || (p === "hybrid_foam_batts" && area !== "wall"); }
 // 30t: Asher — foam over garage roofline -> garage ceiling SF = garage roofline FLAT SF (no pitch), material required, optional 2-section split
 function syncGarageCeil() {
@@ -2665,7 +2667,18 @@ function buildLinesForPackage(p, tag) {
       }
     };
     if (S.hasMetalRoof) area("roof", "Metal building roof", D.roof, "flat " + fmt(D.flat) + " (" + fmt(D.L) + "×" + fmt(D.W) + ") ×" + D.pf.toFixed(3), roofDepthJob() + '" OC');
-    if (S.hasMetalGables) area("gable", "Metal building gables", D.gable, String(S.metalGableSf || "").trim() ? "entered" : "auto from width + pitch", '3.5" open cell');
+    if (S.hasMetalGables) (S.metalGables || []).forEach((g, i) => { // 30ab: one line per gable; foam defaults to the building's choice
+      const sf = metalGableSfOf(g); if (!(sf > 0)) return;
+      const note = (g.shape === "rectangle" ? "rectangle " : "triangle ") + fmt(n(g.length)) + " × " + fmt(n(g.height)) + (g.shape === "rectangle" ? "" : " ÷ 2");
+      if (metalAreaUsesFoam("gable")) {
+        push(lines, { area: "Metal building", assembly: "Metal building gables", product: "Open-cell spray foam", description: '3.5" open cell', footage: round2(sf), unit: "SF", notes: noteTag + "Gable #" + (i + 1) + " " + note });
+        const bf = ["oc", "cc", "both"].includes(S.metalFoam) ? S.metalFoam : "oc", f = g.foam === "oc" || g.foam === "cc" ? g.foam : (bf === "both" ? "" : bf);
+        applyFoamType(lines[lines.length - 1], { foamType: f, ccDepth: METAL_CC_DEPTHS.includes(String(g.cc)) ? g.cc : S.metalCc }, "metal gable");
+      } else {
+        const r = String(S.metalGableBattR || "r13").replace(/\D/g, "") || "13";
+        push(lines, { area: "Metal building", assembly: "Metal building gables", product: "R-" + r + " fiberglass batts", description: "R" + r + "/" + battW(S.metalGableOc, "16"), priceKey: "R-" + r + " fiberglass batts", footage: round2(sf), unit: "SF", notes: noteTag + "Gable #" + (i + 1) + " " + note });
+      }
+    });
     if (S.hasMetalWalls) area("wall", "Metal building walls", D.wallNet, fmt(D.perim) + " LF × " + fmt(n(S.metalWallHeight)) + " ft" + (D.ded > 0 ? " − " + fmt(D.ded) + " SF deductions" : ""), '3.5" open cell');
   }
 
@@ -3517,8 +3530,28 @@ function renderAssemblyEditors() {
     }
     if (S.hasMetalGables) {
       SEC = 1.3; card = el("div", "row-card");
-      const gf = fieldInput(S.metalIrregular ? "Gable SF (enter manually)" : "Gable SF (blank = auto " + fmt(round2(D.gableAuto)) + " from width + pitch)", S.metalGableSf, v => { S.metalGableSf = v; schedule(); }, "number"); gf.querySelector("input").onchange = () => render(); card.appendChild(gf);
-      mat(card, "gable", "Gables", [["r13", "R13"], ["r19", "R19"]]); box.appendChild(card);
+      if (!Array.isArray(S.metalGables) || !S.metalGables.length) S.metalGables = [newMetalGable()];
+      const bf = ["oc", "cc", "both"].includes(S.metalFoam) ? S.metalFoam : "oc", bfTxt = { oc: "Open cell", cc: "Closed cell" + (S.metalCc ? " " + S.metalCc + '"' : ""), both: "Show both" }[bf];
+      const foamOn = metalAreaUsesFoam("gable");
+      S.metalGables.forEach((g, i) => {
+        card.appendChild(el("div", "row-title", "Gable #" + (i + 1)));
+        card.appendChild(fieldSelect("Shape", g.shape === "rectangle" ? "rectangle" : "triangle", [["triangle", "Triangle (L × H ÷ 2)"], ["rectangle", "Rectangle (L × H)"]], v => { g.shape = v; render(); }));
+        const g2 = el("div", "grid2");
+        [["Length ft", "length"], ["Height ft", "height"]].forEach(([lb, k]) => { const x = fieldInput(lb, g[k], v => { g[k] = v; schedule(); }, "number"); x.querySelector("input").onchange = () => render(); g2.appendChild(x); });
+        card.appendChild(g2);
+        prop(card, "Gable #" + (i + 1) + " SF", fmt(round2(metalGableSfOf(g))) + " SF");
+        if (foamOn) {
+          card.appendChild(fieldSelect("Gable #" + (i + 1) + " foam", g.foam === "oc" || g.foam === "cc" ? g.foam : "", [["", "Same as building — " + bfTxt], ["oc", "Open cell"], ["cc", "Closed cell"]], v => { g.foam = v; render(); }));
+          if (g.foam === "cc") card.appendChild(fieldSelect("Gable #" + (i + 1) + " closed-cell depth", METAL_CC_DEPTHS.includes(String(g.cc)) ? String(g.cc) : "", [["", S.metalCc ? "Building depth " + S.metalCc + '"' : "Pick depth…"]].concat(METAL_CC_DEPTHS.map(d => [d, d + '"'])), v => { g.cc = v; render(); }));
+          if (!g.foam && bf === "both") card.appendChild(el("p", "cap", "Show both: this gable is priced open cell and closed cell" + (S.metalCc ? " (" + S.metalCc + '")' : "") + "."));
+        }
+        if (S.metalGables.length > 1) card.appendChild(addBtn("Remove gable #" + (i + 1), () => { S.metalGables.splice(i, 1); render(); }));
+      });
+      card.appendChild(addBtn("Add gable", () => { S.metalGables.push(newMetalGable()); render(); }));
+      if (!S.metalIrregular && D.W > 0 && D.rise > 0) card.appendChild(addBtn("Fill 2 end gables from width + pitch", () => { const h = String(round2(D.W / 2 * D.rise / 12)); S.metalGables = [0, 1].map(() => Object.assign(newMetalGable(), { length: String(D.W), height: h })); render(); }));
+      prop(card, "Total gable SF", fmt(round2(D.gable)) + " SF");
+      if (!foamOn) mat(card, "gable", "Gables", [["r13", "R13"], ["r19", "R19"]]);
+      box.appendChild(card);
     }
   }
   SEC = 32;
@@ -4167,9 +4200,10 @@ function missingFields() {
   if (S.jobMode === "metal") { // 30w
     if (S.metalIrregular) { if (!(n(S.metalFlatManual) > 0)) add("Metal building", "Flat footprint SF", "Flat footprint", "Flat footprint SF (enter manually)");
       if (S.hasMetalWalls && !(n(S.metalPerimManual) > 0)) add("Metal building", "Wall linear footage", "Walls", "Wall linear footage LF (enter manually)");
-      if (S.hasMetalGables && !(n(S.metalGableSf) > 0)) add("Metal building", "Gable SF", "Gables", "Gable SF (enter manually)"); }
-    else if (!(n(S.metalLen) > 0)) add("Metal building", "Length", "Building size", "Building length ft");
-    else if (!(n(S.metalWid) > 0)) add("Metal building", "Width", "Building size", "Building width ft");
+    }
+    if (!S.metalIrregular && !(n(S.metalLen) > 0)) add("Metal building", "Length", "Building size", "Building length ft");
+    else if (!S.metalIrregular && !(n(S.metalWid) > 0)) add("Metal building", "Width", "Building size", "Building width ft");
+    if (S.hasMetalGables) (S.metalGables || []).forEach((g, i) => { if (!(n(g.length) > 0)) add("Gable #" + (i + 1), "Length", "Gables", "Length ft"); else if (!(n(g.height) > 0)) add("Gable #" + (i + 1), "Height", "Gables", "Height ft"); });
     if (S.hasMetalWalls && !(n(S.metalWallHeight) > 0)) add("Metal building", "Wall height", "Flat footprint", "Wall height");
   }
   if (S.hasMisc) (S.misc || []).forEach((r, i) => { if (!String(r.material || "").trim()) add("Misc item #" + (i + 1), "Material", "Misc item #" + (i + 1), "Material (required)"); });
@@ -4686,6 +4720,7 @@ function migrateState(d) {
   if (typeof S.hasMetal !== "boolean") S.hasMetal = false;
   ["hasMetalRoof", "hasMetalWalls"].forEach(k => { if (typeof S[k] !== "boolean") S[k] = true; }); if (typeof S.hasMetalGables !== "boolean") S.hasMetalGables = true;
   if (typeof S.metalIrregular !== "boolean") S.metalIrregular = false;
+  if (!Array.isArray(S.metalGables)) S.metalGables = n(S.metalGableSf) > 0 ? [Object.assign(newMetalGable(), { shape: "rectangle", length: String(n(S.metalGableSf)), height: "1" })] : []; // 30ab: old single gable SF -> one rectangle row
   if (!["oc", "cc", "both"].includes(S.metalFoam)) S.metalFoam = ["both", "cc"].find(v => [S.metalRoofFoam, S.metalWallFoam, S.metalGableFoam].includes(v)) || "oc";
   if (typeof S.metalCc !== "string") S.metalCc = S.metalRoofCc || S.metalWallCc || S.metalGableCc || "";
   ["metalLen", "metalWid", "metalFlatManual", "metalPerimManual", "metalRoofFoam", "metalWallFoam", "metalGableFoam"].forEach(k => { if (typeof S[k] !== "string") S[k] = ""; }); if (!Array.isArray(S.metalDeducts)) S.metalDeducts = [];
@@ -4901,7 +4936,7 @@ function newJob() {
   S.hasSubfloor = false; S.hasDense = false; S.hasCrawlWalls = false;
   S.crawlSubR = "R-19"; S.crawlSubOc = "16"; S.hasUfbc = false; S.hasSepWalls = false; S.ufbcSf = ""; S.ufbcR = "R-19"; S.ufbcOc = "16"; S.subfloorOverride = "";
   S.hasMisc = false; S.misc = [newMiscItem()];
-  S.hasMetal = false; S.hasMetalRoof = true; S.hasMetalWalls = true; S.hasMetalGables = true; S.metalLen = ""; S.metalWid = ""; S.metalFoam = "oc"; S.metalCc = ""; S.metalIrregular = false; S.metalFlatManual = ""; S.metalPerimManual = ""; S.metalDeducts = []; S.metalRoofFoam = "oc"; S.metalWallFoam = "oc"; S.metalGableFoam = "oc"; S.metalRoofBattR = "r19"; S.metalWallBattR = "r13"; S.metalGableBattR = "r13"; S.metalRoofOc = "16"; S.metalWallOc = "16"; S.metalGableOc = "16"; S.metalRoofFlat = ""; S.metalRoofPitch = "1"; S.metalRoofCustomRise = ""; S.metalRoofCc = ""; S.metalWallPerim = ""; S.metalWallHeight = ""; S.metalWallCc = ""; S.metalGableSf = ""; S.metalGableCc = "";
+  S.hasMetal = false; S.hasMetalRoof = true; S.hasMetalWalls = true; S.hasMetalGables = true; S.metalLen = ""; S.metalWid = ""; S.metalGables = []; S.metalFoam = "oc"; S.metalCc = ""; S.metalIrregular = false; S.metalFlatManual = ""; S.metalPerimManual = ""; S.metalDeducts = []; S.metalRoofFoam = "oc"; S.metalWallFoam = "oc"; S.metalGableFoam = "oc"; S.metalRoofBattR = "r19"; S.metalWallBattR = "r13"; S.metalGableBattR = "r13"; S.metalRoofOc = "16"; S.metalWallOc = "16"; S.metalGableOc = "16"; S.metalRoofFlat = ""; S.metalRoofPitch = "1"; S.metalRoofCustomRise = ""; S.metalRoofCc = ""; S.metalWallPerim = ""; S.metalWallHeight = ""; S.metalWallCc = ""; S.metalGableSf = ""; S.metalGableCc = "";
   S.deadAir = [{ id: uid(), name: "", sf: "" }];
   S.vaults = [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }];
   S.knees = [{ id: uid(), name: "", height: "8", lf: "", oc: "16", shape: "rectangle", wrap: true }];
@@ -5335,7 +5370,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30aa";
+const APP_BUILD = "2026-10-30ab";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -5444,6 +5479,9 @@ function fgCustWire() {
     nav.style.transform = "";
     const dock = document.getElementById("saveDock");
     if (dock) { if (dock.parentElement !== document.body) document.body.insertBefore(dock, nav); dock.style.transform = ""; }
+    // 30ab: self-heal — if iOS left the fixed bar painted away from the bottom (bar "floats up" while scrolling), force a re-layout
+    if (!typing()) { const vh = window.innerHeight, off = Math.abs(nav.getBoundingClientRect().bottom - vh);
+      if (off > 24) { [nav, dock].forEach(e => { if (!e || e.classList.contains("hidden")) return; e.style.display = "none"; void e.offsetHeight; e.style.display = ""; }); } }
     // 30d: scroll-lock restore: xl-open only while an .xl-modal is actually on screen
     if (document.body.classList.contains("xl-open") && !document.querySelector(".xl-modal")) document.body.classList.remove("xl-open");
   };
@@ -5458,6 +5496,7 @@ function fgCustWire() {
   window.addEventListener("focus", nudge);
   window.addEventListener("orientationchange", nudge);
   window.addEventListener("scroll", schedulePin, { passive: true });
+  window.addEventListener("scrollend", schedulePin, { passive: true }); let st = null; window.addEventListener("scroll", () => { clearTimeout(st); st = setTimeout(schedulePin, 140); }, { passive: true }); // 30ab: re-check after momentum scroll stops
   window.addEventListener("resize", schedulePin);
   if (vv) { vv.addEventListener("resize", () => { schedulePin(); nudge(); }); vv.addEventListener("scroll", schedulePin); }
   document.addEventListener("touchend", () => setTimeout(schedulePin, 350), { passive: true });
