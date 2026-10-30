@@ -150,6 +150,8 @@ button { cursor: pointer; border: none; background: none; }
   padding: 12px; margin-bottom: 10px;
 }
 .row-card .row-title { font-weight: 700; font-size: .9rem; margin-bottom: 8px; }
+.coords-link { font-weight: 700; text-decoration: underline; }
+.coords-out { margin-top: 6px; }
 .row-card > .row-edit-btn { float: right; margin: -4px 0 0 8px; min-height: 0; padding: 3px 12px; }
 .row-card.rc-collapsed > :not(.row-title):not(.row-edit-btn) { display: none; }
 .row-card.rc-collapsed .row-title { margin-bottom: 0; }
@@ -403,6 +405,8 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <div class="field"><label>Zip</label><input id="siteZip" inputmode="numeric"></div>
       </div>
       <div class="field"><label>County</label><input id="siteCounty" placeholder="fills from the address search"></div>
+      <div class="field"><label>Site pin (paste coordinates)</label><input id="siteCoords" placeholder="Apple Maps: drop pin → copy coordinates → paste" autocomplete="off" inputmode="text">
+        <div class="coords-out cap" id="coordsOut"></div></div>
       <div class="field"><label>Subdivision (optional)</label><input id="subdivision"></div>
       <div class="toggle-row"><span>Billing address same as job site</span><button type="button" class="switch" id="billSame"></button></div>
       <div id="billFields" class="hidden">
@@ -1559,7 +1563,7 @@ const S = {
   photos: [],
   accessScaffold: "no", accessScaffoldNote: "", accessDriveway: "", accessDrivewayNote: "", accessGate: "", accessGateCode: "",
   builder: "", city: "", address: "", keywords: "",
-  siteState: "GA", siteZip: "", siteCounty: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
+  siteState: "GA", siteZip: "", siteCounty: "", siteCoords: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
   billSame: true, billAddress: "", billCity: "", billState: "", billZip: "", showFgMap: false,
   gasType: "natural",
   outputView: "excel",
@@ -2146,7 +2150,8 @@ function twoOrder(foamChoice) {
   const fpDet = twoFpDetails(), fpLs = twoFpLines();
   // NOTES priority: job site access, then Asher's typed notes, then the fireplace pointer. Nothing is cut — if they don't fit in the
   // 6 note rows (one row goes to "Page k of N" on multi-sheet orders), they continue on the next sheet's NOTES (adding a sheet if needed).
-  const pri = accessLines().concat((S.woNotes || "").split(/\n/).map(x => x.trim()).filter(Boolean),
+  const pin = parseCoords(S.siteCoords); // 30ah: site pin first in Sky's NOTES
+  const pri = (pin ? ["SITE PIN: " + pin.text + " — " + pin.url] : []).concat(accessLines(),(S.woNotes || "").split(/\n/).map(x => x.trim()).filter(Boolean),
     fpDet.length ? ["FIREPLACE: see the Fireplace sheet (and fireplace .txt) for every fireplace detail."] : []);
   let pages = Math.max(1, Math.ceil(rows.length / PER));
   while (pages * (NOTE_ROWS - (pages > 1 ? 1 : 0)) < pri.length) pages++;
@@ -2249,13 +2254,44 @@ function twoFpText(o) {
   return head.concat(det.map(r => r[0] + ": " + r[1]), ["", "FIREPLACE LINES"],
     ls.map(L => "- " + (L.assembly || "") + " | " + (L.product || "") + " | " + (L.description || "") + ((L.footage && L.unit !== "—") ? " | " + fmt(n(L.footage)) + " " + (L.unit || "") : "") + (L.notes ? " (" + String(L.notes).trim() + ")" : ""))).join("\n") + "\n";
 }
+// 30ah: pasted site pin (no map widget). Accepts "34.0123, -83.7123", "34.0123° N, 83.7123° W", or a maps link with ll= / q= / @lat,lng.
+function parseCoords(str) {
+  const t = String(str || "").replace(/[\u2032\u2019']/g, "'").trim(); if (!t) return null;
+  let m = t.match(/[?&](?:ll|q|sll|daddr|coordinate)=(-?\d+(?:\.\d+)?)\s*(?:,|%2C)\s*(-?\d+(?:\.\d+)?)/i) || t.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  let lat, lng;
+  if (m) { lat = +m[1]; lng = +m[2]; }
+  else {
+    m = t.match(/(-?\d+(?:\.\d+)?)\s*°?\s*([NS])?\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*°?\s*([EW])?/i); if (!m) return null;
+    lat = +m[1] * (/s/i.test(m[2] || "") ? -1 : 1); lng = +m[3] * (/w/i.test(m[4] || "") ? -1 : 1);
+  }
+  if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180) || (lat === 0 && lng === 0)) return null;
+  const f = x => (Math.round(x * 1e6) / 1e6).toString();
+  const text = f(lat) + ", " + f(lng);
+  return { lat, lng, text, url: "https://maps.google.com/?q=" + f(lat) + "," + f(lng), tap: coordsTapUrl(f(lat) + "," + f(lng)) };
+}
+// 30ai: tap opens the device's maps app — iPhone/iPad: Apple Maps; Android: geo: (default maps app); desktop: maps.google.com in the browser.
+function coordsTapUrl(ll) {
+  const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && typeof navigator !== "undefined" && navigator.maxTouchPoints > 1)) return "https://maps.apple.com/?q=" + ll + "&ll=" + ll;
+  if (/Android/.test(ua)) return "geo:" + ll + "?q=" + ll;
+  return "https://maps.google.com/?q=" + ll;
+}
+function coordsLinkHtml(raw) { const c = parseCoords(raw); return c ? '<a class="coords-link" href="' + escHtml(c.tap) + '" target="_blank" rel="noopener">📍 ' + escHtml(c.text) + '</a>' : ""; }
+function coordsShareLines() { const c = parseCoords(S.siteCoords); return c ? "\nSite pin: " + c.text + "\nMaps: " + c.url : ""; }
+function renderCoordsOut() {
+  const o = $("coordsOut"); if (!o) return; const raw = String(S.siteCoords || "").trim(), c = parseCoords(raw);
+  if (!raw) { o.innerHTML = ""; return; }
+  if (!c) { o.innerHTML = '<span style="color:var(--err-ink)">Couldn\'t read those coordinates — paste like 34.0123, -83.7123</span>'; return; }
+  o.innerHTML = coordsLinkHtml(raw) + ' <small>(tap to open in Maps)</small> · <button type="button" class="btn btn-secondary btn-sm" id="btnCopyCoords">Copy</button>';
+  $("btnCopyCoords").onclick = () => { const v = c.text + "\n" + c.url; (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => setStatus("Site pin copied."), () => { window.prompt("Copy the site pin:", v); }); };
+}
 function twoFileName(o) { return ("WO - " + o.jobSite + (o.foamLabel ? " - " + o.foamLabel : "")).replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() + ".xlsx"; }
 function twoShareText(o, both) {
   const who = twoWho("walls").name, where = [o.jobSite, (S.city || "").trim()].filter(Boolean).join(", ");
   if (both) return { title: "WO - " + o.jobSite + " - Open vs Closed Cell",
-    text: who + ", attached are two work orders for " + where + (o.customer ? " (" + o.customer + ")" : "") + ": Option A - Open Cell and Option B - Closed Cell." };
+    text: who + ", attached are two work orders for " + where + (o.customer ? " (" + o.customer + ")" : "") + ": Option A - Open Cell and Option B - Closed Cell." + coordsShareLines() };
   return { title: "WO - " + o.jobSite + (o.foamLabel ? " - " + o.foamLabel : ""),
-    text: who + ", attached is the work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + (o.foamLabel ? " — " + o.foamLabel : "") + "." };
+    text: who + ", attached is the work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + (o.foamLabel ? " — " + o.foamLabel : "") + "." + coordsShareLines() };
 }
 // 29aj: Sky work order = one file; in OC vs CC compare its foam lines read "open cell vs. closed cell" (no export choice needed here).
 function twoOrdersFor() { return [twoOrder()]; }
@@ -4160,6 +4196,7 @@ function renderArchive() {
       '<div class="meta">' + escHtml(j.dateMeasured) + " · " + ownerName(j.owner) +
       " · " + escHtml(j.builder || "—") + " · " + escHtml(j.city || "—") + '</div>' +
       '<div class="title">' + escHtml(j.address || "(no address)") + '</div>' +
+      (parseCoords(j.siteCoords) ? '<div class="meta arch-coords">' + coordsLinkHtml(j.siteCoords) + '</div>' : "") +
       '<div class="meta">' + escHtml(relabelPkg(j.packageLabel)) + (j.photoCount ? " · 📷 " + j.photoCount : "") + '</div>' +
       (j.chaseBlocked ? '<div class="callout danger" style="margin:6px 0 8px;padding:8px"><strong>⚠ Chase blocked</strong>' + escHtml(j.chaseNote || "No note") + '</div>' : '');
     const actions = el("div", "archive-actions");
@@ -4351,7 +4388,7 @@ function batchBuildJob(job) {
       const warn = [], missing = missingFields().map(missingText); // 29as K: flagged in the review card, not blocking
       if (!(S.address || "").trim()) warn.push("no address — files named by " + ((S.builder || "").trim() ? "builder" : "“Job”"));
       const base = photoFileBase(o.jobSite);
-      return { id: job.id, label, order: o, line: where + (o.customer ? " (" + o.customer + ")" : ""), single: twoShareText(o, false),
+      return { id: job.id, label, order: o, line: where + (o.customer ? " (" + o.customer + ")" : "") + (parseCoords(S.siteCoords) ? " — pin " + parseCoords(S.siteCoords).text + " " + parseCoords(S.siteCoords).url : ""), single: twoShareText(o, false),
         xlsx: { name: twoFileName(o), bytes: KPWO.buildXlsx(o, o.pages) },
         fp: o.fpPages.length ? { name: base + " - fireplace.txt", text: twoFpText(o) } : null,
         photoRefs: S.photos.map((x, i) => ({ id: x.id, name: base + " - photo " + (i + 1) + ".jpg" })), photos: [], photoMissing: 0, warn, missing };
@@ -4602,8 +4639,9 @@ function render() {
   $("builder").value = S.builder;
   $("city").value = S.city;
   $("address").value = S.address;
-  ["siteState", "siteZip", "siteCounty", "subdivision", "custFirst", "custLast", "custCompany", "custPhone", "custEmail", "billAddress", "billCity", "billState", "billZip"]
+  ["siteState", "siteZip", "siteCounty", "siteCoords", "subdivision", "custFirst", "custLast", "custCompany", "custPhone", "custEmail", "billAddress", "billCity", "billState", "billZip"]
     .forEach(k => { const e = $(k); if (e && document.activeElement !== e) e.value = S[k] == null ? "" : S[k]; });
+  renderCoordsOut(); // 30ah
   setSwitch($("billSame"), S.billSame !== false);
   toggleField("billFields", S.billSame === false);
   setSwitch($("fgPrices"), fgPricesOn());
@@ -4736,7 +4774,7 @@ function saveDraft() {
   lsSet(DRAFT_KEY, JSON.stringify(draftPayload()));
 }
 
-const CUST_DEFAULTS = { siteState: "GA", siteZip: "", siteCounty: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
+const CUST_DEFAULTS = { siteState: "GA", siteZip: "", siteCounty: "", siteCoords: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
   billSame: true, billAddress: "", billCity: "", billState: "", billZip: "" };
 function resetCustomer() { Object.keys(CUST_DEFAULTS).forEach(k => { S[k] = CUST_DEFAULTS[k]; }); }
 const HOME_OWNER = S.owner; // 29ax: this copy's own owner (edition default)
@@ -4892,7 +4930,7 @@ function refreshArchive() {
       id: j.id, dateMeasured: j.dateMeasured, owner: j.owner, builder: j.builder,
       city: j.city, address: j.address, packageLabel: j.packageLabel, keywords: j.keywords || "",
       miscText: j.miscText || "", photoCount: ((j.draft && j.draft.photos) || []).length,
-      chaseBlocked: !!j.chaseBlocked, chaseNote: j.chaseNote || ""
+      chaseBlocked: !!j.chaseBlocked, chaseNote: j.chaseNote || "", siteCoords: (j.draft && j.draft.siteCoords) || "" // 30ah
     }));
     S._fullJobs = jobs;
     renderArchive();
@@ -5092,7 +5130,7 @@ function wireInputs() {
     atticRetro: "atticRetro", crawlRetro: "crawlRetro", blowR: "blowR",
     flatSf: "flatSf", housePitch: "housePitch", houseCustomRise: "houseCustomRise",
     touchupPatchSf: "touchupPatchSf", marginCustom: "marginCustom",
-    siteState: "siteState", siteZip: "siteZip", siteCounty: "siteCounty", subdivision: "subdivision", custFirst: "custFirst", custLast: "custLast",
+    siteState: "siteState", siteZip: "siteZip", siteCounty: "siteCounty", siteCoords: "siteCoords", subdivision: "subdivision", custFirst: "custFirst", custLast: "custLast",
     custCompany: "custCompany", custPhone: "custPhone", custEmail: "custEmail", billAddress: "billAddress", billCity: "billCity",
     billState: "billState", billZip: "billZip", woRep: "woRep", woDate: "woDate", woNotes: "woNotes",
     extraLabor: "extraLabor", extraLaborNote: "extraLaborNote",
@@ -5106,6 +5144,7 @@ function wireInputs() {
       const pkgChange = id === "pkg" && S[key] !== e.value;
       S[key] = e.value;
       if (pkgChange) applyPkgDefaults();
+      if (id === "siteCoords") renderCoordsOut(); // 30ah
       if (id === "city" || id === "siteState" || id === "siteZip" || id === "siteCounty") { clearTimeout(wireInputs._rt); wireInputs._rt = setTimeout(() => { if (!e.matches(":focus")) render(); }, 50); }
       if (id === "gasType" || id === "pkg" || id === "atticRetro" || id === "crawlRetro" || id === "housePitch" || id === "blowR" || id.indexOf("filter") === 0)
         render();
@@ -5441,7 +5480,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30ag";
+const APP_BUILD = "2026-10-30aj";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
