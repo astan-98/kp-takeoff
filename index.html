@@ -222,6 +222,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 #saveDockRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .calc-modal { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; }
 .calc-modal.hidden { display: none; }
+.metal-gable-rm { display: block; width: 100%; min-height: 0; padding: 4px 10px; margin: 2px 0 6px; font-size: .8rem; line-height: 1.2; color: var(--err-ink); border-color: var(--err-border); }
 .calc-modal { overscroll-behavior: contain; touch-action: none; }
 html.calc-lock, html.calc-lock body { overscroll-behavior: none; overflow: hidden; } /* 30ac: no pull-to-reload behind the calculator */
 .calc-box { background: var(--bg2); color: var(--text); width: 100%; max-width: 560px; border-radius: 16px 16px 0 0; padding: 6px 14px calc(14px + var(--safe-b));
@@ -3542,6 +3543,7 @@ function renderAssemblyEditors() {
         const g2 = el("div", "grid2");
         [["Length ft", "length"], ["Height ft", "height"]].forEach(([lb, k]) => { const x = fieldInput(lb, g[k], v => { g[k] = v; schedule(); }, "number"); x.querySelector("input").onchange = () => render(); g2.appendChild(x); });
         card.appendChild(g2);
+        if (S.metalGables.length > 1) { const rb = addBtn("Remove gable #" + (i + 1), () => { S.metalGables.splice(i, 1); render(); }); rb.className = "btn btn-secondary metal-gable-rm"; card.appendChild(rb); } // 30ae: long thin delete between the inputs and the SF readout
         prop(card, "Gable #" + (i + 1) + " SF", fmt(round2(metalGableSfOf(g))) + " SF");
         if (foamOn) {
           card.appendChild(fieldSelect("Gable #" + (i + 1) + " foam", g.foam === "oc" || g.foam === "cc" ? g.foam : "", [["", "Same as building — " + bfTxt], ["oc", "Open cell"], ["cc", "Closed cell"]], v => { g.foam = v; render(); }));
@@ -3549,7 +3551,6 @@ function renderAssemblyEditors() {
           if (!g.foam && bf === "both") card.appendChild(el("p", "cap", "Show both: this gable is priced open cell and closed cell" + (S.metalCc ? " (" + S.metalCc + '")' : "") + "."));
         }
         { const tr = el("div", "toggle-row"); tr.appendChild(el("span", null, "House wrap on gable #" + (i + 1) + "?")); const sw = el("button", "switch" + (g.wrap ? " on" : "")); sw.type = "button"; sw.onclick = () => { g.wrap = !g.wrap; render(); }; tr.appendChild(sw); card.appendChild(tr); } // 30ad: off by default
-        if (S.metalGables.length > 1) card.appendChild(addBtn("Remove gable #" + (i + 1), () => { S.metalGables.splice(i, 1); render(); }));
       });
       card.appendChild(addBtn("Add gable", () => { S.metalGables.push(newMetalGable()); render(); }));
       if (!S.metalIrregular && D.W > 0 && D.rise > 0) card.appendChild(addBtn("Fill 2 end gables from width + pitch", () => { const h = String(round2(D.W / 2 * D.rise / 12)); S.metalGables = [0, 1].map(() => Object.assign(newMetalGable(), { length: String(D.W), height: h })); render(); }));
@@ -5376,7 +5377,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30ad";
+const APP_BUILD = "2026-10-30ae";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
