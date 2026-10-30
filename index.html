@@ -1760,7 +1760,7 @@ function metalFoamSync() {
   ["Roof", "Gable", "Wall"].forEach(k => { S["metal" + k + "Foam"] = f; S["metal" + k + "Cc"] = S.metalCc || ""; });
   S.foamType = f === "both" && areas.length ? "both" : "oc";
 }
-function METAL_KEEP_LINE(L) { return /^Metal building/.test(L.assembly || "") || L.assembly === "Extra labor" || L.assembly === "Miscellaneous" || L.assembly === "Air seal (caulk & foam)"; }
+function METAL_KEEP_LINE(L) { return /^Metal building/.test(L.assembly || "") || L.assembly === "Gable wrap" || L.assembly === "Extra labor" || L.assembly === "Miscellaneous" || L.assembly === "Air seal (caulk & foam)"; }
 function metalDims() {
   const irr = !!S.metalIrregular, L = irr ? 0 : n(S.metalLen), W = irr ? 0 : n(S.metalWid); // 30y: irregular = manual flat SF + wall LF
   const flat = irr ? n(S.metalFlatManual) : L * W, perim = irr ? n(S.metalPerimManual) : 2 * (L + W);
@@ -1772,7 +1772,7 @@ function metalDims() {
   return { irr, L, W, flat, perim, pf, rise, roof: flat * pf, ded, wallGross, wallNet, gableAuto, gable };
 }
 function metalGableSfOf(g) { const a = n(g.length) * n(g.height); return g.shape === "rectangle" ? a : a / 2; }
-function newMetalGable() { return { id: uid(), shape: "triangle", length: "", height: "", foam: "", cc: "" }; }
+function newMetalGable() { return { id: uid(), shape: "triangle", length: "", height: "", foam: "", cc: "", wrap: false }; }
 function metalAreaUsesFoam(area) { const p = S.pkg; return p === "total_foam" || (p === "hybrid_foam_batts" && area !== "wall"); }
 // 30t: Asher — foam over garage roofline -> garage ceiling SF = garage roofline FLAT SF (no pitch), material required, optional 2-section split
 function syncGarageCeil() {
@@ -2671,6 +2671,7 @@ function buildLinesForPackage(p, tag) {
     if (S.hasMetalRoof) area("roof", "Metal building roof", D.roof, "flat " + fmt(D.flat) + " (" + fmt(D.L) + "×" + fmt(D.W) + ") ×" + D.pf.toFixed(3), roofDepthJob() + '" OC');
     if (S.hasMetalGables) (S.metalGables || []).forEach((g, i) => { // 30ab: one line per gable; foam defaults to the building's choice
       const sf = metalGableSfOf(g); if (!(sf > 0)) return;
+      if (g.wrap) push(lines, { area: "Gable", assembly: "Gable wrap", product: "House wrap", description: "House Wrap", footage: round2(sf), unit: "SF", notes: noteTag + "Metal gable #" + (i + 1) }); // 30ad: optional house wrap (FG: Open Gables)
       const note = (g.shape === "rectangle" ? "rectangle " : "triangle ") + fmt(n(g.length)) + " × " + fmt(n(g.height)) + (g.shape === "rectangle" ? "" : " ÷ 2");
       if (metalAreaUsesFoam("gable")) {
         push(lines, { area: "Metal building", assembly: "Metal building gables", product: "Open-cell spray foam", description: '3.5" open cell', footage: round2(sf), unit: "SF", notes: noteTag + "Gable #" + (i + 1) + " " + note });
@@ -3547,6 +3548,7 @@ function renderAssemblyEditors() {
           if (g.foam === "cc") card.appendChild(fieldSelect("Gable #" + (i + 1) + " closed-cell depth", METAL_CC_DEPTHS.includes(String(g.cc)) ? String(g.cc) : "", [["", S.metalCc ? "Building depth " + S.metalCc + '"' : "Pick depth…"]].concat(METAL_CC_DEPTHS.map(d => [d, d + '"'])), v => { g.cc = v; render(); }));
           if (!g.foam && bf === "both") card.appendChild(el("p", "cap", "Show both: this gable is priced open cell and closed cell" + (S.metalCc ? " (" + S.metalCc + '")' : "") + "."));
         }
+        { const tr = el("div", "toggle-row"); tr.appendChild(el("span", null, "House wrap on gable #" + (i + 1) + "?")); const sw = el("button", "switch" + (g.wrap ? " on" : "")); sw.type = "button"; sw.onclick = () => { g.wrap = !g.wrap; render(); }; tr.appendChild(sw); card.appendChild(tr); } // 30ad: off by default
         if (S.metalGables.length > 1) card.appendChild(addBtn("Remove gable #" + (i + 1), () => { S.metalGables.splice(i, 1); render(); }));
       });
       card.appendChild(addBtn("Add gable", () => { S.metalGables.push(newMetalGable()); render(); }));
@@ -5374,7 +5376,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30ac";
+const APP_BUILD = "2026-10-30ad";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
