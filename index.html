@@ -369,7 +369,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
     <button type="button" class="train-launch" id="btnTraining"><svg class="train-ico" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 9 12 4 2 9l10 5 10-5Z"/><path d="M6 11.2V16c0 1.1 2.7 3 6 3s6-1.9 6-3v-4.8"/><path d="M22 9v6"/></svg><span class="tl-txt"><b>Training</b><small>New here? Step-by-step walkthrough. Nothing gets saved.</small></span><span class="tl-chev" aria-hidden="true">›</span></button>
     <div class="section" id="sec-job">
       <h2>Job header</h2>
-      <p class="cap">Owner · new/retro · package · site info. Draft autosaves.</p>
+      <p class="cap">Whose job. Draft autosaves.</p>
       <div class="field"><label>Whose job?</label>
         <div class="seg" id="seg-owner">
           <button type="button" data-v="asher" class="active">Asher's job</button>
@@ -378,6 +378,50 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         </div>
       </div>
       <div class="callout" id="ownerHint">Asher → FG-style secondary default (Excel still primary handoff)</div>
+    </div>
+
+    <div class="section" id="sec-customer">
+      <h2>Customer</h2>
+      <p class="cap">One customer box (also what FieldGroove gets). Builder / company for builders; first + last for homeowners or the builder's contact.</p>
+      <div class="field"><label>Builder / company</label><input id="builder" autocomplete="organization"></div>
+      <input id="custCompany" type="hidden">
+      <div class="grid2">
+        <div class="field"><label>First name</label><input id="custFirst" autocomplete="off"></div>
+        <div class="field"><label>Last name</label><input id="custLast" autocomplete="off"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Phone</label><input id="custPhone" type="tel" autocomplete="off"></div>
+        <div class="field"><label>Email</label><input id="custEmail" type="email" autocomplete="off"></div>
+      </div>
+      <div class="field addr-ac"><label>Job site address</label><input id="address" placeholder="123 Main St" autocomplete="off"><div id="addrSugg" class="addr-sugg hidden" role="listbox"></div></div>
+      <div class="field"><label>City</label><input id="city" placeholder="Gainesville"></div>
+      <div class="grid2">
+        <div class="field"><label>State</label><input id="siteState" placeholder="GA" autocapitalize="characters"></div>
+        <div class="field"><label>Zip</label><input id="siteZip" inputmode="numeric"></div>
+      </div>
+      <div class="field"><label>County</label><input id="siteCounty" placeholder="fills from the address search"></div>
+      <div class="field"><label>Subdivision (optional)</label><input id="subdivision"></div>
+      <div class="toggle-row"><span>Billing address same as job site</span><button type="button" class="switch" id="billSame"></button></div>
+      <div id="billFields" class="hidden">
+        <div class="field"><label>Billing address</label><input id="billAddress"></div>
+        <div class="grid2">
+          <div class="field"><label>City</label><input id="billCity"></div>
+          <div class="field"><label>State</label><input id="billState"></div>
+        </div>
+        <div class="field"><label>Zip</label><input id="billZip" inputmode="numeric"></div>
+      </div>
+      <div class="field"><label>Date measured</label><input id="dateMeasured" type="date"></div>
+      <div class="field"><label>Keywords / notes</label><input id="keywords" placeholder="searchable notes"></div>
+      <div class="grid2" style="margin-top:10px">
+        <button type="button" class="btn btn-primary" id="btnSaveArchive">Save to Library</button>
+        <button type="button" class="btn btn-secondary" id="btnNewJob">New job</button>
+      </div>
+      <p class="status" id="statusNote"></p>
+    </div>
+
+    <div class="section" id="sec-jobtype">
+      <h2>Job type</h2>
+      <p class="cap">New / retro / metal · package · foundation.</p>
       <div class="field"><label>New construction, retro or metal building?</label>
         <div class="seg" id="seg-mode">
           <button type="button" data-v="new" class="active">New construction</button>
@@ -455,45 +499,6 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
           <div class="seg" id="customWallChips"><button type="button" data-v="batt">Batts</button><button type="button" data-v="foam">Foam</button><button type="button" data-v="cellulose">Cellulose</button><button type="button" data-v="spider">Spider</button></div>
         </div>
       </div>
-    </div>
-
-    <div class="section" id="sec-customer">
-      <h2>Customer</h2>
-      <p class="cap">One customer box (also what FieldGroove gets). Builder / company for builders; first + last for homeowners or the builder's contact.</p>
-      <div class="field"><label>Builder / company</label><input id="builder" autocomplete="organization"></div>
-      <input id="custCompany" type="hidden">
-      <div class="grid2">
-        <div class="field"><label>First name</label><input id="custFirst" autocomplete="off"></div>
-        <div class="field"><label>Last name</label><input id="custLast" autocomplete="off"></div>
-      </div>
-      <div class="grid2">
-        <div class="field"><label>Phone</label><input id="custPhone" type="tel" autocomplete="off"></div>
-        <div class="field"><label>Email</label><input id="custEmail" type="email" autocomplete="off"></div>
-      </div>
-      <div class="field addr-ac"><label>Job site address</label><input id="address" placeholder="123 Main St" autocomplete="off"><div id="addrSugg" class="addr-sugg hidden" role="listbox"></div></div>
-      <div class="field"><label>City</label><input id="city" placeholder="Gainesville"></div>
-      <div class="grid2">
-        <div class="field"><label>State</label><input id="siteState" placeholder="GA" autocapitalize="characters"></div>
-        <div class="field"><label>Zip</label><input id="siteZip" inputmode="numeric"></div>
-      </div>
-      <div class="field"><label>County</label><input id="siteCounty" placeholder="fills from the address search"></div>
-      <div class="field"><label>Subdivision (optional)</label><input id="subdivision"></div>
-      <div class="toggle-row"><span>Billing address same as job site</span><button type="button" class="switch" id="billSame"></button></div>
-      <div id="billFields" class="hidden">
-        <div class="field"><label>Billing address</label><input id="billAddress"></div>
-        <div class="grid2">
-          <div class="field"><label>City</label><input id="billCity"></div>
-          <div class="field"><label>State</label><input id="billState"></div>
-        </div>
-        <div class="field"><label>Zip</label><input id="billZip" inputmode="numeric"></div>
-      </div>
-      <div class="field"><label>Date measured</label><input id="dateMeasured" type="date"></div>
-      <div class="field"><label>Keywords / notes</label><input id="keywords" placeholder="searchable notes"></div>
-      <div class="grid2" style="margin-top:10px">
-        <button type="button" class="btn btn-primary" id="btnSaveArchive">Save to Library</button>
-        <button type="button" class="btn btn-secondary" id="btnNewJob">New job</button>
-      </div>
-      <p class="status" id="statusNote"></p>
     </div>
 
     <div class="section" id="sec-photos">
@@ -5377,7 +5382,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30ae";
+const APP_BUILD = "2026-10-30af";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
