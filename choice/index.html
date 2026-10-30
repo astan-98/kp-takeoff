@@ -379,7 +379,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <div id="pkgField" class="field"><label>Package type</label>
         <select id="pkg">
           <option value="standard">Standard (blow + batts)</option>
-          <option value="total_bat">Total Bat (R38 batts, no blow)</option>
+          <option value="total_bat">Total Batt (R38 batts, no blow)</option>
           <option value="hybrid_foam_batts">Foam Roofline + Batt Walls</option>
           <option value="foam_cellulose">Foam Roofline + Cellulose Walls</option>
           <option value="foam_spider">Foam Roofline + Spider Walls</option>
@@ -402,7 +402,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <div id="optionsBlock">
         <div class="toggle-row"><span>Compare packages (2–3 options)?</span><button type="button" class="switch" id="compareOn"></button></div>
         <div id="optionChipsWrap" class="hidden">
-          <div class="field"><label>Options to price (pick 2–3)</label><div class="seg" id="optionChips"><button type="button" data-v="standard">Standard</button><button type="button" data-v="total_bat">Total Bat</button><button type="button" data-v="hybrid_foam_batts">Foam Roofline + Batt Walls</button><button type="button" data-v="foam_cellulose">Foam Roofline + Cellulose Walls</button><button type="button" data-v="foam_spider">Foam Roofline + Spider Walls</button><button type="button" data-v="total_foam">Total foam</button><button type="button" data-v="crawl_encap">Crawl encapsulation</button><button type="button" data-v="custom">Custom mix</button></div></div>
+          <div class="field"><label>Options to price (pick 2–3)</label><div class="seg" id="optionChips"><button type="button" data-v="standard">Standard</button><button type="button" data-v="total_bat">Total Batt</button><button type="button" data-v="hybrid_foam_batts">Foam Roofline + Batt Walls</button><button type="button" data-v="foam_cellulose">Foam Roofline + Cellulose Walls</button><button type="button" data-v="foam_spider">Foam Roofline + Spider Walls</button><button type="button" data-v="total_foam">Total foam</button><button type="button" data-v="crawl_encap">Crawl encapsulation</button><button type="button" data-v="custom">Custom mix</button></div></div>
           <p class="cap">Measure once. Every area any option needs is shown; the Summary tab sorts lines into a separate sheet per option (walls use each option's material).</p>
         </div>
       </div>
@@ -459,7 +459,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 
     <div class="section" id="sec-photos">
       <h2>Photos</h2>
-      <p class="cap">Snap or pick photos for this job. They save with the job and go along with the work order to the office.</p>
+      <p class="cap">Snap or pick photos for this job. They save with the job and go along with the work order to the crew.</p>
       <button type="button" class="btn btn-secondary btn-block" id="btnAddPhoto">📷 Add photo</button>
       <input type="file" id="photoInput" accept="image/*" multiple class="hidden">
       <div class="photo-grid" id="photoGrid"></div>
@@ -575,7 +575,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       </div>
       <div class="divider"></div>
       <h2>Work order</h2>
-      <p class="cap">Choice work order sheet, filled from this job (customer, address, city, subdivision). The whole takeoff — walls/batts and attic/roof lines — goes to the office as one work order (long jobs continue onto extra sheets in the same file). Photos ride along, and a fireplace job adds a Fireplace sheet + details file. Preview, then share.</p>
+      <p class="cap">Choice work order sheet, filled from this job (customer, address, city, subdivision). The whole takeoff — walls/batts and attic/roof lines — goes to the crew as one work order (long jobs continue onto extra sheets in the same file). Photos ride along, and a fireplace job adds a Fireplace sheet + details file. Preview, then share.</p>
       <div class="grid2">
         <div class="field"><label>Rep</label><input id="woRep" autocapitalize="words"></div>
         <div class="field"><label>Date measured (auto = day job was created; blank = none)</label><input id="woDate" type="date"></div>
@@ -639,7 +639,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <button type="button" class="btn btn-secondary btn-sm" id="archSelect">Select</button>
         <button type="button" class="btn btn-secondary btn-sm hidden" id="archSelAll">Select all shown</button>
         <span class="sel-badge hidden" id="archSelCount">0 selected</span>
-        <button type="button" class="btn btn-primary btn-sm hidden" id="archSendSel" disabled>Send 0 to Office</button>
+        <button type="button" class="btn btn-primary btn-sm hidden" id="archSendSel" disabled>Send 0 to Crew</button>
       </div>
       <div id="archiveList"></div>
     </div>
@@ -1081,7 +1081,7 @@ function packageIsCrawlEncap(pkg) { return pkg === "crawl_encap"; }
 function totalBatOn(pkg) { return S.jobMode === "new" && pkg === "total_bat"; }
 const FOUNDATION_LABELS = { slab: "Slab", crawl: "Crawl space", unfinished: "Unfinished basement", finished: "Finished basement (walls being done)" };
 function foundationOf() { return FOUNDATION_LABELS[S.foundation] ? S.foundation : ""; }
-function pkgLabel(k) { return k === "total_bat" ? "Total Bat (R38 batts, no blow)" : (PACKAGE_LABELS[k] || k); }
+function pkgLabel(k) { return k === "total_bat" ? "Total Batt (R38 batts, no blow)" : (PACKAGE_LABELS[k] || k); }
 // 29al: "Foam band/rim joist" option — new-construction foam roofline packages that don't already foam the band (not total foam).
 function rimFoamAllowed(pkg) { if (S.jobMode !== "new" || pkg == null) return false; const pr = pkgProfile(pkg); return !!pr.foamRoof && !pr.totalFoam; }
 const CUSTOM_ROOF_KEYS = ["blow", "foam", "batts"], CUSTOM_WALL_KEYS = ["batt", "foam", "cellulose", "spider"];
@@ -1891,8 +1891,8 @@ function renderFgMap() {
    Same sheet layout + preview as the Chafin work orders (KPWO.sheetLayout / buildXlsx / previewHtml in wo-core.js),
    filled from this takeoff's own job info instead of the Chafin lot log. */
 const TWO_DEFAULT_CONTACTS = {
-  walls: { name: "Office", phone: "", email: "" },
-  attic: { name: "Office", phone: "", email: "" },
+  walls: { name: "Crew", phone: "", email: "" },
+  attic: { name: "Crew", phone: "", email: "" },
 };
 let TWO_CONTACTS = JSON.parse(JSON.stringify(TWO_DEFAULT_CONTACTS));
 function twoLoadContacts() {
@@ -2222,7 +2222,7 @@ function buildLinesForPackage(p, tag) {
   const totalBat = totalBatOn(p);
   if (totalBat && !foamRoof && derived > 0) {
     // 29ao Total Bat: the would-be blow area (footprint − dead air rows − vaults) is all dead air → same R38 dead-air line/office item/price/FieldGroove as the Dead air rows
-    push(lines, { area: "Dead air", assembly: "Dead air", product: "R-38 fiberglass batts", description: "R38/24", footage: round2(derived), unit: "SF", notes: noteTag + "Total Bat: " + derivedCalc });
+    push(lines, { area: "Dead air", assembly: "Dead air", product: "R-38 fiberglass batts", description: "R38/24", footage: round2(derived), unit: "SF", notes: noteTag + "Total Batt: " + derivedCalc });
   }
   if ((newUsesBlow || F.atticIsBlow) && !foamRoof && !totalBat) {
     const blow = derived;
@@ -3186,12 +3186,13 @@ function renderAssemblyEditors() {
     card.innerHTML = '<div class="row-title">Garage ceiling</div>';
     if (!Array.isArray(S.garageCeils)) S.garageCeils = [];
     const multi = S.garageCeils.length > 0;
-    const gcMatOpts = Object.keys(GARAGE_CEIL_MATS).map(k => [k, GARAGE_CEIL_MATS[k][0]]);
+    const GC_RETIRED = ["blow_r30", "blow_r38"]; // 29ba: we don't blow garage ceilings — not offered; saved jobs keep theirs
+    const gcMatOpts = cur => Object.keys(GARAGE_CEIL_MATS).filter(k => !GC_RETIRED.includes(k) || k === cur).map(k => [k, GARAGE_CEIL_MATS[k][0] + (GC_RETIRED.includes(k) ? " (saved — no longer offered)" : "")]);
     const gcFields = (label, get, set) => {
       if (multi) card.appendChild(el("div", "row-title", label));
       card.appendChild(fieldInput(multi ? "SF" : "Garage ceiling SF", get("sf"), v => { set("sf", v); schedule(); }, "number"));
       const mat = GARAGE_CEIL_MATS[get("mat")] ? get("mat") : "r19";
-      card.appendChild(fieldSelect("Ceiling mat", mat, gcMatOpts, v => { set("mat", v); render(); }));
+      card.appendChild(fieldSelect("Ceiling mat", mat, gcMatOpts(mat), v => { set("mat", v); render(); }));
       if (battUse.notTotalFoam && /^r\d+$/.test(mat)) card.appendChild(fieldSelect("Batt width", battW(get("oc"), "16"), BATT_W_CHOICES, v => { set("oc", v); render(); }));
       if (mat === "foam5" || anyTotalFoam) {
         const proxy = { foamType: get("foamType"), ccDepth: get("ccDepth") };
@@ -3206,7 +3207,7 @@ function renderAssemblyEditors() {
       gcFields("Ceiling area #" + (idx + 2), k => g[k], (k, v) => { g[k] = v; });
       card.appendChild(addBtn("Remove area", () => { S.garageCeils.splice(idx, 1); render(); }));
     });
-    card.appendChild(addBtn("Add area", () => { S.garageCeils.push({ id: uid(), sf: "", mat: GARAGE_CEIL_MATS[S.garageCeilMat] ? S.garageCeilMat : "r19", oc: "16" }); render(); }));
+    card.appendChild(addBtn("Add area", () => { S.garageCeils.push({ id: uid(), sf: "", mat: GARAGE_CEIL_MATS[S.garageCeilMat] && !GC_RETIRED.includes(S.garageCeilMat) ? S.garageCeilMat : "r19", oc: "16" }); render(); }));
     let rc = null;
     if (F.showFoamRoofPath) {
     rc = el("div", "row-card"); rc.innerHTML = '<div class="row-title">Garage roofline</div>';
@@ -3316,20 +3317,26 @@ function renderAssemblyEditors() {
   SEC = 10;
   if (F.showFoamRoofPath) {
     const card = el("div", "row-card");
-    card.innerHTML = '<div class="row-title">' + (F.customAttic && !pkgProfile(S.pkg).onlyAttic ? "Foam roofline areas (flat SF × pitch)" : "Extra roofline areas (optional — blank uses flat×pitch)") + '</div>';
+    card.innerHTML = '<div class="row-title">' + (F.customAttic && !pkgProfile(S.pkg).onlyAttic ? "Foam roofline area (flat SF × pitch)" : "Roofline foam") + '</div>';
     if (foamTypeJob() !== "cc") {
       card.appendChild(roofDepthSelect("Roofline foam depth (job)", S.roofFoamDepth, v => { S.roofFoamDepth = v; render(); }, true));
       card.appendChild(el("p", "cap", 'Open cell fills in from the job site address: Athens-Clarke County 8", Highlands NC 10", everywhere else 5.5". Pick a depth to override.'));
       if (foamCompareOn()) card.appendChild(el("p", "cap", 'Compare on: this is Option A (open cell). Option B prices these lines closed cell at ' + (ccDepthJob() ? ccDepthJob() + '"' : "the depth you pick (none yet)") + '.'));
     } else card.appendChild(el("p", "cap", 'Job foam type is closed cell — house roofline uses the job closed-cell depth (' + (ccDepthJob() ? ccDepthJob() + '"' : "not picked yet") + ') unless picked below. Lines can switch back to open cell below.'));
     if (foamTypeJob() === "cc" || foamCompareOn()) card.appendChild(ccDepthPicker("House roofline closed-cell depth" + (foamCompareOn() ? " (Option B)" : ""), ccValid(S.houseRoofCc) ? String(S.houseRoofCc) : "", v => { S.houseRoofCc = v; render(); }, ccDepthJob() ? "Default " + ccDepthJob() + '"' : null)); // 29as
+    // 29ba: "Add roofline area" removed (the owner). Combined custom attics keep their one foam roofline row (#1 = its only SF entry).
+    // Saved jobs: any row that already has SF still shows, still makes its line, and can be removed — never dropped silently.
+    const combined = F.customAttic && !pkgProfile(S.pkg).onlyAttic;
     S.foamRoofs.forEach((r, idx) => {
+      if (!(combined && idx === 0) && !(n(r.flatSf) > 0)) return;
+      const legacy = !(combined && idx === 0);
+      if (legacy) card.appendChild(el("p", "cap fr-legacy", "Saved roofline area #" + (idx + 1) + " (from an older job)" + (combined ? "" : " — used instead of flat × house pitch")));
       card.appendChild(fieldInput("Flat SF #" + (idx+1), r.flatSf, v => { r.flatSf = v; schedule(); }, "number"));
       card.appendChild(fieldSelect("Pitch", r.pitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { r.pitch = v; render(); }));
       foamTypeControls(card, r, "foamType", "ccDepth");
       if (foamTypeFor(r.foamType) !== "cc") card.appendChild(roofDepthSelect("Foam depth #" + (idx+1), r.depth, v => { r.depth = v; render(); }));
+      if (legacy) card.appendChild(addBtn("Remove roofline area #" + (idx + 1), () => { if (idx === 0) r.flatSf = ""; else S.foamRoofs.splice(idx, 1); render(); }));
     });
-    card.appendChild(addBtn("Add roofline area", () => { S.foamRoofs.push({ id: uid(), name: "", flatSf: "", pitch: "6", customRise: "" }); render(); }));
     box.appendChild(card);
   }
   SEC = 95;
@@ -4148,7 +4155,7 @@ function renderLiveOnly() {
   const atticBlow = Math.max(0, flat - da - vf);
   const foam = flat * resolvePitchFactor(S.housePitch, S.houseCustomRise);
   $("atticBlowLive").textContent = fmt(atticBlow) + " SF";
-  if ($("atticBlowLiveLabel")) $("atticBlowLiveLabel").textContent = totalBatOn(optionsOn() ? optionPkgs()[S.optionView | 0] : S.pkg) ? "Total Bat R38 dead air SF (no blow)" : "Attic blow SF";
+  if ($("atticBlowLiveLabel")) $("atticBlowLiveLabel").textContent = totalBatOn(optionsOn() ? optionPkgs()[S.optionView | 0] : S.pkg) ? "Total Batt R38 dead air SF (no blow)" : "Attic blow SF";
   $("foamRoofLive").textContent = fmt(foam) + " SF";
   const lines = allLines();
   const pricedCount = S.priceLibrary.filter(p => n(p.unitPrice40) > 0).length;
@@ -4711,20 +4718,9 @@ function trainDemo(html, cap) { return '<div class="train-demo" aria-hidden="tru
 function trainSeg(opts, on) { return '<div class="seg">' + opts.map((o, i) => '<button type="button" tabindex="-1" class="' + (i === on ? "active" : "") + '">' + escHtml(o) + "</button>").join("") + "</div>"; }
 function trainSwitch(label, on) { return '<div class="toggle-row"><span>' + escHtml(label) + '</span><span class="switch' + (on ? " on" : "") + '"></span></div>'; }
 function trainCheck(label, on) { return '<label class="toggle-row fp-plat-check"><span>' + escHtml(label) + '</span><input type="checkbox" tabindex="-1"' + (on ? " checked" : "") + "></label>"; }
-function trainOwnerStep() {
-  const seg = $("seg-owner");
-  const btns = seg ? Array.from(seg.querySelectorAll("button")).filter(b => !b.classList.contains("hidden")).map(b => b.textContent.trim()) : [];
-  if (APP_EDITION === "choice") return { sec: "Measure · Job header", title: "Whose job?",
-    html: "<p>Every job on this copy is <b>Blake's job</b>. There's no job selector, so there's nothing to pick.</p>" };
-  if (ALLOW_OWNER_SWITCH) return { sec: "Measure · Job header", title: "Whose job?",
-    html: "<p><b>Whose job?</b> picks who the job belongs to. Only the owner's and coworker's copies can switch between the owner's, coworker's and office's jobs. Every other rep's copy, Blake's included, is locked to its own owner, and new rep copies start locked automatically.</p>" +
-      trainDemo(trainSeg(btns.length ? btns : ["the owner's job", "office's job"], 0), "on this copy") };
-  return { sec: "Measure · Job header", title: "Whose job?",
-    html: "<p>This copy is locked to <b>" + escHtml(ownerName()) + "'s jobs</b>, so there's no job selector. Every job you make here is yours.</p>" };
-}
 // 29ba: insulation-first walkthrough in the order a rep measures a house; fireplace = 2 short steps near the end (fp: true).
 function trainSteps() {
-  const choice = APP_EDITION === "choice", who = choice ? "Office" : "office", woHead = choice ? "Work order" : "Work order → office";
+  const choice = APP_EDITION === "choice", who = choice ? "Crew" : "office", woHead = choice ? "Work order" : "Work order → office";
   const tabs = Array.from(document.querySelectorAll(".bottom-nav .nav-btn"));
   const what = { wizard: "measure the house — every job starts here", output: "the finished takeoff, " + trainSheet() + " and the FieldGroove file",
     archive: "your saved jobs — search and reopen them", workorder: "builder lot-log work orders", pricing: "unit prices and the ballpark price" };
@@ -4740,7 +4736,7 @@ function trainSteps() {
         "<p><b>Nothing here touches your jobs.</b> The pictures are examples only and nothing is saved.</p>" +
         "<p>Tap <b>Next</b> and <b>Back</b> to move, or <b>✕</b> to close anytime. The <b>Training</b> button stays at the top of the Measure tab until you finish once, then it moves to the top of the <b>Pricing</b> tab.</p>" },
     { sec: "Start", title: "The tabs at the bottom", html: "<p>The bar at the bottom of the screen switches between the parts of the app:</p>" + tabList +
-        "<p>You'll spend most of your time on <b>Measure</b>. It's one long page of bubbles — scroll down through it top to bottom.</p>" },
+        "<p>You'll spend most of your time on <b>Measure</b>. It's one long page of sections — scroll down through it top to bottom.</p>" },
     { sec: M, title: "Open a new job",
       html: "<p>Tap <b>＋ New job</b> at the top of the screen. It starts a fresh, empty job dated today. There's also a <b>New job</b> button under Customer / builder.</p>" +
         "<p>Everything you type autosaves as a draft while you go, so you won't lose work if the phone locks. When the job is done you'll tap <b>Save to Library</b>.</p>" +
@@ -4748,29 +4744,25 @@ function trainSteps() {
     { sec: MJ, title: "New construction or retro?",
       html: "<p>The first question in the <b>Job header</b>. Tap <b>New construction</b> for a house being built, or <b>Retro</b> for an existing house.</p>" +
         "<p><b>Retro</b> then asks <b>Attic retro</b> or <b>Crawl retro</b> and the path:</p>" +
-        ul(["<b>Attic retro path</b>: Suck out + blow, Suck out + foam, Batt removal + blow, Batt removal + foam, or Add Attic Blow.",
-          "<b>Crawl retro path</b>: Remove + replace, Touch-up (tuck / patch), Remove + encapsulation, or Crawl – new batts (no removal)."]) +
+        ul(["<b>Attic retro path</b>: select the attic package.", "<b>Crawl retro path</b>: select the crawl package."]) +
         trainDemo(fld("New construction or retro?", trainSeg(["New construction", "Retro"], 0))) },
-    trainOwnerStep(),
     { sec: MJ, title: "Package type",
       html: "<p>On new construction, pick the <b>Package type</b>. It decides which areas the app asks about and what material each line uses:</p>" +
-        ul(["<b>Standard (blow + batts)</b> — blown attic, batt walls.", "<b>Total Bat (R38 batts, no blow)</b> — like Standard, but the attic goes in as R38 batts instead of blow.",
-          "<b>Foam Roofline + Batt Walls</b>, <b>Foam Roofline + Cellulose Walls</b>, <b>Foam Roofline + Spider Walls</b> — spray foam on the roof deck, walls as named.",
+        ul(["<b>Standard (blow + batts)</b> — blown attic, batt walls.", "<b>Total Batt (R38 batts, no blow)</b> — like Standard, but the attic goes in as R38 batts instead of blow.",
+          "<b>Hybrid Foam Roofline / Misc Walls</b> — spray foam on the roof deck, with your choice of wall material.",
           "<b>Total foam</b> — foam roofline and foam walls.", "<b>Crawl encapsulation</b> — crawl walls foamed, poly on the floor.", "<b>Custom mix</b> — pick the roofline/attic and wall materials yourself."]) +
         trainDemo(fld("Package type", sel("Standard (blow + batts)"))) },
     { sec: MJ, title: "What the package turns on",
       html: "<p>Picking a package sets the usual answers for you. You can still change any of them.</p>" +
-        ul(["<b>Standard</b> and <b>Total Bat</b> turn on Dead air, Knee walls, Vaults, Baffles, Air seal and Walls.",
+        ul(["<b>Standard</b> and <b>Total Batt</b> turn on Dead air, Knee walls, Vaults, Baffles, Air seal and Walls.",
           "<b>Foam roofline</b> packages turn on Gables and Walls. Dead air, vaults and knees are left out (the foam is on the roof deck), but baffles are still included on new construction.",
           "Gables are only asked on foam roofline jobs."]) },
     { sec: MJ, title: "Compare packages (Options A, B, C)",
       html: "<p>Want to price the same house more than one way? Turn on <b>Compare packages (2–3 options)?</b> and tap 2 or 3 packages under <b>Options to price</b>.</p>" +
         "<p>You measure once. The app asks for every area any option needs, and the Summary tab gives each option its own sheet — <b>Option A</b>, <b>Option B</b>, <b>Option C</b>.</p>" +
-        trainDemo(trainSwitch("Compare packages (2–3 options)?", true) + fld("Options to price (pick 2–3)", trainSeg(["Standard", "Total Bat", "Total foam"], 0))) },
+        trainDemo(trainSwitch("Compare packages (2–3 options)?", true) + fld("Options to price (pick 2–3)", trainSeg(["Standard", "Foam Roofline + Batt Walls", "Total foam"], 0))) },
     { sec: MJ, title: "Foundation",
-      html: "<p>Pick the <b>Foundation</b>: Slab, Crawl space, Unfinished basement, or Finished basement (walls being done).</p>" +
-        ul(["<b>Slab</b> hides the basement and crawl bubbles.", "<b>Crawl space</b> hides the basement bubbles.",
-          "Basements can also turn on <b>House also has a crawl space</b>.", "Until you pick, nothing is hidden and the app reminds you to pick one."]) +
+      html: "<p>Pick the foundation type.</p>" +
         trainDemo(fld("Foundation", sel("Crawl space"))) },
     { sec: "Measure · Customer / builder", title: "Customer / builder",
       html: "<p>Fill in <b>Builder / customer</b>, <b>City</b>, <b>Job site address</b>, <b>State</b>, <b>Zip</b> and <b>Subdivision (optional)</b>.</p>" +
@@ -4782,74 +4774,57 @@ function trainSteps() {
         "<p>Below that: <b>Date measured</b> (today on a new job) and <b>Keywords / notes</b> — anything you type there is searchable in the Library later.</p>" +
         trainDemo(trainSwitch("Billing address same as job site", true)) },
     { sec: "Measure · Photos", title: "Photos",
-      html: "<p>Tap <b>📷 Add photo</b> to snap or pick photos. They save with the job and go along with the work order to " + who + ".</p>" },
+      html: "<p>Tap <b>📷 Add photo</b> to snap or pick photos. They're saved with the takeoff.</p>" },
     { sec: "Measure · Job site access", title: "Job site access",
       html: "<p>These answers print in the NOTES on the work order:</p>" +
         ul(["<b>Scaffolding or ladder needed?</b> — Yes asks for the <b>Height / reason</b>.", "<b>Driveway access</b> — Easy, or May have trouble (with an optional note).",
           "<b>Gate / lockbox code?</b> — Yes asks for the code."]) +
         trainDemo(fld("Scaffolding or ladder needed?", trainSeg(["No", "Yes"], 1)) + fld("Driveway access", trainSeg(["Easy", "May have trouble"], 0))) },
     { sec: "Measure · What's on this house?", title: "What's on this house?",
-      html: "<p>A list of switches — one per area. Turn on what this house has and turn off what it doesn't. Every area that's off is skipped, so its bubble never shows.</p>" +
+      html: "<p>A list of switches — one per area. Turn on what this house has and turn off what it doesn't. Every area that's off is skipped, so its section never shows.</p>" +
         "<p>Depending on the job you'll see: Dead air, Vaults, Knee walls, Rim / band, Walls, Interior walls, Between floors (sound), Gables, Cantilevers, Garage, Porch, Crawl, UFBC (basement ceiling), Crawl walls to foam, Dense-pack floors, Poured floor (skip poly) and Miscellaneous.</p>" +
         "<p>Only the switches that fit the package and foundation show up.</p>" +
         trainDemo(trainSwitch("Dead air", true) + trainSwitch("Vaults", true) + trainSwitch("Garage", false)) },
     { sec: "Measure · Flat footprint", title: "Flat footprint",
       html: "<p>Type the house's <b>Flat footprint SF (once)</b> — the flat floor area under the roof. The app uses it everywhere it can, so you only type it once.</p>" +
-        ul(["<b>Attic blow SF</b> = flat footprint minus dead air SF minus vault flat SF. On Total Bat it reads <b>Total Bat R38 dead air SF (no blow)</b>.",
-          "On foam roofline jobs, pick the <b>House roof pitch</b> instead. <b>Foam roof from flat</b> = flat footprint × the pitch factor (steeper roof = more SF)."]) +
+        ul(["<b>Attic blow SF</b> = flat footprint minus dead air SF minus vault flat SF. On Total Batt it reads <b>Total Batt R38 dead air SF (no blow)</b>.",
+          "Pick the roof pitch — the app applies it automatically."]) +
         trainDemo('<div class="field"><label>Flat footprint SF (once)</label><input tabindex="-1" value="2000"></div><div class="props"><span class="k">Attic blow SF</span><span class="v">1850 SF</span></div>') },
     { sec: "Measure · Attic", title: "Attic blow",
       html: ul(["<b>New construction</b> blow is always R-38 — nothing to pick.",
         "<b>Retro</b> attic: the path says what happens first — suck out the old insulation, remove old batts, or just <b>Add Attic Blow</b> on top. Blow paths ask the <b>Blow R-value</b>: R-19, R-30, R-38 or R-49.",
-        "<b>Custom mix</b> with Blow attic or Batts attic gets its own bubble with SF and R-value."]) +
+        "<b>Custom mix</b> with Blow attic or Batts attic gets its own section with SF and R-value."]) +
         trainDemo(fld("Blow R-value", sel("R-38")), "retro") },
     { sec: "Measure · Roofline foam", title: "Roofline foam",
-      html: "<p>On foam roofline jobs the <b>Spray foam type (job)</b> bubble picks <b>Open cell (default)</b>, <b>Closed cell</b>, or <b>Show both (compare)</b>.</p>" +
+      html: "<p>On foam roofline jobs the <b>Spray foam type (job)</b> section picks <b>Open cell (default)</b>, <b>Closed cell</b>, or <b>Show both (compare)</b>.</p>" +
         ul(["<b>Roofline foam depth (job)</b> fills in from the job site address: Athens-Clarke County 8\", Highlands NC 10\", everywhere else 5.5\". Pick a depth to override it.",
-          "Closed cell needs a <b>closed-cell depth</b> picked — the app warns you until you do.",
-          "<b>Extra roofline areas</b>: tap <b>Add roofline area</b> for each extra roof section (Flat SF + Pitch, its own depth)."]) +
+          "Closed cell needs a <b>closed-cell depth</b> picked — the app warns you until you do."]) +
         trainDemo(fld("Foam type", sel("Open cell (default)"))) },
-    { sec: "Measure · Roofline foam", title: "Open cell vs closed cell (compare)",
-      html: "<p>Pick <b>Show both (compare)</b> to price every foam area two ways: <b>Option A</b> open cell and <b>Option B</b> closed cell at the depth you pick.</p>" +
-        "<p>Concrete basement walls and crawl walls stay closed cell in both. The Summary tab shows an <b>Open cell vs closed cell</b> table side by side.</p>" },
     { sec: "Measure · Attic areas", title: "Dead air, vaults and knee walls",
-      html: ul(["<b>Dead air #</b>: SF and Batt width (R38). Tap <b>Add dead air</b> for more.",
-        "<b>Vault #</b>: Type — Open vault (R38) or Closed / decked vault (R30) — then Flat SF, Pitch and Batt width. Tap <b>Add vault</b> for more.",
-        "<b>Knee #</b>: Shape (Rectangle or Triangle), Height ft, LF and Stud spacing. The app shows the SF (L × H, or L × H ÷ 2 for a triangle). <b>Wrap</b> is on by default. Tap <b>Add knee</b> for more."]) +
+      html: ul(["<b>Dead air #</b>: SF and Batt width (R38). Tap <b>Add dead air</b> to add another measurement or a different material to dead air.",
+        "<b>Vault #</b>: Type — Open vault (R38) or Closed / decked vault (R30) — then Flat SF, Pitch and Batt width. Tap <b>Add vault</b> to add another measurement or a different material to vaults.",
+        "<b>Knee #</b>: Shape (Rectangle or Triangle), Height ft, LF and Stud spacing. The app shows the SF (L × H, or L × H ÷ 2 for a triangle). <b>Wrap</b> is on by default. Tap <b>Add knee</b> to add another measurement or a different material to knee walls."]) +
         "<p>These are skipped on foam roofline jobs.</p>" },
     { sec: "Measure · Baffles", title: "Baffles",
       html: "<p>Count the baffles yourself and type the <b>Baffle count</b>, then pick the <b>Baffle width</b> (16\" or 24\"). The app doesn't count them for you.</p>" +
         "<p>On new construction baffles are always included, so a blank count gets flagged when you save.</p>" +
         trainDemo(fld("Baffle count", '<input tabindex="-1" value="40">') + fld("Baffle width", trainSeg(['16"', '24"'], 1))) },
     { sec: "Measure · Walls", title: "Exterior walls",
-      html: "<p>Each <b>Wall #</b> bubble is one wall area:</p>" +
+      html: "<p>Each <b>Wall #</b> section is one wall area:</p>" +
         ul(["<b>Type</b>: 2x4 exterior (R-13), 2x6 exterior (R-19), Garage exterior — basement walls too when the foundation has them.",
           "<b>Stud spacing</b> (16, 19 or 24 OC), <b>Height</b> (8', 9', 10', 12' or Custom) and <b>Cavities</b> — the number of stud bays. The app turns cavities into SF.",
           "<b>Material mode</b>: Batt, Foam, Cellulose, Spider, ComfortBat or Acoustical. The package sets the default.",
           "Batts are unfaced by default — turn on <b>Kraft faced (default unfaced)</b> for kraft.",
-          "Tap <b>Add wall area</b> for each different wall."]) +
+          "Tap <b>Add wall area</b> to add a new wall type or material."]) +
         trainDemo(fld("Type", sel("2x4 exterior (R-13)")) + fld("Cavities", '<input tabindex="-1" value="120">') + trainSwitch("Kraft faced (default unfaced)", false)) },
     { sec: "Measure · Walls", title: "Basement walls",
-      html: "<p>With a basement foundation, daylight and concrete walls get their own bubbles.</p>" +
+      html: "<p>With a basement foundation, daylight and concrete walls get their own sections.</p>" +
         ul(["<b>Daylight basement (R-19)</b> walls are measured like exterior walls.",
-          "<b>Concrete basement (R-13)</b> walls get R-13 batts, or 1\" closed cell on Total foam. For unframed concrete, turn on <b>Measure by linear feet × wall height</b> — that's closed cell foam."]) },
-    { sec: "Measure · Interior walls", title: "Interior walls",
-      html: "<p>Interior walls have their own bubble. Enter <b>Cavities</b>, or <b>or Linear feet</b> and the app works out the cavities.</p>" +
-        "<p><b>Material</b> starts at <b>Sound batts (R-13)</b>. Other choices: AcousticalBat / rock wool, Cellulose (netted), Spider (netted), Open-cell foam.</p>" +
-        trainDemo(fld("Material", sel("Sound batts (R-13)"))) },
+          "<b>Concrete basement (R-13)</b> walls get R-13 batts, or 1\" closed cell on Total foam. For unframed concrete, turn on <b>Measure by linear feet × wall height</b>. That'll default the material to closed cell foam."]) },
     { sec: "Measure · Rim / band", title: "Rim / band",
-      html: "<p>Type the rim joist length in <b>LF</b>. The app multiplies it by 1.2 for the SF (shown in the bubble title). Tap <b>Add rim</b> for more.</p>" +
+      html: "<p>Type the rim joist length in <b>LF</b>. The app multiplies it by 1.2 for the SF (shown in the section title). Tap <b>Add rim</b> to add another measurement or a different material to the rim / band.</p>" +
         "<p>On new construction foam roofline jobs (not Total foam), you can turn on <b>Foam band/rim joist (instead of R19 batts)</b>.</p>" +
         trainDemo('<div class="row-title">Rim #1 · ×1.2 → 180</div>' + fld("LF", '<input tabindex="-1" value="150">')) },
-    { sec: "Measure · Garage, porch, gables", title: "Garage, porch, gables and cantilevers",
-      html: ul(["<b>Garage ceiling</b>: Garage ceiling SF and <b>Ceiling mat</b> (R19, R30 or R38 batts, blown R30 or R38, or 5\" open-cell foam). Tap <b>Add area</b> for another ceiling. On foam roofline jobs, <b>Foam garage roofline</b> asks its flat SF and pitch.",
-        "<b>Porch</b> (foam roofline jobs): <b>Porch flat SF</b>, then <b>Porch roofline (foam)?</b> with pitch and depth, and <b>Porch ceiling?</b> with its material. No ceiling? It asks <b>Gabled off with house wrap?</b>",
-        "<b>Gable #</b> (foam roofline jobs): shape, length and height.", "<b>Cantilever #</b>: SF and material."]) },
-    { sec: "Measure · Floors and crawl", title: "Floors, crawl and basement ceiling",
-      html: ul(["<b>Between floors (sound)</b>: the floor SF between levels and the material (R13 sound batts to start).",
-        "<b>Crawl</b>: Crawl SF (blank = the flat footprint) and the material.", "<b>UFBC (unfinished basement ceiling)</b>: SF and batt R-value.",
-        "<b>Crawl walls to foam</b> and <b>Poured floor (skip poly)</b> on crawl encapsulation; <b>Dense-pack floors</b> on dense-pack packages.",
-        "Crawl retro <b>Touch-up</b>: type the <b>Crawl touch-up patch SF</b> under the flat footprint."]) },
     { sec: "Measure · Air sealing / extra labor", title: "Air sealing and extra labor",
       html: ul(["<b>Air seal?</b> adds the air sealing package (caulk & foam at the base plate, openings and penetrations) as one line. When it's on, <b>Air seal add-on $</b> is for air seal labor that runs over the package.",
         "<b>Extra labor $</b> (with an optional note) is a job-wide labor add — a fixed amount, on every option when you compare."]) +
@@ -4866,7 +4841,7 @@ function trainSteps() {
         trainDemo(trainSeg(["Excel (primary)", "FG-style (secondary)"], 0)) },
     { sec: "Summary tab", title: woHead,
       html: "<p>Further down the Summary tab, the work order sheet fills in from the job. Check <b>Rep</b>, <b>Date measured</b> (fills in with the day the job was created — change it if you need to and your change sticks) and <b>Notes</b>.</p>" +
-        "<p>Tap <b>Work order → " + who + "</b> to preview the sheet, zoom in, and share it — photos go along.</p>" +
+        "<p>Tap <b>Work order → " + who + "</b> to preview the sheet, zoom in, and " + (choice ? "send the work order to the crew" : "share it") + " — photos go along.</p>" +
         trainDemo('<button type="button" tabindex="-1" class="btn btn-primary btn-block">Work order → ' + who + "</button>") },
     { sec: "Summary tab", title: "FieldGroove import",
       html: '<div class="train-banner" id="trainFgBanner">' + escHtml(TRAIN_FG_BANNER) + "</div>" +
@@ -4890,7 +4865,7 @@ function trainSteps() {
       html: "<p>Every fireplace job shows this yellow notice. Saving, sending, or opening " + escHtml(trainSheet()) + " on a fireplace job pops it up first — tap <b>I'll check the manual</b> to go on, or <b>Go back</b>.</p>" +
         trainDemo(trainNotice()) },
     { sec: "Done", title: "You're ready",
-      html: "<p>That's a whole job: <b>＋ New job</b> → Job header → Customer / builder → What's on this house? → measure each bubble → <b>Save to Library</b> → Summary.</p>" +
+      html: "<p>That's a whole job: <b>＋ New job</b> → Job header → Customer / builder → What's on this house? → measure each section → <b>Save to Library</b> → Summary.</p>" +
         "<p>After you tap <b>Finish</b>, open training again anytime from the <b>Training</b> button at the top of the <b>Pricing</b> tab.</p>" }
   ];
 }
@@ -5916,7 +5891,7 @@ function typedShareText(orders, name) {
   var lines = orders.map(function (o) { return (subs.length > 1 ? o.sub + " " : "") + "Lot " + (isNaN(o.lot.n) ? o.lot.l : o.lot.n) + " - " + ticketLabel(o) + " - " + ticketDateStr(o); });
   return {
     title: "Chafin WOs - " + subs.map(function (sb) { return sb + " Lot" + (bySub[sb].length > 1 ? "s " : " ") + bySub[sb].join(", "); }).join(" + "),
-    text: (name || "Office") + ", attached " + (orders.length === 1 ? "is the work order" : "are the work orders") + " for " + lotsTxt + ".\n" + lines.join("\n")
+    text: (name || "Crew") + ", attached " + (orders.length === 1 ? "is the work order" : "are the work orders") + " for " + lotsTxt + ".\n" + lines.join("\n")
   };
 }
 function fileNameFor(o, cat) {
