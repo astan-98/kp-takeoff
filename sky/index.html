@@ -421,37 +421,34 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
     </div>
 
     <div class="section" id="sec-customer">
-      <h2>Customer / builder</h2>
+      <h2>Customer</h2>
+      <p class="cap">One customer box (also what FieldGroove gets). Builder / company for builders; first + last for homeowners or the builder's contact.</p>
+      <div class="field"><label>Builder / company</label><input id="builder" autocomplete="organization"></div>
+      <input id="custCompany" type="hidden">
       <div class="grid2">
-        <div class="field"><label>Builder / customer</label><input id="builder" autocomplete="organization"></div>
-        <div class="field"><label>City</label><input id="city" placeholder="Gainesville"></div>
+        <div class="field"><label>First name</label><input id="custFirst" autocomplete="off"></div>
+        <div class="field"><label>Last name</label><input id="custLast" autocomplete="off"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Phone</label><input id="custPhone" type="tel" autocomplete="off"></div>
+        <div class="field"><label>Email</label><input id="custEmail" type="email" autocomplete="off"></div>
       </div>
       <div class="field"><label>Job site address</label><input id="address" placeholder="123 Main St"></div>
+      <div class="field"><label>City</label><input id="city" placeholder="Gainesville"></div>
       <div class="grid2">
         <div class="field"><label>State</label><input id="siteState" placeholder="GA" autocapitalize="characters"></div>
         <div class="field"><label>Zip</label><input id="siteZip" inputmode="numeric"></div>
       </div>
       <div class="field"><label>Subdivision (optional)</label><input id="subdivision"></div>
-      <details class="cust-box" id="custBox"><summary>Customer (for FieldGroove)</summary>
+      <div class="toggle-row"><span>Billing address same as job site</span><button type="button" class="switch" id="billSame"></button></div>
+      <div id="billFields" class="hidden">
+        <div class="field"><label>Billing address</label><input id="billAddress"></div>
         <div class="grid2">
-          <div class="field"><label>First name</label><input id="custFirst" autocomplete="off"></div>
-          <div class="field"><label>Last name</label><input id="custLast" autocomplete="off"></div>
+          <div class="field"><label>City</label><input id="billCity"></div>
+          <div class="field"><label>State</label><input id="billState"></div>
         </div>
-        <div class="field"><label>Company (blank = builder above)</label><input id="custCompany" autocomplete="off"></div>
-        <div class="grid2">
-          <div class="field"><label>Phone</label><input id="custPhone" type="tel" autocomplete="off"></div>
-          <div class="field"><label>Email</label><input id="custEmail" type="email" autocomplete="off"></div>
-        </div>
-        <div class="toggle-row"><span>Billing address same as job site</span><button type="button" class="switch" id="billSame"></button></div>
-        <div id="billFields" class="hidden">
-          <div class="field"><label>Billing address</label><input id="billAddress"></div>
-          <div class="grid2">
-            <div class="field"><label>City</label><input id="billCity"></div>
-            <div class="field"><label>State</label><input id="billState"></div>
-          </div>
-          <div class="field"><label>Zip</label><input id="billZip" inputmode="numeric"></div>
-        </div>
-      </details>
+        <div class="field"><label>Zip</label><input id="billZip" inputmode="numeric"></div>
+      </div>
       <div class="field"><label>Date measured</label><input id="dateMeasured" type="date"></div>
       <div class="field"><label>Keywords / notes</label><input id="keywords" placeholder="searchable notes"></div>
       <div class="grid2" style="margin-top:10px">
@@ -1058,7 +1055,9 @@ const WALL_KIND_LABELS = {
   ext_2x4: "2x4 exterior (R-13)", ext_2x6: "2x6 exterior (R-19)",
   daylight: "Daylight basement (R-19)", concrete: "Concrete basement (R-13)",
   garage_ext: "Garage exterior", interior: "Interior",
+  sep_2x4: "Basement separation wall 2x4 (R-13)", sep_2x6: "Basement separation wall 2x6 (R-19)", // 30n: finished basement only
 };
+const isSepKind = k => k === "sep_2x4" || k === "sep_2x6";
 
 function uid() { return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8); }
 function n(v) { const x = parseFloat(v); return Number.isFinite(x) ? x : 0; }
@@ -1290,19 +1289,19 @@ function wallExcelDesc(row, mode) {
   const hLabel = h + "'";
   if (mode === "foam") return '3.5" OC'; // 29ap: spray foam — no batt width/height; 29ar: no trailing "foam"
   if (mode === "cellulose" || mode === "spider") {
-    const depth = (row.kind === "ext_2x6" || row.kind === "daylight") ? '5.5"' : '3.5"';
+    const depth = (row.kind === "ext_2x6" || row.kind === "daylight" || row.kind === "sep_2x6") ? '5.5"' : '3.5"';
     return (mode === "spider" ? "Spider" : "Cellulose") + " " + depth + " / " + inside + " / " + hLabel;
   }
   if (mode === "comfortbat") return "ComfortBat / " + inside + " / " + hLabel;
   if (mode === "acoustical") return 'AcousticalBat 3" / ' + inside + " / " + hLabel;
   const kf = row.kraft ? " Kraft" : "";
-  if (row.kind === "ext_2x4" || row.kind === "concrete") return "R13/" + inside + kf + "/" + hLabel;
+  if (row.kind === "ext_2x4" || row.kind === "concrete" || row.kind === "sep_2x4") return "R13/" + inside + kf + "/" + hLabel;
   if (row.kind === "interior") return "Batts / " + inside + " / " + hLabel;
   return "R19/" + inside + kf + "/" + hLabel;
 }
 // Height only splits R-13 batt walls (pre-cut lengths). Everything else merges across heights within its wall type.
 function wallHeightSplits(kind, mode) {
-  return (mode === "batt" || !mode) && (kind === "ext_2x4" || kind === "concrete" || kind === "interior");
+  return (mode === "batt" || !mode) && (kind === "ext_2x4" || kind === "concrete" || kind === "interior" || kind === "sep_2x4");
 }
 // R-13 batt walls merge in two height bands: 8' and under, and over 8' (9'+). The bands never combine.
 function r13Band(desc, h) { return dropHeight(desc) + (n(h) > 8 ? "/9'+" : "/8'"); }
@@ -1312,7 +1311,7 @@ function wallProduct(mode, kind) {
   if (mode === "cellulose") return "Cellulose";
   if (mode === "spider") return "Spider";
   if (mode === "comfortbat" || mode === "acoustical") return "Rock wool";
-  if (kind === "ext_2x4" || kind === "concrete") return "R-13 fiberglass batts";
+  if (kind === "ext_2x4" || kind === "concrete" || kind === "sep_2x4") return "R-13 fiberglass batts";
   if (kind === "interior") return "Fiberglass batts";
   return "R-19 fiberglass batts";
 }
@@ -1321,7 +1320,7 @@ const INTERIOR_MAT_OPTIONS = [
   ["cellulose", "Cellulose (netted)"], ["spider", "Spider (netted)"], ["foam", "Open-cell foam"]
 ];
 function newInteriorWall() {
-  return { id: uid(), oc: "16", height: "8", customHeight: "", cavities: "", lf: "", materialMode: "batt" };
+  return { id: uid(), stud: "2x4", oc: "16", height: "8", customHeight: "", cavities: "", lf: "", materialMode: "batt" };
 }
 function interiorCavities(r) {
   const c = n(r.cavities);
@@ -1334,17 +1333,18 @@ function interiorWallSf(r) { return wallFactor(r) * interiorCavities(r); }
 function interiorWallLine(r, idx, count, noteTag) {
   const inside = wallWidthLabel(r.oc);
   const hLabel = wallHeightFt(r) + "'";
-  const mode = r.materialMode || "batt";
+  const mode = r.materialMode || "batt", is6 = r.stud === "2x6";
   let product, desc;
   if (mode === "foam") { product = "Open-cell spray foam"; desc = '3.5" OC'; } // 29ap: no width/height on spray foam; 29ar: no trailing "foam"
-  else if (mode === "cellulose") { product = "Cellulose"; desc = 'Cellulose 3.5" / ' + inside + " / " + hLabel; }
-  else if (mode === "spider") { product = "Spider"; desc = 'Spider 3.5" / ' + inside + " / " + hLabel; }
+  else if (mode === "cellulose") { product = "Cellulose"; desc = "Cellulose " + (is6 ? '5.5"' : '3.5"') + " / " + inside + " / " + hLabel; }
+  else if (mode === "spider") { product = "Spider"; desc = "Spider " + (is6 ? '5.5"' : '3.5"') + " / " + inside + " / " + hLabel; }
   else if (mode === "acoustical") { product = "Rock wool"; desc = 'AcousticalBat 3" / ' + inside + " / " + hLabel; }
+  else if (is6) { product = "R-19 fiberglass batts"; desc = "Batts R19/" + inside + " (2x6 interior)"; } // 30n: Asher — 2x6 interior = R19, no height
   else { product = "R-13 fiberglass batts"; desc = "Sound batts R13/" + inside + "/" + hLabel; }
   const label = "Interior walls" + (count > 1 ? " #" + (idx + 1) : "");
   const cav = interiorCavities(r);
   return { area: label, assembly: "Interior walls", product: product, description: desc + (count > 1 ? " (#" + (idx + 1) + ")" : ""),
-    _mergeDesc: mode === "batt" ? r13Band(desc, wallHeightFt(r)) : dropHeight(desc),
+    _mergeDesc: mode === "batt" && !is6 ? r13Band(desc, wallHeightFt(r)) : dropHeight(desc),
     footage: round2(interiorWallSf(r)), unit: "SF",
     notes: noteTag + cav + " cav × " + round2(wallFactor(r)) + " @ " + hLabel + (n(r.cavities) > 0 ? "" : " (from " + fmt(n(r.lf)) + " LF)") };
 }
@@ -1471,7 +1471,7 @@ const S = {
   houseCustomRise: "",
   hasDeadAir: false, hasVaults: false, hasKnees: false, hasBaffles: false,
   hasRim: false, hasWalls: true, hasInteriorWalls: false, hasGables: false, hasCants: false,
-  hasGarage: false, hasPorch: false, hasBasementWalls: false,
+  hasGarage: false, hasPorch: false, hasBasementWalls: false, hasSepWalls: false,
   hasSubfloor: false, hasDense: false, hasCrawlWalls: false,
   hasMisc: false, misc: [newMiscItem()],
   interiorWalls: [newInteriorWall()],
@@ -1566,6 +1566,7 @@ function flags(pkgArg) {
     customAttic: isNew && PR.custom,
     canAskBetweenFloors: isNew,
     canAskUfbc: isNew && showBasement,
+    canAskSepWalls: isNew && fdn === "finished", sepWalls: isNew && fdn === "finished" && !!S.hasSepWalls, // 30n
     canAskTouchup: crawlIsTouchup,
     canAskCrawlEncap: (PR.crawlEncap && (!isNew || showCrawl)) || crawlIsEncap,
     canAskRim: isNew || crawlIsReplace || crawlIsEncap || PR.crawlEncap || crawlIsNewBatts,
@@ -1668,6 +1669,8 @@ const FG_AREA_BY_SECTION = {
   "Crawl wall foam": "Crawl Space Foundation Walls", "Dehumidifier": "Crawl Encapsulation", "Band / rim": "Rim Joist",
   "Wall — 2x4 exterior (R-13)": "2/4 Exterior Walls", "Wall — 2x6 exterior (R-19)": "2/6 Exterior Walls",
   "Wall — Daylight basement (R-19)": "2/6 Daylight Walls", "Wall — Concrete basement (R-13)": "2/4 Concrete Wall",
+  "Wall — Basement separation wall 2x4 (R-13)": "2/4 Basement Seperation Wall", "Wall — Basement separation wall 2x6 (R-19)": "2/6 Basement Seperation Wall", /* 30n: FG spelling */
+  "Basement band": "Basement Bands", /* 30n */
   "Wall — Garage exterior": "2/4 Garage Walls", "Wall — Interior": "2/4 Interior Walls", "Interior walls": "2/4 Interior Walls",
   "Between floors (sound)": "Between Floors", "Gable": "Gables", "Gable wrap": "Open Gables", /* 30i: Asher — never Attic Gables */ "Cantilever": "Cantilever",
   "Garage roof foam": "Garage Roofline", "Garage ceiling": "Garage Ceiling", "Floor dense-pack": "Bonus Room Subfloor",
@@ -1675,7 +1678,7 @@ const FG_AREA_BY_SECTION = {
 };
 const FG_NET_AREA = { "Interior": "2/4 Interior Walls", "Interior walls": "2/4 Interior Walls", "Between floors": "Between Floors", "Dense-pack": "Bonus Room Subfloor" };
 const OC = " (Owens Corning)";
-const WALL_SECS = ["Wall — 2x4 exterior (R-13)", "Wall — 2x6 exterior (R-19)", "Wall — Daylight basement (R-19)", "Wall — Concrete basement (R-13)", "Wall — Garage exterior"];
+const WALL_SECS = ["Wall — 2x4 exterior (R-13)", "Wall — 2x6 exterior (R-19)", "Wall — Daylight basement (R-19)", "Wall — Concrete basement (R-13)", "Wall — Garage exterior", "Wall — Basement separation wall 2x4 (R-13)", "Wall — Basement separation wall 2x6 (R-19)"];
 const INT_SECS = ["Wall — Interior", "Interior walls"];
 const FG_RULES = [
   // —— blown ——
@@ -1690,6 +1693,7 @@ const FG_RULES = [
   { id: "wall_r13", wall24: true, label: "R-13 batts — exterior / concrete / garage walls", key: "R-13 fiberglass batts", sec: WALL_SECS, items: ["R13/{w}/{h}' UF" + OC, "R13/{W} UF" + OC], kraftItems: ["R13/{w}/{h}' KRAFT" + OC, "R13/{W} KRAFT" + OC, "R13/{W} UF" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the wall row is marked Kraft faced. 16 OC→15\", 24 OC→23\" (19 OC: no R13 19\" item → 16\" item, flagged); 8'/9' precuts, other heights → R13/16 roll (24 OC → R13/24 UF; no kraft 24\" roll)." },
   { id: "wall_r19", wall24: true, label: "R-19 batts — 2x6 / daylight / garage walls", key: "R-19 fiberglass batts", sec: WALL_SECS, items: ["R19/{w} UF" + OC, "R19/{W} UF" + OC], kraftItems: ["R19/{w} KRAFT" + OC, "R19/{W} KRAFT" + OC, "R19/{w} UF" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the wall row is marked Kraft faced. 16 OC→15\", 24 OC→23\"; 8'/9' precuts else R19/16, R19/19 or R19/24 roll. Mixed-height merged lines use the roll." },
   { id: "int_r13", wall24: true, label: "R-13 sound batts — interior walls", key: "R-13 fiberglass batts", sec: INT_SECS, items: ["R13/{w}/{h}' UF" + OC, "R13/{W} UF" + OC], conf: "sure", note: "Default for interior walls: R-13 unfaced (UF) fiberglass, even in 2x6 walls. R-19 only when someone specifically asks for 2x6 interior walls. Rock wool, cellulose or spider occasionally; no other default." },
+  { id: "int_r19", wall24: true, label: "R-19 batts — 2x6 interior walls", key: "R-19 fiberglass batts", sec: INT_SECS, area: "2/6 Interior Walls", items: ["R19/{w} UF" + OC, "R19/{W} UF" + OC], conf: "sure", note: "30n: Asher — 2x6 interior walls: R19/15 at 16 OC, R19/24 at 24 OC, no height." },
   { id: "knee_r19", wall24: true, label: "R-19 batts — knee walls", key: "R-19 fiberglass batts", sec: ["Knee wall"], items: ["R19/{w} UF" + OC, "R19/{W} UF" + OC], kraftItems: ["R19/{w} KRAFT" + OC, "R19/{W} KRAFT" + OC, "R19/{w} UF" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the knee row is marked Kraft faced. 8' precut by OC. Work area 2/4 Knee Walls (alt Bonus Room Knee Walls)." },
   // —— batts: ceilings / floors ——
   { id: "attic_batts", label: "Attic floor batts R19/R30/R38 (custom mix)", key: "R-{r} fiberglass batts", sec: ["Attic batts"], items: ["R{r}/{W} UF" + OC], conf: "sure", note: "Unfaced; width picker default 24\" (trusses). R-49 has no FG batt item." },
@@ -1698,7 +1702,7 @@ const FG_RULES = [
   { id: "closedvault_r30", label: "Closed (decked) vault R30 batts", key: "R-30 fiberglass batts", sec: ["Closed vault"], items: ["R30/{W} UF" + OC], kraftItems: ["R30/{W} KRAFT" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the vault is marked Kraft faced. Width picker default 16\" (R30/16, /19, /24 UF and KRAFT exist)." },
   { id: "crawl_batts", label: "Crawl subfloor / touch-up / new batts", key: "R-{r} fiberglass batts", sec: ["Crawl subfloor", "Crawl touch-up"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "sure", note: "R19 → R19/15/4' UF (or 23\" at 24 OC); R13/R30 → 16\" UF roll." },
   { id: "ufbc_batts", label: "UFBC (unfinished basement ceiling) batts", key: "R-{r} fiberglass batts", sec: ["UFBC"], items: ["R{r}/{w}/4' UF" + OC, "R{r}/{W} UF" + OC], conf: "sure", note: "Same as crawl subfloor." },
-  { id: "rim_r19", label: "Rim joist R19 batts (LF × 1.2)", key: "R-19 fiberglass batts", sec: ["Band / rim"], items: ["R19/{W} UF" + OC], conf: "sure", note: "Bands are R19/16 unfaced (UF) by default; 19\"/24\" width → R19/19 or R19/24 UF. Qty = LF×1.2 exported as SqFt." },
+  { id: "rim_r19", label: "Rim joist R19 batts (LF × 1.2)", key: "R-19 fiberglass batts", sec: ["Band / rim", "Basement band"], items: ["R19/{W} UF" + OC], conf: "sure", note: "Bands are R19/16 unfaced (UF) by default; 19\"/24\" width → R19/19 or R19/24 UF. Qty = LF×1.2 exported as SqFt." },
   { id: "bf_r13", label: "Between floors R13 sound batts", key: "R-13 fiberglass batts", sec: ["Between floors (sound)"], items: ["R13/{W} UF" + OC], conf: "sure", note: "19\" → no R13 19\" item, flagged." },
   { id: "bf_r19", label: "Between floors R19 batts", key: "R-19 fiberglass batts", sec: ["Between floors (sound)"], items: ["R19/{W} UF" + OC], conf: "sure", note: "" },
   { id: "cant_batts", label: "Cantilever batts R19/R30/R38", key: "R-{r} fiberglass batts", sec: ["Cantilever"], items: ["R{r}/{W} UF" + OC], kraftItems: ["R{r}/{W} KRAFT" + OC, "R{r}/{W} UF" + OC], conf: "sure", note: "Unfaced (UF) by default; Kraft only when the cantilever is marked Kraft faced. Width picker default 16\"; R38/19 kraft → UF (no kraft)." },
@@ -1837,7 +1841,7 @@ function fgBuildRows(foamChoice) {
     if (L.dollars != null) price = round2(n(L.dollars));
     else if (fgPricesOn()) { const pk = priceKeyFor(L); let u = priceMap.get(pk); if (u === undefined) u = priceMap.get(roofFoamBaseKey(pk)); if (u > 0) price = Math.round(u * (L.fixed ? 1 : scale) * 10000) / 10000; }
     const qty = n(L.footage);
-    rows.push([company, first, last, (S.custEmail || "").trim(), (S.custPhone || "").trim(), bill[0], bill[1], bill[2], bill[3],
+    rows.push(fgc.matchOnly ? [company, "", "", "", "", "", "", "", ""] : [company, first, last, (S.custEmail || "").trim(), (S.custPhone || "").trim(), bill[0], bill[1], bill[2], bill[3],
       project, site, city, st, zip, (S.subdivision || "").trim(), "", projType, E.name, E.type, "", "", "", // 30i: Phase blank — FG already makes a "Base Estimate" phase; naming it again added a 2nd (empty) one
       r.item, r.area, qty, r.uom, r.depth, r.rv, "No", "", price, "", ""]);
   }));
@@ -1934,7 +1938,7 @@ function twoWho(cat) { return TWO_CONTACTS[cat] || TWO_DEFAULT_CONTACTS[cat]; }
 const TWO_ATTIC_SECS = ["Attic blow", "Attic batts", "Attic prep", "Roof foam", "Porch roof foam", "Garage roof foam"];
 const TWO_LABELS = {
   "Wall — 2x4 exterior (R-13)": "Ext Walls", "Wall — 2x6 exterior (R-19)": "Ext Walls 2x6", "Wall — Daylight basement (R-19)": "Daylight Walls",
-  "Wall — Concrete basement (R-13)": "Basement Walls", "Wall — Garage exterior": "Garage Walls", "Wall — Interior": "Interior Walls", "Interior walls": "Interior Walls",
+  "Wall — Concrete basement (R-13)": "Basement Walls", "Wall — Basement separation wall 2x4 (R-13)": "Separation Walls 2x4", "Wall — Basement separation wall 2x6 (R-19)": "Separation Walls 2x6", "Basement band": "Basement Bands", "Wall — Garage exterior": "Garage Walls", "Wall — Interior": "Interior Walls", "Interior walls": "Interior Walls",
   "Knee wall": "Knee Walls", "Knee wrap": "Knee Wrap", "Dead air": "Dead Air", "Open vault": "Open Vault", "Closed vault": "Closed Vault", "Poly vent": "Poly Vents",
   "Garage ceiling": "Garage Ceiling", "Baffles": "Baffles", "Band / rim": "Bands", "Between floors (sound)": "Between Floors", "Cantilever": "Cantilever",
   "Gable": "Gables", "Gable wrap": "Gable Wrap", "Crawl subfloor": "Crawl", "Crawl touch-up": "Crawl Touch-up", "Crawl prep": "Crawl Removal", "Poly": "Crawl Poly",
@@ -2386,7 +2390,8 @@ function buildLinesForPackage(p, tag) {
     S.rims.forEach(r => {
       const lf = n(r.lf); if (lf <= 0) return;
       const bandFoam = totalFoam || (rimFoamOpt && !!r.foam);
-      push(lines, { area: "Rim joist", assembly: "Band / rim",
+      const bsmt = r.level === "basement" && F.showBasement && !!F.foundation; // 30n: Asher — basement bands are their own line
+      push(lines, { area: bsmt ? "Basement band" : "Rim joist", assembly: bsmt ? "Basement band" : "Band / rim",
         product: bandFoam ? "Open-cell spray foam" : "R-19 fiberglass batts",
         description: bandFoam ? '3.5" OC' : "R19/" + battW(r.oc, "16"),
         footage: round2(lf * 1.2), unit: "LF", notes: noteTag + fmt(lf) + " LF × 1.2" + (bandFoam && !totalFoam ? " · foamed (not batts)" : "") });
@@ -2401,6 +2406,7 @@ function buildLinesForPackage(p, tag) {
     let nettingTotal = 0;
     S.walls.forEach(r => {
       if ((r.kind === "daylight" || r.kind === "concrete") && !F.basementWalls) return;
+      if (isSepKind(r.kind) && !F.sepWalls) return; // 30n
       // 29as: unframed concrete walls can be measured LF × wall height (closed cell foam line); default = cavity counting
       const lfMode = r.kind === "concrete" && !!r.measureLf;
       const cavities = n(r.cavities); if (!lfMode && cavities <= 0) return;
@@ -2796,6 +2802,7 @@ function foamCompareHtml(fc) {
 const WORK_AREA_LABELS = {
   "Wall — 2x4 exterior (R-13)": "Exterior walls (2x4)", "Wall — 2x6 exterior (R-19)": "Exterior walls (2x6)",
   "Wall — Daylight basement (R-19)": "Daylight basement walls", "Wall — Concrete basement (R-13)": "Concrete basement walls",
+  "Wall — Basement separation wall 2x4 (R-13)": "Basement separation walls (2x4)", "Wall — Basement separation wall 2x6 (R-19)": "Basement separation walls (2x6)", "Basement band": "Basement band / rim",
   "Wall — Garage exterior": "Garage walls", "Wall — Interior": "Interior walls", "Interior walls": "Interior walls",
   "Knee wall": "Knee walls", "Knee wrap": "Knee walls (wrap)", "Dead air": "Dead air", "Open vault": "Open vaults", "Closed vault": "Closed vaults",
   "Poly vent": "Closed vaults (vents)", "Garage ceiling": "Garage ceiling", "Garage roof foam": "Garage roofline", "Baffles": "Eaves (baffles)",
@@ -2908,6 +2915,7 @@ function renderGates() {
   addToggle("Porch", "hasPorch", F.canAskPorch);
   addToggle("Crawl", "hasSubfloor", F.canAskSubfloor);
   addToggle("UFBC (basement ceiling)", "hasUfbc", F.canAskUfbc);
+  addToggle("Separation walls (basement)", "hasSepWalls", F.canAskSepWalls && S.hasWalls); // 30n: finished basement only
   addToggle("Crawl walls to foam", "hasCrawlWalls", F.canAskCrawlEncap);
   addToggle("Dense-pack floors", "hasDense", F.canAskDense);
   addToggle("Poured floor (skip poly)", "pouredFloor", F.canAskCrawlEncap);
@@ -3047,7 +3055,8 @@ function renderAssemblyEditors() {
   if (S.hasRim && F.canAskRim) {
     S.rims.forEach((r, idx) => {
       const card = el("div", "row-card");
-      card.innerHTML = '<div class="row-title">Rim #' + (idx+1) + ' · ×1.2 → ' + fmt(n(r.lf)*1.2) + '</div>';
+      card.innerHTML = '<div class="row-title">Rim #' + (idx+1) + (F.showBasement && r.level === "basement" ? " · basement band" : F.showBasement ? " · main level" : "") + ' · ×1.2 → ' + fmt(n(r.lf)*1.2) + '</div>';
+      if (F.showBasement && F.foundation) card.appendChild(fieldSelect("Level", r.level === "basement" ? "basement" : "main", [["main", "Main level band"], ["basement", "Basement band"]], v => { r.level = v; render(); })); // 30n
       card.appendChild(fieldInput("LF", r.lf, v => { r.lf = v; schedule(); }, "number"));
       if (rimFoamAny) {
         const fr = el("div", "toggle-row"); fr.appendChild(el("span", null, "Foam band/rim joist (instead of R19 batts)"));
@@ -3071,7 +3080,7 @@ function renderAssemblyEditors() {
     const isBase = k => k === "daylight" || k === "concrete";
     const ownBase = F.basementSections;
     const hideBaseRows = ownBase || F.noBasementKinds || (F.foundation === "unfinished" && !F.basementWalls);
-    const genKinds = Object.keys(WALL_KIND_LABELS).filter(k => k !== "interior" && (!isBase(k) || !(ownBase || F.noBasementKinds))); // 29at: interior has its own bubble
+    const genKinds = Object.keys(WALL_KIND_LABELS).filter(k => k !== "interior" && !isSepKind(k) && (!isBase(k) || !(ownBase || F.noBasementKinds))); // 29at: interior has its own bubble
     const wallCard = (r, title, kinds) => {
       const card = el("div", "row-card");
       const lfMode = r.kind === "concrete" && !!r.measureLf; // 29as: unframed concrete measured LF × wall height
@@ -3115,7 +3124,7 @@ function renderAssemblyEditors() {
     };
     const h = el("div", "divider"); box.appendChild(h);
     box.appendChild(el("p", "cap", "Walls — matching walls of the same type combine into one Excel row (R-13 batts stay split by height). 16 OC = 12×15×h÷144 · 19 OC = 12×18×h÷144 · 24 OC = 12×24×h÷144"));
-    S.walls.filter(r => r.kind !== "interior" && !(hideBaseRows && isBase(r.kind))).forEach((r, idx) => wallCard(r, "Wall #" + (idx + 1), genKinds));
+    S.walls.filter(r => r.kind !== "interior" && !isSepKind(r.kind) && !(hideBaseRows && isBase(r.kind))).forEach((r, idx) => wallCard(r, "Wall #" + (idx + 1), genKinds));
     box.appendChild(addBtn("Add wall area", () => {
       S.walls.push({ id: uid(), name: "", kind: "ext_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: defaultWallMode(S.pkg, "ext_2x4") });
       render();
@@ -3133,6 +3142,18 @@ function renderAssemblyEditors() {
         render();
       }));
     });
+    // 30n: Asher — basement separation walls (finished basement only), 2x4 (R-13) or 2x6 (R-19), entered like walls (OC, height, cavities)
+    if (F.sepWalls) {
+      SEC = 83;
+      box.appendChild(el("div", "divider"));
+      box.appendChild(el("p", "cap", "Separation walls (finished basement) — pick 2x4 (R-13) or 2x6 (R-19), then stud spacing, height and cavities."));
+      if (!S.walls.some(r => isSepKind(r.kind))) S.walls.push({ id: uid(), name: "", kind: "sep_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: defaultWallMode(S.pkg, "sep_2x4") });
+      S.walls.filter(r => isSepKind(r.kind)).forEach((r, idx) => wallCard(r, "Separation wall #" + (idx + 1), ["sep_2x4", "sep_2x6"]));
+      box.appendChild(addBtn("Add separation wall", () => {
+        S.walls.push({ id: uid(), name: "", kind: "sep_2x4", oc: "16", height: "8", customHeight: "", cavities: "", materialMode: defaultWallMode(S.pkg, "sep_2x4") });
+        render();
+      }));
+    }
   }
   SEC = 62;
   if (S.hasInteriorWalls && F.canAskWalls) {
@@ -3142,7 +3163,8 @@ function renderAssemblyEditors() {
     S.interiorWalls.forEach((r, idx) => {
       const card = el("div", "row-card");
       const sf = round2(interiorWallSf(r));
-      card.innerHTML = '<div class="row-title">Interior walls #' + (idx+1) + ' · ' + fmt(interiorCavities(r)) + ' cav → ' + fmt(sf) + ' SF</div>';
+      card.innerHTML = '<div class="row-title">Interior walls #' + (idx+1) + ' · ' + (r.stud === "2x6" ? "2x6 · " : "") + fmt(interiorCavities(r)) + ' cav → ' + fmt(sf) + ' SF</div>';
+      card.appendChild(fieldSelect("Wall size", r.stud === "2x6" ? "2x6" : "2x4", [["2x4", "2x4 (R-13 sound batts)"], ["2x6", "2x6 (R-19 batts)"]], v => { r.stud = v; render(); })); // 30n
       card.appendChild(fieldSelect("Stud spacing", r.oc, WALL_W_CHOICES, v => { r.oc = v; render(); }));
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
@@ -3150,7 +3172,7 @@ function renderAssemblyEditors() {
       g.appendChild(fieldInput("Cavities", r.cavities, v => { r.cavities = v; schedule(); }, "number"));
       g.appendChild(fieldInput("or Linear feet", r.lf, v => { r.lf = v; schedule(); }, "number"));
       card.appendChild(g);
-      card.appendChild(fieldSelect("Material", r.materialMode, INTERIOR_MAT_OPTIONS, v => { r.materialMode = v; render(); }));
+      card.appendChild(fieldSelect("Material", r.materialMode, r.stud === "2x6" ? INTERIOR_MAT_OPTIONS.map(o => o[0] === "batt" ? ["batt", "Batts (R-19)"] : o) : INTERIOR_MAT_OPTIONS, v => { r.materialMode = v; render(); }));
       if (r.materialMode === "foam") foamTypeControls(card, r, "foamType", "ccDepth");
       if (S.interiorWalls.length > 1) {
         const rm = el("button", "btn btn-secondary btn-sm"); rm.type = "button"; rm.textContent = "Remove";
@@ -3404,7 +3426,7 @@ function renderAssemblyEditors() {
 }
 const BUBBLE_TITLES = { 2: "Spray foam type", 5: "Attic", 10: "Roofline", 12: "Dead air", 13: "Vaults", 14: "Knee walls", 20: "Garage roofline", 30: "Garage ceiling",
   32: "Porch", 35: "Cantilevers", 40: "Gables", 50: "Baffles", 60: "Walls", 62: "Interior walls", 64: "Between floors", 66: "Dense-pack floors",
-  80: "Daylight walls", 81: "Concrete walls", 82: "UFBC (unfinished basement ceiling)", 84: "Crawl – new batts", 85: "Crawl touch-up", 86: "Crawl space", 87: "Crawl walls", 95: "Miscellaneous", 99: "Bands / rim" };
+  80: "Daylight walls", 81: "Concrete walls", 82: "UFBC (unfinished basement ceiling)", 83: "Separation walls", 84: "Crawl – new batts", 85: "Crawl touch-up", 86: "Crawl space", 87: "Crawl walls", 95: "Miscellaneous", 99: "Bands / rim" };
 
 function fieldInput(label, value, onChange, type) {
   const f = el("div", "field");
@@ -3873,7 +3895,8 @@ function missingFields() {
       if (r.kind === "concrete" && r.measureLf) { if (blank(r.lf)) add(title, "Linear feet", title); else if (blank(r.lfHeight)) add(title, "Wall height ft", title); }
       else if (blank(r.cavities)) add(title, "Cavities", title);
     };
-    S.walls.filter(r => r.kind !== "interior" && !(hideBaseRows && isBase(r.kind))).forEach((r, i) => { if (!isBase(r.kind) || F.basementWalls) chk(r, "Wall #" + (i + 1)); });
+    S.walls.filter(r => r.kind !== "interior" && !isSepKind(r.kind) && !(hideBaseRows && isBase(r.kind))).forEach((r, i) => { if (!isBase(r.kind) || F.basementWalls) chk(r, "Wall #" + (i + 1)); });
+    if (F.sepWalls) S.walls.filter(r => isSepKind(r.kind)).forEach((r, i) => chk(r, "Separation wall #" + (i + 1)));
     S.walls.filter(r => r.kind === "interior").forEach((r, i) => chk(r, "Interior wall row #" + (i + 1)));
     if (F.basementSections) [["daylight", "Daylight wall"], ["concrete", "Concrete wall"]].forEach(([k, one]) => S.walls.filter(r => r.kind === k).forEach((r, i) => chk(r, one + " #" + (i + 1))));
   }
@@ -4439,6 +4462,9 @@ function migrateState(d) {
   if (typeof S.hasBetweenFloors !== "boolean") S.hasBetweenFloors = false;
   // old single "UFBC / crawl" toggle → Crawl (same key); UFBC starts off
   if (typeof S.hasUfbc !== "boolean") S.hasUfbc = false;
+  if (typeof S.hasSepWalls !== "boolean") S.hasSepWalls = false;
+  // 30n: one Customer box — an old FG-only company moves into Builder / company when the builder was blank
+  if ((S.custCompany || "").trim() && !(S.builder || "").trim()) { S.builder = S.custCompany.trim(); S.custCompany = ""; }
   if (!/^(R-(13|19|30)|foam)$/.test(S.crawlSubR || "")) S.crawlSubR = "R-19";
   if (!/^R-(13|19|30)$/.test(S.ufbcR || "")) S.ufbcR = "R-19";
   if (typeof S.compareOn !== "boolean") S.compareOn = false;
@@ -4598,7 +4624,7 @@ function newJob() {
   S.interiorWalls = [newInteriorWall()];
   S.hasGarage = false; S.garageCeils = []; S.hasPorch = false; S.hasBasementWalls = false;
   S.hasSubfloor = false; S.hasDense = false; S.hasCrawlWalls = false;
-  S.crawlSubR = "R-19"; S.crawlSubOc = "16"; S.hasUfbc = false; S.ufbcSf = ""; S.ufbcR = "R-19"; S.ufbcOc = "16"; S.subfloorOverride = "";
+  S.crawlSubR = "R-19"; S.crawlSubOc = "16"; S.hasUfbc = false; S.hasSepWalls = false; S.ufbcSf = ""; S.ufbcR = "R-19"; S.ufbcOc = "16"; S.subfloorOverride = "";
   S.hasMisc = false; S.misc = [newMiscItem()];
   S.deadAir = [{ id: uid(), name: "", sf: "" }];
   S.vaults = [{ id: uid(), name: "", kind: "open", flatSf: "", pitch: "6", customRise: "" }];
@@ -4794,11 +4820,11 @@ function trainSteps() {
       html: "<p>Pick the foundation type.</p>" +
         trainDemo(fld("Foundation", sel("Crawl space"))) },
     { sec: "Measure · Customer / builder", title: "Customer / builder",
-      html: "<p>Fill in <b>Builder / customer</b>, <b>City</b>, <b>Job site address</b>, <b>State</b>, <b>Zip</b> and <b>Subdivision (optional)</b>.</p>" +
+      html: "<p>Fill in <b>Builder / company</b>, <b>City</b>, <b>Job site address</b>, <b>State</b>, <b>Zip</b> and <b>Subdivision (optional)</b>.</p>" +
         "<p>The city, state and zip also set the default roofline foam depth, so get them right.</p>" +
-        trainDemo('<div class="grid2">' + fld("Builder / customer", inp("Smith Homes")) + fld("City", inp("Gainesville")) + "</div>" + fld("Job site address", inp("123 Main St"))) },
-    { sec: "Measure · Customer / builder", title: "Customer (for FieldGroove) and billing",
-      html: "<p>Tap <b>Customer (for FieldGroove)</b> to open the customer box: First name, Last name, Company (blank = builder above if no name), Phone and Email.</p>" +
+        trainDemo('<div class="grid2">' + fld("Builder / company", inp("Smith Homes")) + fld("City", inp("Gainesville")) + "</div>" + fld("Job site address", inp("123 Main St"))) },
+    { sec: "Measure · Customer / builder", title: "Customer details and billing",
+      html: "<p>The same Customer box also has First name, Last name, Phone and Email — one place, also what FieldGroove gets. An existing FieldGroove customer fills in by itself.</p>" +
         "<p><b>Billing address same as job site</b> — turn it off to type a separate billing address, city, state and zip.</p>" +
         "<p>Below that: <b>Date measured</b> (today on a new job) and <b>Keywords / notes</b> — anything you type there is searchable in the Library later.</p>" +
         trainDemo(trainSwitch("Billing address same as job site", true)) },
@@ -4931,7 +4957,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-30m";
+const APP_BUILD = "2026-10-30n";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -4967,10 +4993,16 @@ function fgCustomerForExport() {
   let first = (S.custFirst || "").trim(), last = (S.custLast || "").trim();
   const typed = (S.custCompany || "").trim(), raw = typed || (S.builder || "").trim();
   const m = fgCustFind(raw);
+  // 30n: Asher — FG duplicates (McEntyre). Existing FG customer: send ONLY the name in CustomerCompanyName (exact FG company, or
+  // "Last, First" for a person) and leave First/Last/email/phone/address blank, so match-by-name has nothing conflicting to split on.
   if (m && m.conf === "exact") {
-    if (m.c.b) return { company: m.c.n, first: first || m.c.f || "", last: last || m.c.l || "" };
-    return { company: "", first: first || m.c.f || "", last: last || m.c.l || "" };
+    if (m.c.b) return { company: m.c.n, first: "", last: "", matchOnly: true };
+    const pf = m.c.f || "", pl = m.c.l || "";
+    if (pf && pl) return { company: pl + ", " + pf, first: "", last: "", matchOnly: true };
+    return { company: "", first: first || pf, last: last || pl };
   }
+  // a person typed only in First/Last who is on the FG list
+  if (!raw && first && last) { const pm = fgCustFind(first + " " + last); if (pm && pm.conf === "exact" && !pm.c.b && pm.c.f && pm.c.l) return { company: pm.c.l + ", " + pm.c.f, first: "", last: "", matchOnly: true }; }
   return { company: raw, first, last };
 }
 // Fill only empty fields, only with what the FieldGroove list has (no invented values).
@@ -4978,7 +5010,7 @@ function fgCustomerForExport() {
 function fgCustApply(c) {
   const filled = [];
   const set = (id, v, lbl) => { const e = $(id); if (!e || !v || String(e.value || "").trim()) return; e.value = v; e.dispatchEvent(new Event("input", { bubbles: true })); filled.push(lbl); };
-  if (c.b) set("custCompany", c.n, "company");
+  if (c.b) { const be = $("builder"); if (be && fgCustNorm(be.value) !== fgCustNorm(c.n)) { be.value = c.n; be.dispatchEvent(new Event("input", { bubbles: true })); filled.push("company spelling"); } } // 30n: one Customer box
   set("custFirst", c.f, c.b ? "contact first name" : "first name"); set("custLast", c.l, c.b ? "contact last name" : "last name");
   if (!c.b) { const e = $("custCompany"); if (e && fgCustFind(e.value) && fgCustFind(e.value).c === c) { e.value = ""; e.dispatchEvent(new Event("input", { bubbles: true })); filled.push("company cleared (person)"); } }
   set("custPhone", c.p, "phone"); set("custEmail", c.e, "email");
@@ -4996,7 +5028,7 @@ function fgCustCheck(id, apply) {
   const v = ($(id) && $(id).value || "").trim();
   if (!v) { fgCustNote(id, ""); return; }
   const m = fgCustFind(v);
-  const who = c => (c.b ? " · business account" + (c.f ? " (contact " + escHtml(c.f + " " + c.l) + ")" : "") : " · residential / person — exported as first + last name, company blank") + (c.o && c.o.length ? " · " + c.o.join("/") + "'s list" : "");
+  const who = c => (c.b ? " · business account" + (c.f ? " (contact " + escHtml(c.f + " " + c.l) + ")" : "") : " · residential / person — " + (c.f && c.l ? "FieldGroove gets \"" + escHtml(c.l + ", " + c.f) + "\" (matches the existing customer)" : "exported as first + last name")) + (c.o && c.o.length ? " · " + c.o.join("/") + "'s list" : "");
   const info = c => [c.p, c.e].filter(Boolean).map(escHtml).join(" · ") || "no phone/email on file";
   if (m && m.conf === "exact") {
     const f = apply ? fgCustApply(m.c) : [];
