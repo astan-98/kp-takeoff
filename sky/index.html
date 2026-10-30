@@ -307,6 +307,10 @@ html, body { overscroll-behavior-y: none; overflow-x: clip; max-width: 100%; }
   body.wo-print #twoXlZoomBox { zoom: 1 !important; }
   body.wo-print .wo-pgbrk { break-after: page; page-break-after: always; height: 0 !important; }
 }
+.addr-ac { position: relative; }
+.addr-sugg { position: absolute; left: 0; right: 0; top: 100%; z-index: 40; background: #fff; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.15); overflow: hidden; }
+.addr-opt { display: block; width: 100%; text-align: left; padding: 10px 12px; border: 0; border-bottom: 1px solid #eee; background: #fff; font: inherit; color: #222; }
+.addr-opt:last-child { border-bottom: 0; }
 body.xl-open { overflow: hidden; }
 .xl-modal { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column;
   padding-top: var(--safe-t); padding-bottom: var(--safe-b); }
@@ -442,12 +446,13 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <div class="field"><label>Phone</label><input id="custPhone" type="tel" autocomplete="off"></div>
         <div class="field"><label>Email</label><input id="custEmail" type="email" autocomplete="off"></div>
       </div>
-      <div class="field"><label>Job site address</label><input id="address" placeholder="123 Main St"></div>
+      <div class="field addr-ac"><label>Job site address</label><input id="address" placeholder="123 Main St" autocomplete="off"><div id="addrSugg" class="addr-sugg hidden" role="listbox"></div></div>
       <div class="field"><label>City</label><input id="city" placeholder="Gainesville"></div>
       <div class="grid2">
         <div class="field"><label>State</label><input id="siteState" placeholder="GA" autocapitalize="characters"></div>
         <div class="field"><label>Zip</label><input id="siteZip" inputmode="numeric"></div>
       </div>
+      <div class="field"><label>County</label><input id="siteCounty" placeholder="fills from the address search"></div>
       <div class="field"><label>Subdivision (optional)</label><input id="subdivision"></div>
       <div class="toggle-row"><span>Billing address same as job site</span><button type="button" class="switch" id="billSame"></button></div>
       <div id="billFields" class="hidden">
@@ -1200,10 +1205,10 @@ function roofDepthAuto() {
   const city = String(S.city || "").trim().toLowerCase().replace(/[.,]/g, "").replace(/\s+/g, " ");
   const st = String(S.siteState || "").trim().toLowerCase().replace(/\./g, "");
   const zip = String(S.siteZip || "").trim().slice(0, 5);
-  const addr = String(S.address || "").toLowerCase();
+  const addr = String(S.address || "").toLowerCase(), county = String(S.siteCounty || "").toLowerCase(); // 30r: county from address search
   const isGA = !st || st === "ga" || st === "georgia", isNC = !st || st === "nc" || st === "north carolina";
   if ((isNC && /^highlands( nc| north carolina)?$/.test(city)) || zip === "28741") return { depth: "10", why: "Highlands, NC" };
-  if ((isGA && /^(athens|athens-clarke|athens clarke|winterville)( ga| georgia)?$/.test(city)) || (isGA && /\bclarke( county| co)?\b/.test(city + " " + addr))
+  if ((isGA && /^(athens|athens-clarke|athens clarke|winterville)( ga| georgia)?$/.test(city)) || (isGA && /\bclarke( county| co)?\b/.test(city + " " + addr + " " + county))
       || (!city && /^3060[1-9]$/.test(zip))) return { depth: "8", why: "Athens-Clarke County" };
   return { depth: "5.5", why: "" };
 }
@@ -1462,7 +1467,7 @@ const S = {
   photos: [],
   accessScaffold: "no", accessScaffoldNote: "", accessDriveway: "", accessDrivewayNote: "", accessGate: "", accessGateCode: "",
   builder: "", city: "", address: "", keywords: "",
-  siteState: "GA", siteZip: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
+  siteState: "GA", siteZip: "", siteCounty: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
   billSame: true, billAddress: "", billCity: "", billState: "", billZip: "", showFgMap: false,
   gasType: "natural",
   outputView: "excel",
@@ -4260,7 +4265,7 @@ function render() {
   $("builder").value = S.builder;
   $("city").value = S.city;
   $("address").value = S.address;
-  ["siteState", "siteZip", "subdivision", "custFirst", "custLast", "custCompany", "custPhone", "custEmail", "billAddress", "billCity", "billState", "billZip"]
+  ["siteState", "siteZip", "siteCounty", "subdivision", "custFirst", "custLast", "custCompany", "custPhone", "custEmail", "billAddress", "billCity", "billState", "billZip"]
     .forEach(k => { const e = $(k); if (e && document.activeElement !== e) e.value = S[k] == null ? "" : S[k]; });
   setSwitch($("billSame"), S.billSame !== false);
   toggleField("billFields", S.billSame === false);
@@ -4390,7 +4395,7 @@ function saveDraft() {
   lsSet(DRAFT_KEY, JSON.stringify(draftPayload()));
 }
 
-const CUST_DEFAULTS = { siteState: "GA", siteZip: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
+const CUST_DEFAULTS = { siteState: "GA", siteZip: "", siteCounty: "", subdivision: "", custFirst: "", custLast: "", custCompany: "", custPhone: "", custEmail: "",
   billSame: true, billAddress: "", billCity: "", billState: "", billZip: "" };
 function resetCustomer() { Object.keys(CUST_DEFAULTS).forEach(k => { S[k] = CUST_DEFAULTS[k]; }); }
 const HOME_OWNER = S.owner; // 29ax: this copy's own owner (edition default)
@@ -4666,14 +4671,73 @@ function newJob() {
   render();
 }
 
+// ---------- 30r: Sky's address auto-fill — Google Places API (New): Autocomplete + Place Details (Essentials) ----------
+// Key is injected at build time (KP_PLACES_KEY), referrer-locked to https://astan-98.github.io/*. Blank key / offline = plain typing.
+let PLACES_KEY = "";
+const PLACES_BIAS = { circle: { center: { latitude: 34.05, longitude: -83.55 }, radius: 50000 } }; // NE Georgia (Winder–Athens–Jefferson); bias only, not a limit
+let placesSess = "", placesTimer = 0, placesSeq = 0;
+function placesOn() { return !!PLACES_KEY && typeof fetch === "function" && navigator.onLine !== false; }
+function placesToken() { if (!placesSess) placesSess = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : uid() + uid(); return placesSess; }
+function placesHide() { const b = $("addrSugg"); if (b) { b.classList.add("hidden"); b.innerHTML = ""; } }
+async function placesSuggest(q) {
+  const r = await fetch("https://places.googleapis.com/v1/places:autocomplete", { method: "POST",
+    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": PLACES_KEY },
+    body: JSON.stringify({ input: q, sessionToken: placesToken(), includedRegionCodes: ["us"], includedPrimaryTypes: ["street_address", "premise", "subpremise", "route"], locationBias: PLACES_BIAS }) });
+  if (!r.ok) throw new Error("places " + r.status);
+  const j = await r.json();
+  return (j.suggestions || []).map(x => x.placePrediction).filter(Boolean).map(p => ({ id: p.placeId, text: (p.text && p.text.text) || "" }));
+}
+// Parse Place Details addressComponents -> { address, city, state, zip, county }
+function placesParse(d) {
+  const c = {}; (d.addressComponents || []).forEach(a => (a.types || []).forEach(t => { if (!c[t]) c[t] = a; }));
+  const L = t => (c[t] && c[t].longText) || "", S2 = t => (c[t] && c[t].shortText) || "";
+  return { address: [S2("street_number") || L("street_number"), L("route")].filter(Boolean).join(" "),
+    city: L("locality") || L("postal_town") || L("sublocality") || L("administrative_area_level_3"),
+    state: S2("administrative_area_level_1"), zip: L("postal_code"), county: L("administrative_area_level_2") };
+}
+async function placesPick(id, label) {
+  placesHide();
+  const tok = placesToken(); placesSess = ""; // details ends the session (one billed session)
+  try {
+    const r = await fetch("https://places.googleapis.com/v1/places/" + encodeURIComponent(id) + "?sessionToken=" + encodeURIComponent(tok),
+      { headers: { "X-Goog-Api-Key": PLACES_KEY, "X-Goog-FieldMask": "addressComponents,formattedAddress" } });
+    if (!r.ok) throw new Error("details " + r.status);
+    placesApply(placesParse(await r.json()));
+  } catch (e) { setStatus("Address search couldn't load the details — type city / zip by hand."); }
+}
+function placesApply(p) {
+  const put = (id, key, v) => { if (!v) return; S[key] = v; const e = $(id); if (e) e.value = v; };
+  put("address", "address", p.address); put("city", "city", p.city); put("siteState", "siteState", p.state); put("siteZip", "siteZip", p.zip); put("siteCounty", "siteCounty", p.county);
+  render(); schedule();
+  setStatus("Address filled from search" + (p.county ? " · " + p.county : "") + ".");
+}
+function placesWire() {
+  const inp = $("address"), box = $("addrSugg"); if (!inp || !box || inp._placesWired) return; inp._placesWired = true;
+  inp.addEventListener("input", () => {
+    clearTimeout(placesTimer); const q = inp.value.trim();
+    if (!placesOn() || q.length < 4) { placesHide(); return; }
+    placesTimer = setTimeout(async () => {
+      const my = ++placesSeq;
+      try {
+        const list = await placesSuggest(q); if (my !== placesSeq) return;
+        if (!list.length) { placesHide(); return; }
+        box.innerHTML = ""; list.slice(0, 5).forEach(x => { const b = el("button", "addr-opt", escHtml(x.text)); b.type = "button"; b.setAttribute("role", "option");
+          b.onmousedown = ev => ev.preventDefault(); b.onclick = () => placesPick(x.id, x.text); box.appendChild(b); });
+        box.classList.remove("hidden");
+      } catch (e) { placesHide(); } // offline / quota / bad key -> manual typing
+    }, 300);
+  });
+  inp.addEventListener("blur", () => setTimeout(placesHide, 200));
+}
 function wireInputs() {
+  placesWire();
   const map = {
     builder: "builder", city: "city", address: "address", dateMeasured: "dateMeasured",
     keywords: "keywords", gasType: "gasType", pkg: "pkg",
     atticRetro: "atticRetro", crawlRetro: "crawlRetro", blowR: "blowR",
     flatSf: "flatSf", housePitch: "housePitch", houseCustomRise: "houseCustomRise",
     touchupPatchSf: "touchupPatchSf", marginCustom: "marginCustom",
-    siteState: "siteState", siteZip: "siteZip", subdivision: "subdivision", custFirst: "custFirst", custLast: "custLast",
+    siteState: "siteState", siteZip: "siteZip", siteCounty: "siteCounty", subdivision: "subdivision", custFirst: "custFirst", custLast: "custLast",
     custCompany: "custCompany", custPhone: "custPhone", custEmail: "custEmail", billAddress: "billAddress", billCity: "billCity",
     billState: "billState", billZip: "billZip", woRep: "woRep", woDate: "woDate", woNotes: "woNotes",
     airSealAddon: "airSealAddon", extraLabor: "extraLabor", extraLaborNote: "extraLaborNote",
@@ -4687,7 +4751,7 @@ function wireInputs() {
       const pkgChange = id === "pkg" && S[key] !== e.value;
       S[key] = e.value;
       if (pkgChange) applyPkgDefaults();
-      if (id === "city" || id === "siteState" || id === "siteZip") { clearTimeout(wireInputs._rt); wireInputs._rt = setTimeout(() => { if (!e.matches(":focus")) render(); }, 50); }
+      if (id === "city" || id === "siteState" || id === "siteZip" || id === "siteCounty") { clearTimeout(wireInputs._rt); wireInputs._rt = setTimeout(() => { if (!e.matches(":focus")) render(); }, 50); }
       if (id === "gasType" || id === "pkg" || id === "atticRetro" || id === "crawlRetro" || id === "housePitch" || id === "blowR" || id.indexOf("filter") === 0)
         render();
       else schedule();
@@ -4977,7 +5041,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-30q";
+const APP_BUILD = "2026-10-30r";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
