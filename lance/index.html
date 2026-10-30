@@ -4912,7 +4912,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-30c";
+const APP_BUILD = "2026-10-30d";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -4929,12 +4929,18 @@ const PTR_THRESHOLD = 70, PTR_MAX = 120;
   const nav = document.querySelector(".bottom-nav"), vv = window.visualViewport;
   const typing = () => { const a = document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== "file"); };
   let raf = 0;
+  // 30d: never offset the bar by the visual-viewport shortfall. That math lifted the bar by the keyboard height (~336px) the
+  // moment focus left an input while the keyboard was still up, and iOS Home Screen apps often never send the resize that
+  // would put it back, so the bar stayed stranded mid-screen. position:fixed; bottom:0 (+ safe-area padding) does the job;
+  // pin() only clears any stale transform and keeps the bar/dock as direct children of <body>.
   const pin = () => {
     raf = 0; if (!nav) return;
-    let off = 0;
-    if (vv && !typing() && Math.abs(vv.scale - 1) < 0.01) off = Math.round(window.innerHeight - (vv.height + vv.offsetTop));
-    nav.style.transform = off ? "translate3d(0," + (-off) + "px,0)" : "translateZ(0)";
-    const dock = document.getElementById("saveDock"); if (dock) dock.style.transform = nav.style.transform; // 29as: dock rides with the nav
+    if (nav.parentElement !== document.body) document.body.appendChild(nav);
+    nav.style.transform = "";
+    const dock = document.getElementById("saveDock");
+    if (dock) { if (dock.parentElement !== document.body) document.body.insertBefore(dock, nav); dock.style.transform = ""; }
+    // 30d: scroll-lock restore: xl-open only while an .xl-modal is actually on screen
+    if (document.body.classList.contains("xl-open") && !document.querySelector(".xl-modal")) document.body.classList.remove("xl-open");
   };
   const schedulePin = () => { if (!raf) raf = requestAnimationFrame(pin); };
   let t = null;
@@ -4950,6 +4956,8 @@ const PTR_THRESHOLD = 70, PTR_MAX = 120;
   window.addEventListener("resize", schedulePin);
   if (vv) { vv.addEventListener("resize", () => { schedulePin(); nudge(); }); vv.addEventListener("scroll", schedulePin); }
   document.addEventListener("touchend", () => setTimeout(schedulePin, 350), { passive: true });
+  if (window.MutationObserver) new MutationObserver(schedulePin).observe(document.body, { childList: true }); // 30d: modal/sheet closed
+  schedulePin();
 })();
 let ptrState = null, ptrBusy = false;
 function ptrScrollTop() { return Math.max(window.scrollY || 0, (document.scrollingElement || document.documentElement).scrollTop || 0); }
