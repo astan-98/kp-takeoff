@@ -222,6 +222,8 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 #saveDockRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .calc-modal { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; }
 .calc-modal.hidden { display: none; }
+.calc-modal { overscroll-behavior: contain; touch-action: none; }
+html.calc-lock, html.calc-lock body { overscroll-behavior: none; overflow: hidden; } /* 30ac: no pull-to-reload behind the calculator */
 .calc-box { background: var(--bg2); color: var(--text); width: 100%; max-width: 560px; border-radius: 16px 16px 0 0; padding: 6px 14px calc(14px + var(--safe-b));
   height: calc(100dvh - var(--safe-t) - 16px); display: flex; flex-direction: column; touch-action: none; transition: transform .2s ease; } /* 30z: near full-screen sheet */
 .calc-box.dragging { transition: none; }
@@ -5349,13 +5351,13 @@ function calcPress(k) {
   else CALC.expr += k;
   calcShow();
 }
-function calcClose() { $("calcModal").classList.add("hidden"); }
+function calcClose() { $("calcModal").classList.add("hidden"); document.documentElement.classList.remove("calc-lock"); }
 function calcInit() {
   const keys = ["C", "(", ")", "÷", "7", "8", "9", "×", "4", "5", "6", "−", "1", "2", "3", "+", "%", "0", ".", "⌫", "="];
   const box = $("calcKeys"); if (!box || box.childNodes.length) return;
   keys.forEach(k => { const b = document.createElement("button"); b.type = "button"; b.textContent = k; b.className = k === "=" ? "eq" : /[÷×−+()%C⌫]/.test(k) ? "op" : "";
     if (k === "=") b.style.gridColumn = "span 4"; b.onclick = () => calcPress(k); box.appendChild(b); });
-  $("btnCalcDock").onclick = () => { $("calcModal").classList.remove("hidden"); calcShow(); };
+  $("btnCalcDock").onclick = () => { $("calcModal").classList.remove("hidden"); document.documentElement.classList.add("calc-lock"); calcShow(); };
   $("calcClose").onclick = () => calcClose();
   $("calcModal").addEventListener("click", e => { if (e.target.id === "calcModal") $("calcModal").classList.add("hidden"); });
   // 30z: swipe down to close (touch + mouse/pen); Close button stays as fallback
@@ -5363,14 +5365,16 @@ function calcInit() {
   const start = y => { y0 = y; dy = 0; bx.classList.add("dragging"); };
   const move = y => { if (y0 == null) return; dy = Math.max(0, y - y0); bx.style.transform = dy ? "translateY(" + dy + "px)" : ""; };
   const end = () => { if (y0 == null) return; bx.classList.remove("dragging"); const close = dy > 90; y0 = null; bx.style.transform = ""; if (close) calcClose(); };
-  bx.addEventListener("touchstart", e => { if (e.touches.length === 1) start(e.touches[0].clientY); }, { passive: true });
-  bx.addEventListener("touchmove", e => { if (e.touches.length === 1) move(e.touches[0].clientY); }, { passive: true });
-  bx.addEventListener("touchend", end); bx.addEventListener("touchcancel", end);
+  // 30ac: the sheet owns the gesture — stop it reaching the app's pull-to-refresh and the browser's own pull-to-reload
+  bx.addEventListener("touchstart", e => { e.stopPropagation(); if (e.touches.length === 1) start(e.touches[0].clientY); }, { passive: true });
+  bx.addEventListener("touchmove", e => { e.stopPropagation(); if (e.cancelable) e.preventDefault(); if (e.touches.length === 1) move(e.touches[0].clientY); }, { passive: false });
+  bx.addEventListener("touchend", e => { e.stopPropagation(); end(); }); bx.addEventListener("touchcancel", e => { e.stopPropagation(); end(); });
+  $("calcModal").addEventListener("touchmove", e => { e.stopPropagation(); if (e.cancelable) e.preventDefault(); }, { passive: false });
   bx.addEventListener("pointerdown", e => { if (e.pointerType !== "touch") start(e.clientY); });
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30ab";
+const APP_BUILD = "2026-10-30ac";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -5505,8 +5509,10 @@ function fgCustWire() {
 })();
 let ptrState = null, ptrBusy = false;
 function ptrScrollTop() { return Math.max(window.scrollY || 0, (document.scrollingElement || document.documentElement).scrollTop || 0); }
+function calcOpen() { const m = document.getElementById("calcModal"); return !!(m && !m.classList.contains("hidden")); }
 function ptrBlocked(target) {
   if (document.querySelector(".xl-modal")) return true;
+  if (calcOpen() || (target && target.closest && target.closest("#calcModal"))) return true; // 30ac: calculator swipe never triggers pull-to-refresh
   const ae = document.activeElement;
   if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return true;
   for (let t = target; t && t !== document.body && t.nodeType === 1; t = t.parentElement) {
