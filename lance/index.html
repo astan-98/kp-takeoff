@@ -4912,7 +4912,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-30b";
+const APP_BUILD = "2026-10-30c";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -5402,8 +5402,8 @@ function cloudQueueJob(job, totalSf) {
   if (job && job.id != null) cloudUndelete(job.id); // saved again here → no longer "deleted on this device"
   if (!cloudOn() || !job || job.id == null) return Promise.resolve(null);
   const q = cloudQueue().filter(p => p && p.jobId !== job.id); // one entry per job: the newest save replaces an unsent older one
-  q.push(cloudPayload(job, totalSf)); cloudSetQueue(q); cloudRender();
-  return cloudFlush();
+  q.push(cloudPayload(job, totalSf)); cloudSetQueue(q); cloudPhQueueJob(job); cloudRender();
+  return cloudFlush().then(v => { cloudExtrasPush(); return v; }); // 30c: then its photos (script v3 only)
 }
 function cloudFlush() {
   if (!cloudOn()) return Promise.resolve(null);
@@ -5457,6 +5457,7 @@ function cloudBackupAll(opts) {
     };
     return next().then(() => {
       if (failed.length) cloudQueueMany(failed);
+      jobs.forEach(cloudPhQueueJob); cloudExtrasPush(); // 30c: their photos too (script v3 only)
       lsSet(CLOUD_ALL_KEY, new Date().toISOString());
       const msg = failed.length ? sent + " backed up, " + failed.length + " pending" : "Backed up " + sent + " ✓";
       if (!opts.silent) backupStatus(msg);
@@ -5475,6 +5476,7 @@ function cloudRender(state) {
   el.textContent = state === "sending" ? "Cloud backup: sending…" :
     q ? "Backup pending (" + q + ")" + (CLOUD_ERR === "offline" ? " — will send when back online" : CLOUD_ERR ? " — will retry on next save or app open" : "") :
     d ? "Backed up ✓ " + when : "Cloud backup on — every Save to Library backs up automatically.";
+  if (CLOUD_PH_FULL && state !== "sending") el.textContent += " · Some photos stay in the cloud only — this device's storage is full.";
 }
 // merge rule (same as the file restore): add jobs this phone doesn't have, update only when the cloud copy was saved later; never delete
 function cloudMergePlan(local, remote) {
@@ -5530,6 +5532,216 @@ function cloudSyncPlan(local, remote, opts) {
   return cloudMergePlan(local, rem);
 }
 let CLOUD_SYNC_WIRED = false;
+/* ---------- 30c: photos + work orders, through script v3 ----------
+   Dormant until the script answers ?action=info with version >= 3 (a v2 script says "unknown copy"), so this build is safe
+   before the script is updated and turns itself on once v3 is deployed (re-checked at most every 2 min).
+   Photos: already stored small (long edge 1600 px, JPEG 80%) in IndexedDB; after a job saves, each photo not uploaded yet
+   is sent once (ids tracked per copy), one at a time, queued + retried like jobs. Sync downloads photos a job here is
+   missing; if this device's storage is full they stay cloud-only and the status line says so.
+   Work orders (only the copy with the work order tab): each saved work order, the lot log and the builder-text log go up
+   (master sheet only) and come back down with the restore rules — add missing, newer wins, never delete, deletes made
+   here stick, the work order open on screen is never overwritten. One-time catch-up for existing photos + work orders. */
+const CLOUD_PH_QUEUE_KEY = CLOUD_COPY + "-cloud-photo-queue-v1", CLOUD_PH_DONE_KEY = CLOUD_COPY + "-cloud-photos-v1", CLOUD_PH_ALL_KEY = CLOUD_COPY + "-cloud-photos-all-v1";
+const CLOUD_WO_ON = APP_EDITION === "asher"; // only that copy has the work order tab
+const CLOUD_WO_QUEUE_KEY = CLOUD_COPY + "-cloud-wo-queue-v1", CLOUD_WO_ALL_KEY = CLOUD_COPY + "-cloud-wo-all-v1", CLOUD_WO_DEL_KEY = CLOUD_COPY + "-cloud-wo-deleted-v1";
+let CLOUD_V3 = null, CLOUD_V3_AT = 0, CLOUD_PH_FULL = false, CLOUD_PH_BUSY = null, CLOUD_WO_BUSY = null, CLOUD_X_BUSY = null;
+function lsJson(k, d) { try { const v = JSON.parse(lsGet(k) || "null"); return v == null ? d : v; } catch (e) { return d; } }
+function lsJsonSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+function cloudNote(t) { const el = $("cloudStatus"); if (el && cloudOn()) el.textContent = t; }
+function cloudGetJson(params, withCopy) {
+  const q = Object.assign({ token: BACKUP_TOKEN }, withCopy === false ? {} : { copy: CLOUD_COPY }, params);
+  const u = BACKUP_URL + (BACKUP_URL.indexOf("?") >= 0 ? "&" : "?") + Object.keys(q).map(k => k + "=" + encodeURIComponent(q[k])).join("&");
+  return cloudFetch(u, { method: "GET", redirect: "follow" }).then(r => r.text()).then(t => JSON.parse(t));
+}
+function cloudPostJson(body) {
+  return cloudFetch(BACKUP_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, redirect: "follow",
+      body: JSON.stringify(Object.assign({ token: BACKUP_TOKEN, copy: CLOUD_COPY }, body)) })
+    .then(r => r.text()).then(t => { let d = null; try { d = JSON.parse(t); } catch (e) {} if (!d || d.ok !== true) throw new Error((d && d.error) || "error"); return d; });
+}
+function cloudCheckV3() {
+  if (!cloudOn()) return Promise.resolve(false);
+  if (CLOUD_V3 === true) return Promise.resolve(true);
+  if (CLOUD_V3_AT && Date.now() - CLOUD_V3_AT < CLOUD_SYNC_MIN_MS) return Promise.resolve(false);
+  CLOUD_V3_AT = Date.now();
+  if (navigator.onLine === false) return Promise.resolve(false);
+  return cloudGetJson({ action: "info" }, false).then(d => { CLOUD_V3 = !!(d && d.ok === true && n(d.version) >= 3); return CLOUD_V3; })
+    .catch(() => { CLOUD_V3 = false; return false; });
+}
+// ---- photos up ----
+function cloudPhDone() { return new Set(lsJson(CLOUD_PH_DONE_KEY, [])); }
+function cloudPhMarkDone(id) { const a = lsJson(CLOUD_PH_DONE_KEY, []); if (a.indexOf(id) < 0) { a.push(id); lsJsonSet(CLOUD_PH_DONE_KEY, a); } }
+function cloudPhQueue() { const q = lsJson(CLOUD_PH_QUEUE_KEY, []); return Array.isArray(q) ? q : []; }
+function cloudPhQueueJob(job) {
+  if (!cloudOn() || !job || job.id == null) return;
+  const done = cloudPhDone(), q = cloudPhQueue(), have = new Set(q.map(x => x.photoId));
+  ((job.draft && job.draft.photos) || []).forEach(p => { if (p && p.id && !done.has(p.id) && !have.has(p.id)) { q.push({ photoId: p.id, jobId: job.id, caption: p.caption || "" }); have.add(p.id); } });
+  lsJsonSet(CLOUD_PH_QUEUE_KEY, q);
+}
+function cloudPhFlush() {
+  if (!cloudOn()) return Promise.resolve(null);
+  if (CLOUD_PH_BUSY) return CLOUD_PH_BUSY;
+  const run = cloudCheckV3().then(v3 => {
+    if (!v3) return null;
+    let i = 0, sent = 0;
+    const step = () => {
+      const q = cloudPhQueue(); if (!q.length || navigator.onLine === false) return Promise.resolve(sent);
+      const it = q[0], total = i + q.length; i++;
+      cloudNote("Uploading photos " + i + " of " + total + "…");
+      const drop = () => lsJsonSet(CLOUD_PH_QUEUE_KEY, cloudPhQueue().filter(x => x.photoId !== it.photoId));
+      return idbPhotoGet(it.photoId).catch(() => null).then(rec => {
+        if (!rec || !rec.data) { drop(); return step(); } // removed from this device
+        return cloudPostJson({ action: "photo", jobId: it.jobId || rec.jobId || "", photoId: it.photoId, caption: it.caption || "", at: rec.at || "", type: rec.type || "image/jpeg", b64: abToB64(rec.data) })
+          .then(() => { drop(); cloudPhMarkDone(it.photoId); sent++; return step(); }, () => sent); // failure: stays queued
+      });
+    };
+    return step();
+  }).catch(() => null);
+  CLOUD_PH_BUSY = run.then(r => { CLOUD_PH_BUSY = null; cloudRender(); return r; });
+  return CLOUD_PH_BUSY;
+}
+// ---- photos down ----
+function cloudIsQuota(e) { return !!e && (e.name === "QuotaExceededError" || e.code === 22 || /quota/i.test(String(e.message || e))); }
+function cloudRoomFor(bytes) {
+  try { if (navigator.storage && navigator.storage.estimate) return navigator.storage.estimate().then(x => !x || !x.quota || (n(x.usage) + bytes) < x.quota * 0.9).catch(() => true); } catch (e) {}
+  return Promise.resolve(true);
+}
+function cloudPhPull() {
+  if (CLOUD_PH_FULL) return Promise.resolve(null);
+  return Promise.all([dbReadAll(openDb, STORE).catch(() => []), idbPhotoIds().catch(() => [])]).then(([jobs, have]) => {
+    const haveS = new Set(have), want = new Map();
+    jobs.forEach(j => ((j && j.draft && j.draft.photos) || []).forEach(p => { if (p && p.id && !haveS.has(p.id)) want.set(p.id, j.id); }));
+    if (!want.size) return 0;
+    return cloudGetJson({ action: "photos" }).then(d => {
+      const list = (d && d.ok === true && Array.isArray(d.photos) ? d.photos : []).filter(p => p && want.has(p.photoId));
+      let i = 0, got = 0;
+      const step = () => {
+        if (i >= list.length) return Promise.resolve(got);
+        const p = list[i++];
+        cloudNote("Downloading photos " + i + " of " + list.length + "…");
+        return cloudGetJson({ action: "photo", jobId: p.jobId, photoId: p.photoId }).then(x => {
+          if (!x || x.ok !== true || typeof x.b64 !== "string") return step();
+          const data = b64ToAb(x.b64);
+          return cloudRoomFor(data.byteLength).then(room => {
+            if (!room) { const e = new Error("quota"); e.name = "QuotaExceededError"; throw e; }
+            return idbPhotoPut({ id: p.photoId, jobId: want.get(p.photoId), type: x.type || "image/jpeg", data, at: p.at || new Date().toISOString() });
+          }).then(() => { got++; cloudPhMarkDone(p.photoId); return step(); });
+        }).catch(e => { if (cloudIsQuota(e)) CLOUD_PH_FULL = true; return got; }); // full: the rest stay cloud-only; network: next sync
+      };
+      return step().then(g => { if (g && S.photos.some(x => want.has(x.id))) photoLoadAll(); return g; });
+    });
+  }).catch(() => null);
+}
+// ---- work orders ----
+function cloudWoDeleted() { const d = lsJson(CLOUD_WO_DEL_KEY, {}); return d && typeof d === "object" && !Array.isArray(d) ? d : {}; }
+function cloudWoQueue() { const q = lsJson(CLOUD_WO_QUEUE_KEY, []); return Array.isArray(q) ? q : []; }
+function cloudWoQueueAdd(kind, id) {
+  if (!CLOUD_WO_ON || !cloudOn() || !id) return;
+  const q = cloudWoQueue().filter(x => !(x.kind === kind && x.id === id)); q.push({ kind, id }); lsJsonSet(CLOUD_WO_QUEUE_KEY, q);
+}
+function cloudWoSynced(kind, id) { return kind === "order" || (kind === "kv" && (id === "lotlog" || /^parselog-\d{4}-\d{2}-\d{2}$/.test(id))); }
+function cloudWoRead(kind, id) {
+  return kind === "order" ? dbReadAll(openWoDb, "orders").then(a => a.find(o => o && o.id === id) || null)
+    : dbReadAll(openWoDb, "kv", true).then(a => { const e = a.find(x => x.key === id); return e ? e.value : null; });
+}
+function cloudWoFlush() {
+  if (!CLOUD_WO_ON || !cloudOn()) return Promise.resolve(null);
+  if (CLOUD_WO_BUSY) return CLOUD_WO_BUSY;
+  const run = cloudCheckV3().then(v3 => {
+    if (!v3) return null;
+    let sent = 0;
+    const step = () => {
+      const q = cloudWoQueue(); if (!q.length || navigator.onLine === false) return Promise.resolve(sent);
+      const it = q[0], drop = () => lsJsonSet(CLOUD_WO_QUEUE_KEY, cloudWoQueue().filter(x => !(x.kind === it.kind && x.id === it.id)));
+      return cloudWoRead(it.kind, it.id).catch(() => null).then(data => {
+        if (data == null || typeof data !== "object") { drop(); return step(); }
+        return cloudPostJson({ action: "wo", kind: it.kind, id: it.id, data }).then(() => { drop(); sent++; return step(); }, () => sent);
+      });
+    };
+    return step();
+  }).catch(() => null);
+  CLOUD_WO_BUSY = run.then(r => { CLOUD_WO_BUSY = null; return r; });
+  return CLOUD_WO_BUSY;
+}
+// builder-text log for one day: union by entry id; the copy with more "sent" lines wins for the same entry
+function cloudWoMergeLog(cur, rem) {
+  const m = new Map(), order = []; let changed = false;
+  (cur || []).forEach(r => { if (r && r.id != null && !m.has(String(r.id))) { m.set(String(r.id), r); order.push(String(r.id)); } });
+  (rem || []).forEach(r => {
+    if (!r || r.id == null) return; const k = String(r.id), c = m.get(k);
+    if (!c) { m.set(k, r); order.push(k); changed = true; }
+    else if ((r.sent || []).length > (c.sent || []).length) { m.set(k, r); changed = true; }
+  });
+  return { changed, arr: order.map(k => m.get(k)) };
+}
+function cloudWoPlan(items, orders, kv, opts) {
+  opts = opts || {};
+  const del = opts.deleted || {}, om = new Map((orders || []).map(o => [o.id, o])), km = new Map((kv || []).map(e => [e.key, e.value]));
+  const r = { orders: [], kv: [] };
+  (items || []).forEach(it => {
+    if (!it || !it.id || it.data == null || typeof it.data !== "object") return;
+    const tomb = del[it.kind + ":" + it.id];
+    if (it.kind === "order") {
+      if (it.id === opts.openId) return; // open on screen: leave it alone
+      const at = String(it.data.at || ""), cur = om.get(it.id);
+      if (tomb && !(at > String(tomb))) return;
+      if (!cur || at > String(cur.at || "")) r.orders.push(it.data);
+    } else if (it.kind === "kv" && it.id === "lotlog") {
+      const at = String((it.data.source && it.data.source.at) || ""), cur = km.get("lotlog"), cat = String((cur && cur.source && cur.source.at) || "");
+      if (tomb && !(at > String(tomb))) return;
+      if (!cur || at > cat) r.kv.push([it.id, it.data]);
+    } else if (it.kind === "kv" && cloudWoSynced("kv", it.id) && Array.isArray(it.data)) {
+      const mg = cloudWoMergeLog(Array.isArray(km.get(it.id)) ? km.get(it.id) : [], it.data);
+      if (mg.changed) r.kv.push([it.id, mg.arr]);
+    }
+  });
+  return r;
+}
+function cloudWoPull() {
+  if (!CLOUD_WO_ON) return Promise.resolve(null);
+  return cloudGetJson({ action: "wo" }).then(d => {
+    if (!d || d.ok !== true || !Array.isArray(d.items)) return null;
+    return Promise.all([dbReadAll(openWoDb, "orders").catch(() => []), dbReadAll(openWoDb, "kv", true).catch(() => [])]).then(([orders, kv]) => {
+      const ui = window.KPWO_UI, plan = cloudWoPlan(d.items, orders, kv, { deleted: cloudWoDeleted(), openId: ui && ui.openId ? ui.openId() : null });
+      const k = plan.orders.length + plan.kv.length; if (!k) return plan;
+      const w = [];
+      if (plan.orders.length) w.push(dbWrite(openWoDb, "orders", os => plan.orders.forEach(o => os.put(o))));
+      if (plan.kv.length) w.push(dbWrite(openWoDb, "kv", os => plan.kv.forEach(e => os.put(e[1], e[0]))));
+      return Promise.all(w).then(() => {
+        if (ui && ui.reload) ui.reload();
+        if (plan.orders.length) cloudNote("Synced " + plan.orders.length + " work order" + (plan.orders.length === 1 ? "" : "s") + " from cloud");
+        return plan;
+      });
+    });
+  }).catch(() => null);
+}
+function cloudWoWire() {
+  if (!CLOUD_WO_ON) return;
+  window.addEventListener("kpwo-saved", e => { const x = e.detail || {}; const d = cloudWoDeleted(); if (d[x.kind + ":" + x.id] !== undefined) { delete d[x.kind + ":" + x.id]; lsJsonSet(CLOUD_WO_DEL_KEY, d); } cloudWoQueueAdd(x.kind, x.id); cloudWoFlush(); });
+  window.addEventListener("kpwo-kv", e => { const k = (e.detail || {}).key; if (!cloudWoSynced("kv", k)) return; const d = cloudWoDeleted(); if (d["kv:" + k] !== undefined) { delete d["kv:" + k]; lsJsonSet(CLOUD_WO_DEL_KEY, d); } cloudWoQueueAdd("kv", k); cloudWoFlush(); });
+  window.addEventListener("kpwo-deleted", e => { const x = e.detail || {}; if (!x.id) return; const d = cloudWoDeleted(); d[x.kind + ":" + x.id] = new Date().toISOString(); lsJsonSet(CLOUD_WO_DEL_KEY, d);
+    lsJsonSet(CLOUD_WO_QUEUE_KEY, cloudWoQueue().filter(q => !(q.kind === x.kind && q.id === x.id))); });
+}
+// ---- one-time catch-ups (per copy, once v3 is there) ----
+function cloudCatchUpExtras() {
+  const w = [];
+  if (!lsGet(CLOUD_PH_ALL_KEY)) w.push(dbReadAll(openDb, STORE).then(jobs => { (jobs || []).forEach(cloudPhQueueJob); lsSet(CLOUD_PH_ALL_KEY, new Date().toISOString()); }).catch(() => {}));
+  if (CLOUD_WO_ON && !lsGet(CLOUD_WO_ALL_KEY)) w.push(Promise.all([dbReadAll(openWoDb, "orders").catch(() => []), dbReadAll(openWoDb, "kv", true).catch(() => [])]).then(([orders, kv]) => {
+    (orders || []).forEach(o => { if (o && o.id) cloudWoQueueAdd("order", o.id); });
+    (kv || []).forEach(e => { if (cloudWoSynced("kv", e.key)) cloudWoQueueAdd("kv", e.key); });
+    lsSet(CLOUD_WO_ALL_KEY, new Date().toISOString());
+  }));
+  return Promise.all(w);
+}
+function cloudExtrasPush() { return cloudCheckV3().then(v3 => v3 ? cloudPhFlush().then(() => cloudWoFlush()) : null).catch(() => null); }
+function cloudExtrasSync() {
+  if (!cloudOn()) return Promise.resolve(null);
+  if (CLOUD_X_BUSY) return CLOUD_X_BUSY;
+  CLOUD_X_BUSY = cloudCheckV3().then(v3 => {
+    if (!v3) return null;
+    return cloudCatchUpExtras().then(() => cloudPhFlush()).then(() => cloudWoFlush()).then(() => cloudWoPull()).then(() => cloudPhPull()).then(() => true);
+  }).catch(() => null).then(r => { CLOUD_X_BUSY = null; return r; });
+  return CLOUD_X_BUSY;
+}
 function cloudSync(opts) {
   opts = opts || {};
   if (!cloudOn()) return Promise.resolve(null);
@@ -5555,6 +5767,7 @@ function cloudSync(opts) {
         });
       });
     }).catch(() => null) // offline / script error: silent, try again next time
+    .then(r => cloudExtrasSync().catch(() => null).then(() => r)) // 30c: photos + work orders (script v3 only)
     .then(r => { CLOUD_SYNC_BUSY = null; return r; });
   return CLOUD_SYNC_BUSY;
 }
@@ -5566,6 +5779,7 @@ function wireCloud() {
   if (cloudOn() && cloudQueue().length) cloudFlush(); // app open: retry anything left from last time
   if (!CLOUD_SYNC_WIRED) { // 30b: pull on open + when the app comes back on screen (throttled inside cloudSync)
     CLOUD_SYNC_WIRED = true;
+    cloudWoWire(); // 30c
     const back = () => { if (!document.hidden) cloudSync(); };
     document.addEventListener("visibilitychange", back);
     window.addEventListener("focus", back);
