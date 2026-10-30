@@ -1679,9 +1679,9 @@ const WALL_SECS = ["Wall — 2x4 exterior (R-13)", "Wall — 2x6 exterior (R-19)
 const INT_SECS = ["Wall — Interior", "Interior walls"];
 const FG_RULES = [
   // —— blown ——
-  { id: "blow_fg_plain", label: "Blown fiberglass (plain price line)", key: "Blown fiberglass", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, uomBlank: true /* 30l: Knauf has no unit in FG inventory — UnitOfMeasure left blank */, conf: "sure", note: "30e: Asher 10/30 — Knauf Jet Stream." },
-  ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r, label: "Blown fiberglass R-" + r + " (new)", key: "Blown fiberglass R-" + r, sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, uomBlank: true /* 30l: Knauf has no unit in FG inventory — UnitOfMeasure left blank */, rv: "key", conf: "sure", note: "RValue column carries R" + r + ". Alt: Owens Corning ProPink L77." })),
-  ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r + "_retro", label: "Blown fiberglass R-" + r + " (retro / Add Attic Blow)", key: "Blown fiberglass R-" + r + " (retro)", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, uomBlank: true /* 30l: Knauf has no unit in FG inventory — UnitOfMeasure left blank */, rv: "key", conf: "sure", note: "Same item as new; FG showed 'R38 Retro Blow: Knauf Jet Stream…' so retro is set by the estimate, not the item." })),
+  { id: "blow_fg_plain", label: "Blown fiberglass (plain price line)", key: "Blown fiberglass", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, uom: "Ea." /* 30m: blank unit failed import; try Ea. (qty stays SF) */, conf: "sure", note: "30e: Asher 10/30 — Knauf Jet Stream." },
+  ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r, label: "Blown fiberglass R-" + r + " (new)", key: "Blown fiberglass R-" + r, sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, uom: "Ea." /* 30m: blank unit failed import; try Ea. (qty stays SF) */, rv: "key", conf: "sure", note: "RValue column carries R" + r + ". Alt: Owens Corning ProPink L77." })),
+  ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r + "_retro", label: "Blown fiberglass R-" + r + " (retro / Add Attic Blow)", key: "Blown fiberglass R-" + r + " (retro)", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, uom: "Ea." /* 30m: blank unit failed import; try Ea. (qty stays SF) */, rv: "key", conf: "sure", note: "Same item as new; FG showed 'R38 Retro Blow: Knauf Jet Stream…' so retro is set by the estimate, not the item." })),
   ...["30", "38"].map(r => ({ id: "blow_cel_r" + r, label: "Blown cellulose R" + r, key: "Blown cellulose R" + r, sec: "*", items: ["Blown Cellulose Insulation for Open Attics" + OC], rv: "key", conf: "sure", note: "Alt: GreenFiber Cellulose." })),
   // —— batts: walls ——
   // 30i: Asher (887 Bluejay Way): exterior 2x4 R13 never R13/16 (8'/9' precut, else 9'); R19 walls always R19/15 (16 OC) or R19/24 (24 OC), no heights
@@ -4931,7 +4931,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-30l";
+const APP_BUILD = "2026-10-30m";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
