@@ -609,6 +609,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <button type="button" class="btn btn-secondary" id="btnRestore">Restore from backup</button>
       </div>
       <input type="file" id="restoreFile" accept=".json,application/json" class="hidden">
+      <div class="hidden" id="cloudBox" style="margin-top:10px">
+        <p class="cap" id="cloudStatus" style="margin:0 0 6px"></p>
+        <button type="button" class="btn btn-secondary btn-block" id="btnCloudRestore">Restore from cloud</button>
+      </div>
       <p class="status" id="backupStatus"></p>
     </div>
     <div class="section">
@@ -4496,7 +4500,8 @@ function savePermanent() {
     draft: draftPayload()
   };
   const prev = (S._fullJobs || []).find(j => j.id === S.jobId), prevPh = ((prev && prev.draft && prev.draft.photos) || []).map(x => x && x.id).filter(Boolean);
-  idbPut(snap).then(() => { setStatus("Saved permanently to Library."); refreshArchive(); if (prevPh.length) photoForget(prevPh, S.jobId); })
+  const totalSf = round2(allLines().filter(L => L.unit === "SF").reduce((a, L) => a + (n(L.footage) || 0), 0)); // 29bb: cloud backup summary column
+  idbPut(snap).then(() => { setStatus("Saved permanently to Library."); refreshArchive(); if (prevPh.length) photoForget(prevPh, S.jobId); cloudQueueJob(snap, totalSf); })
     .catch(() => { S.idbOk = false; setStatus("Library save failed (IndexedDB blocked). Draft still autosaved."); });
 }
 
@@ -4902,7 +4907,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-29ba";
+const APP_BUILD = "2026-10-29bb";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
@@ -5358,11 +5363,114 @@ function renderBackupInfo() {
   box.innerHTML = html;
   box.classList.remove("hidden");
 }
+/* ---------- 29bb: automatic cloud backup (a Google Apps Script web app the owner deploys; see kp-backup-Code.gs) ----------
+   BACKUP_URL empty = feature OFF: no network calls, no cloud UI (safe to ship before the script is deployed).
+   Every successful Save to Library queues that job (latest version per job) in localStorage under a copy-prefixed key and
+   sends it. Failed / offline sends stay queued and retry on the next save, on app open, and on the browser "online" event.
+   The POST body is JSON sent as text/plain (a CORS "simple" request, so no preflight; Apps Script answers through a
+   redirect that fetch follows). Photos are not sent (too big) — the file backup above still carries them. */
+let BACKUP_URL = "https://script.google.com/macros/s/AKfycbzvc7ST1UVtsglLBf_QoClsxBl0GBaEQT3KWk1KeaOKxxAnprrB35y4fv3n6j4719hCCQ/exec"; // the owner's Apps Script Web app (deployed Oct 30 2026); "" turns cloud backup off
+let BACKUP_TOKEN = "JNZjDp7OziL3cisRjGA_KXCivfMT1_WZ"; // shared secret, must match TOKEN in kp-backup-Code.gs
+const CLOUD_COPY = APP_EDITION === "asher" ? "kp" : APP_EDITION; // kp / lance / choice / sky — folder + column in the sheet
+const CLOUD_QUEUE_KEY = CLOUD_COPY + "-cloud-queue-v1", CLOUD_LAST_KEY = CLOUD_COPY + "-cloud-last-v1";
+let cloudFetch = (u, o) => fetch(u, o); // swapped in tests
+let CLOUD_BUSY = null, CLOUD_ERR = "";
+function cloudOn() { return !!String(BACKUP_URL || "").trim(); }
+function cloudQueue() { try { const q = JSON.parse(lsGet(CLOUD_QUEUE_KEY) || "[]"); return Array.isArray(q) ? q : []; } catch (e) { return []; } }
+function cloudSetQueue(q) {
+  // if the phone's storage is full, drop the oldest queued entries until it fits (those jobs are still safe in the Library)
+  for (;;) {
+    try { if (q.length) localStorage.setItem(CLOUD_QUEUE_KEY, JSON.stringify(q)); else localStorage.removeItem(CLOUD_QUEUE_KEY); return q; }
+    catch (e) { if (q.length <= 1) return q; q = q.slice(1); }
+  }
+}
+function cloudPayload(job, totalSf) {
+  return { copy: CLOUD_COPY, rep: ownerName(job.owner), build: APP_BUILD, savedAt: job.savedAt || "", jobId: job.id,
+    jobName: [job.builder, job.address].filter(Boolean).join(" — ") || String(job.id), address: [job.address, job.city].filter(Boolean).join(", "),
+    package: job.packageLabel || "", totalSf: totalSf == null ? "" : totalSf, job: job };
+}
+function cloudQueueJob(job, totalSf) {
+  if (!cloudOn() || !job || job.id == null) return Promise.resolve(null);
+  const q = cloudQueue().filter(p => p && p.jobId !== job.id); // one entry per job: the newest save replaces an unsent older one
+  q.push(cloudPayload(job, totalSf)); cloudSetQueue(q); cloudRender();
+  return cloudFlush();
+}
+function cloudFlush() {
+  if (!cloudOn()) return Promise.resolve(null);
+  if (CLOUD_BUSY) return CLOUD_BUSY; // the running pass re-reads the queue each step, so anything just added goes too
+  const step = () => {
+    const q = cloudQueue(); if (!q.length) return Promise.resolve(true);
+    if (navigator.onLine === false) { CLOUD_ERR = "offline"; return Promise.resolve(false); }
+    const p = q[0];
+    return cloudFetch(BACKUP_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, redirect: "follow",
+        body: JSON.stringify(Object.assign({ token: BACKUP_TOKEN }, p)) })
+      .then(r => r.text().then(t => { let d = null; try { d = JSON.parse(t); } catch (e) {} if (!r.ok || !d || d.ok !== true) throw new Error((d && d.error) || ("HTTP " + r.status)); }))
+      .then(() => {
+        cloudSetQueue(cloudQueue().filter(x => !(x && x.jobId === p.jobId && x.savedAt === p.savedAt))); // a newer save of the same job stays queued
+        lsSet(CLOUD_LAST_KEY, new Date().toISOString()); CLOUD_ERR = ""; return step();
+      }, e => { CLOUD_ERR = (e && e.message) || "network error"; return false; });
+  };
+  cloudRender("sending");
+  CLOUD_BUSY = step().then(v => { CLOUD_BUSY = null; cloudRender(); return v; });
+  return CLOUD_BUSY;
+}
+function cloudRender(state) {
+  const box = $("cloudBox"), el = $("cloudStatus"); if (!box || !el) return;
+  if (!cloudOn()) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  const q = cloudQueue().length, last = lsGet(CLOUD_LAST_KEY), d = last ? new Date(last) : null;
+  const when = d ? (d.toDateString() === new Date().toDateString() ? "" : d.toLocaleDateString([], { month: "short", day: "numeric" }) + ", ") + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+  el.textContent = state === "sending" ? "Cloud backup: sending…" :
+    q ? "Backup pending (" + q + ")" + (CLOUD_ERR === "offline" ? " — will send when back online" : CLOUD_ERR ? " — will retry on next save or app open" : "") :
+    d ? "Backed up ✓ " + when : "Cloud backup on — every Save to Library backs up automatically.";
+}
+// merge rule (same as the file restore): add jobs this phone doesn't have, update only when the cloud copy was saved later; never delete
+function cloudMergePlan(local, remote) {
+  const m = new Map((local || []).map(j => [j.id, j])), r = { puts: [], added: 0, replaced: 0, kept: 0 };
+  (remote || []).forEach(j => {
+    if (!j || j.id == null) return;
+    const cur = m.get(j.id);
+    if (!cur) { r.puts.push(j); r.added++; } else if (jobStamp(j) > jobStamp(cur)) { r.puts.push(j); r.replaced++; } else r.kept++;
+  });
+  return r;
+}
+function cloudRestore(opts) {
+  opts = opts || {};
+  const ask = opts.confirm || (m => window.confirm(m));
+  if (!cloudOn()) return Promise.resolve(null);
+  const bad = "The cloud backup didn't send back a job list.";
+  const u = BACKUP_URL + (BACKUP_URL.indexOf("?") >= 0 ? "&" : "?") + "token=" + encodeURIComponent(BACKUP_TOKEN) + "&copy=" + encodeURIComponent(CLOUD_COPY);
+  return cloudFetch(u, { method: "GET", redirect: "follow" }).then(r => r.text()).then(t => {
+    let d = null; try { d = JSON.parse(t); } catch (e) { throw new Error(bad); }
+    if (!d || d.ok !== true || !Array.isArray(d.jobs)) throw new Error((d && d.error) || bad);
+    return dbReadAll(openDb, STORE).catch(() => []).then(local => {
+      const plan = cloudMergePlan(local, d.jobs);
+      if (!ask("Cloud backup has " + d.jobs.length + " takeoff" + (d.jobs.length === 1 ? "" : "s") + " for this app:\n• " + plan.added + " not on this phone (will be added)\n• " +
+        plan.replaced + " saved later in the cloud (will be updated)\n• " + plan.kept + " already up to date or newer here (left alone)\n\nMerge into this phone's Library? Nothing here gets deleted, and newer jobs on this phone are never overwritten.")) return null;
+      return (plan.puts.length ? dbWrite(openDb, STORE, os => plan.puts.forEach(j => os.put(j))) : Promise.resolve()).then(() => plan);
+    });
+  });
+}
+function runCloudRestore() {
+  backupStatus("Checking the cloud backup…");
+  return cloudRestore().then(p => {
+    if (!p) { backupStatus("Cloud restore cancelled — nothing changed."); return; }
+    backupStatus("Restored from cloud: " + p.added + " new takeoffs, " + p.replaced + " updated, " + p.kept + " already up to date.");
+    refreshArchive();
+  }).catch(e => backupStatus("Cloud restore failed: " + (e && e.message || e) + " Nothing was changed."));
+}
+function wireCloud() {
+  const b = $("btnCloudRestore"); if (b) b.onclick = runCloudRestore;
+  window.addEventListener("online", () => { CLOUD_ERR = ""; cloudFlush(); });
+  cloudRender();
+  if (cloudOn() && cloudQueue().length) cloudFlush(); // app open: retry anything left from last time
+}
 function wireBackup() {
   const b = $("btnBackup"), r = $("btnRestore"), f = $("restoreFile");
   if (b) b.onclick = runBackup;
   if (r && f) { r.onclick = () => { f.value = ""; f.click(); }; f.onchange = () => runRestore(f.files && f.files[0]); }
   renderBackupInfo();
+  wireCloud();
 }
 
 // 29ax: locked copy — strip the whose-job buttons and the archive owner filter; owner stays HOME_OWNER
