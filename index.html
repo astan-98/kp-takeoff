@@ -534,7 +534,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <h2>Air sealing</h2>
       <p class="cap">Air sealing = caulk &amp; foam package (base plate / openings / penetrations). One line item.</p>
       <div class="toggle-row"><span>Air seal?</span><button type="button" class="switch" id="airSealed"></button></div>
-      <div class="field hidden" id="airSealAddonField"><label>Air seal add-on $ (air seal labor runs over the $300 — added to it)</label><input id="airSealAddon" type="number" inputmode="decimal" placeholder="0"></div>
+      <!-- 30s: Asher — air seal add-on $ removed; air seal = $0.15 / flat SF -->
     </div>
 
     <div class="section" id="sec-extra">
@@ -874,7 +874,7 @@ const DEFAULT_PRICE_KEYS = [
   { materialKey: "Netting", unit: "SF", price: "0.26" },
   { materialKey: "Cardboard baffles", unit: "Ea", price: "1.25" },
   { materialKey: "Poly vent", unit: "Ea", price: "1.19" },
-  { materialKey: "Air seal", unit: "Ea", price: "300" },
+  { materialKey: "Air seal", unit: "SF", price: "0.15" }, // 30s: FG SF pricing, qty = flat footprint (was $300 / house)
 ];
 
 const FP_CATALOG = [
@@ -1499,6 +1499,7 @@ function mergePriceLibrary(stored) {
   const map = new Map();
   DEFAULT_PRICE_KEYS.forEach(d => map.set(d.materialKey, { materialKey: d.materialKey, unitPrice40: d.price || "", unit: d.unit }));
   (stored || []).forEach(s => {
+    if (s && s.materialKey === "Air seal" && (String(s.unit || "").toLowerCase() === "ea" || String(s.unitPrice40).trim() === "300")) s = Object.assign({}, s, { unitPrice40: "0.15", unit: "SF" }); // 30s: old $300/house -> $0.15/SF
     const v = String(s.unitPrice40 == null ? "" : s.unitPrice40).trim();
     const cur = map.get(s.materialKey);
     if (v === "" && cur) return; // blank saved price → keep the built-in default
@@ -1806,7 +1807,7 @@ const FG_RULES = [
   { id: "housewrap", label: "House wrap (knee / gable / porch gable-off)", key: "House wrap", sec: "*", items: ["House Wrap"], conf: "sure", note: "" },
   { id: "baffles", label: "Cardboard baffles", key: "Cardboard baffles", sec: "*", items: ['Baffles - {W}"'], uom: "Ea." /* 30l: FG inventory unit is Ea. (Pieces was rejected) */, conf: "sure", note: "Follows the baffle width picker (16\" or 24\", default 24\")." },
   { id: "polyvent", label: "Poly vents (closed vault)", key: "Poly vent", sec: "*", items: ['{W}" Poly-Vent'], uom: "Pieces", conf: "sure", note: "Follows the vault's batt width: 16\"/24\" Poly-Vent; 19\" → none, flagged." },
-  { id: "airseal", label: "Air seal (caulk & foam)", key: "Air seal", sec: "*", items: ["Standard Caulk & Foam Air Package"], uom: "Ea.", conf: "sure", note: "Alt: Right Choice / Premium / Energy Star package, Attic Air Seal Kit." },
+  { id: "airseal", label: "Air seal (caulk & foam)", key: "Air seal", sec: "*", items: ["Standard Caulk & Foam Air Package"], uom: "SqFt" /* 30s: qty = flat SF, UnitPrice 0.15 */, conf: "sure", note: "Alt: Right Choice / Premium / Energy Star package, Attic Air Seal Kit." },
   { id: "airseal_add", label: "Air seal add-on $", key: "Air seal add-on", sec: "*", items: ["Standard Caulk & Foam Labor"], uom: "Ea.", conf: "sure", note: "Fixed $ → UnitPrice always filled." },
   { id: "extralabor", label: "Extra labor $", key: "Extra labor", sec: "*", items: ["Labor"], uom: "Ea.", conf: "sure", note: "Fixed $ → UnitPrice always filled." },
 ];
@@ -1916,6 +1917,7 @@ function fgBuildRows(foamChoice) {
     if (r.flag) flags.add(r.flag);
     let price = "";
     if (L.dollars != null) price = round2(n(L.dollars));
+    else if (L.assembly === "Air seal (caulk & foam)") { const u = priceMap.get("Air seal"); price = u > 0 ? u : 0.15; } // 30s: always send $/SF so FG never falls back to its $0 inventory price
     else if (fgPricesOn()) { const pk = priceKeyFor(L); let u = priceMap.get(pk); if (u === undefined) u = priceMap.get(roofFoamBaseKey(pk)); if (u > 0) price = Math.round(u * (L.fixed ? 1 : scale) * 10000) / 10000; }
     const qty = n(L.footage);
     rows.push(fgc.matchOnly ? [company, "", "", "", "", "", "", "", ""] : [company, first, last, (S.custEmail || "").trim(), (S.custPhone || "").trim(), bill[0], bill[1], bill[2], bill[3],
@@ -2405,12 +2407,12 @@ function buildLinesForPackage(p, tag) {
     S.foamRoofs.forEach(r => {
       const f = n(r.flatSf); if (f <= 0) return;
       usedExplicit = true;
-      const factor = resolvePitchFactor(r.pitch, r.customRise);
-      push(lines, { area: "Roofline", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthFor(r.depth) + '" OC', footage: round2(f * factor), unit: "SF", notes: noteTag + "flat×" + factor.toFixed(3) });
+      // 30s: Asher — roofline foam qty = FLAT footprint, never pitched
+      push(lines, { area: "Roofline", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthFor(r.depth) + '" OC', footage: round2(f), unit: "SF", notes: noteTag + "Flat SF (no pitch)" });
       applyFoamType(lines[lines.length - 1], r, "roof");
     });
     if (!usedExplicit && flat > 0 && (!customAttic || PR.onlyAttic)) {
-      push(lines, { area: "Roofline", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthJob() + '" OC', footage: round2(flat * housePitchFactor), unit: "SF", notes: noteTag + "flat×" + housePitchFactor.toFixed(3) });
+      push(lines, { area: "Roofline", assembly: "Roof foam", product: "Open-cell spray foam", description: roofDepthJob() + '" OC', footage: round2(flat), unit: "SF", notes: noteTag + "Flat SF (no pitch)" });
       applyFoamType(lines[lines.length - 1], { ccDepth: S.houseRoofCc }, "roof");
     }
   }
@@ -2419,7 +2421,7 @@ function buildLinesForPackage(p, tag) {
     const pf = n(S.porchFlat);
     if (S.includePorchRoof && pf > 0) {
       const factor = resolvePitchFactor(S.porchRoofPitch, S.porchRoofCustomRise);
-      push(lines, { area: "Porch roofline", assembly: "Porch roof foam", product: "Open-cell spray foam", description: roofDepthFor(S.porchRoofDepth) + '" OC', footage: round2(pf * factor), unit: "SF", notes: noteTag + "flat " + fmt(pf) + " ×" + factor.toFixed(3) });
+      push(lines, { area: "Porch roofline", assembly: "Porch roof foam", product: "Open-cell spray foam", description: roofDepthFor(S.porchRoofDepth) + '" OC', footage: round2(pf), unit: "SF", notes: noteTag + "Flat SF (no pitch)" });
       applyFoamType(lines[lines.length - 1], { foamType: S.porchRoofFoam, ccDepth: S.porchRoofCc }, "porch roof");
     }
     if (S.includePorchCeiling) {
@@ -2563,7 +2565,7 @@ function buildLinesForPackage(p, tag) {
   if (S.hasGarage && F.canAskGarage) {
     if (S.garageFoamRoof && F.showFoamRoofPath && n(S.garageRoofFlat) > 0) {
       const factor = resolvePitchFactor(S.garageRoofPitch, S.garageRoofCustomRise);
-      push(lines, { area: "Garage roofline", assembly: "Garage roof foam", product: "Open-cell spray foam", description: roofDepthFor(S.garageRoofDepth) + '" OC', footage: round2(n(S.garageRoofFlat) * factor), unit: "SF", notes: noteTag });
+      push(lines, { area: "Garage roofline", assembly: "Garage roof foam", product: "Open-cell spray foam", description: roofDepthFor(S.garageRoofDepth) + '" OC', footage: round2(n(S.garageRoofFlat)), unit: "SF", notes: noteTag + "Flat SF (no pitch)" });
       applyFoamType(lines[lines.length - 1], { foamType: S.garageRoofFoam, ccDepth: S.garageRoofCc }, "garage roof");
     }
     [{ sf: S.garageCeilingSf, mat: S.garageCeilMat, oc: S.garageCeilOc, foamType: S.garageCeilFoam, ccDepth: S.garageCeilCc }].concat(Array.isArray(S.garageCeils) ? S.garageCeils : []).forEach(g => {
@@ -2595,8 +2597,8 @@ function buildLinesForPackage(p, tag) {
   }
 
   if (S.airSealed) {
-    push(lines, { area: site, assembly: "Air seal (caulk & foam)", product: "Air seal", description: "Caulk & Foam Air Penetrations", footage: 1, unit: "ea", fixed: true, notes: noteTag });
-    if (n(S.airSealAddon) > 0) push(lines, { area: site, assembly: "Air seal add-on", product: "Air seal add-on", description: "Above-average house +$" + fmt(round2(n(S.airSealAddon))), footage: 1, unit: "ea", dollars: round2(n(S.airSealAddon)), notes: noteTag + "Fixed $ (not margin-scaled)" });
+    // 30s: Asher — air seal = flat footprint SF × $0.15 (FieldGroove SF pricing). Flat only, never pitched. No add-on $.
+    push(lines, { area: site, assembly: "Air seal (caulk & foam)", product: "Air seal", description: "Caulk & Foam Air Penetrations", footage: round2(flat), unit: "SF", fixed: true, notes: noteTag + "Flat footprint SF (no pitch)" });
   }
   if (n(S.extraLabor) > 0) push(lines, { area: site, assembly: "Extra labor", product: "Extra labor", description: "$" + fmt(round2(n(S.extraLabor))) + ((S.extraLaborNote || "").trim() ? " — " + S.extraLaborNote.trim() : ""), footage: 1, unit: "ea", dollars: round2(n(S.extraLabor)), notes: noteTag + "Fixed $ (not margin-scaled)" });
 
@@ -3366,7 +3368,7 @@ function renderAssemblyEditors() {
     const out = el("p", "cap");
     const showPorch = () => {
       const pf = n(S.porchFlat), fac = resolvePitchFactor(S.porchRoofPitch, S.porchRoofCustomRise);
-      out.textContent = (S.includePorchRoof ? "Roofline " + fmt(round2(pf * fac)) + " SF (flat × " + fac.toFixed(3) + ")" : "No roofline") +
+      out.textContent = (S.includePorchRoof ? "Roofline " + fmt(round2(pf)) + " SF (flat, no pitch)" : "No roofline") +
         " · " + (S.includePorchCeiling ? "Ceiling " + fmt(round2(pf)) + " SF" : "No ceiling");
     };
     card.appendChild(fieldInput("Porch flat SF", S.porchFlat, v => { S.porchFlat = v; showPorch(); schedule(); }, "number"));
@@ -4285,7 +4287,7 @@ function renderLiveOnly() {
   const da = (!F.canAskDeadVaultKnees || !S.hasDeadAir) ? 0 : S.deadAir.reduce((s, r) => s + n(r.sf), 0);
   const vf = (!F.canAskDeadVaultKnees || !S.hasVaults) ? 0 : S.vaults.reduce((s, r) => s + n(r.flatSf), 0);
   const atticBlow = Math.max(0, flat - da - vf);
-  const foam = flat * resolvePitchFactor(S.housePitch, S.houseCustomRise);
+  const foam = flat; // 30s: roofline foam = flat footprint (no pitch)
   $("atticBlowLive").textContent = fmt(atticBlow) + " SF";
   if ($("atticBlowLiveLabel")) $("atticBlowLiveLabel").textContent = totalBatOn(optionsOn() ? optionPkgs()[S.optionView | 0] : S.pkg) ? "Total Batt R38 dead air SF (no blow)" : "Attic blow SF";
   $("foamRoofLive").textContent = fmt(foam) + " SF";
@@ -4400,8 +4402,6 @@ function render() {
   toggleField("houseCustomRiseField", S.housePitch === "custom");
 
   setSwitch($("airSealed"), S.airSealed);
-  toggleField("airSealAddonField", !!S.airSealed);
-  if (document.activeElement !== $("airSealAddon")) $("airSealAddon").value = S.airSealAddon || "";
   if (document.activeElement !== $("extraLabor")) $("extraLabor").value = S.extraLabor || "";
   if (document.activeElement !== $("extraLaborNote")) $("extraLaborNote").value = S.extraLaborNote || "";
 
@@ -4796,7 +4796,7 @@ function wireInputs() {
     siteState: "siteState", siteZip: "siteZip", siteCounty: "siteCounty", subdivision: "subdivision", custFirst: "custFirst", custLast: "custLast",
     custCompany: "custCompany", custPhone: "custPhone", custEmail: "custEmail", billAddress: "billAddress", billCity: "billCity",
     billState: "billState", billZip: "billZip", woRep: "woRep", woDate: "woDate", woNotes: "woNotes",
-    airSealAddon: "airSealAddon", extraLabor: "extraLabor", extraLaborNote: "extraLaborNote",
+    extraLabor: "extraLabor", extraLaborNote: "extraLaborNote",
     filterText: "filterText", filterBuilder: "filterBuilder", filterCity: "filterCity",
     filterOwner: "filterOwner", filterPkg: "filterPkg", filterFrom: "filterFrom", filterTo: "filterTo"
   };
@@ -5022,7 +5022,7 @@ function trainSteps() {
         "<p>On new construction foam roofline jobs (not Total foam), you can turn on <b>Foam band/rim joist (instead of R19 batts)</b>.</p>" +
         trainDemo('<div class="row-title">Rim #1 · ×1.2 → 180</div>' + fld("LF", '<input tabindex="-1" value="150">')) },
     { sec: "Measure · Air sealing / extra labor", title: "Air sealing and extra labor",
-      html: ul(["<b>Air seal?</b> adds the air sealing package (caulk & foam at the base plate, openings and penetrations) as one line. When it's on, <b>Air seal add-on $</b> is for air seal labor that runs over the package.",
+      html: ul(["<b>Air seal?</b> adds the air sealing package (caulk & foam at the base plate, openings and penetrations) as one line, priced per square foot of the flat footprint (Pricing tab).",
         "<b>Extra labor $</b> (with an optional note) is a job-wide labor add — a fixed amount, on every option when you compare."]) +
         trainDemo(trainSwitch("Air seal?", true)) },
     { sec: "Measure · Miscellaneous", title: "Miscellaneous",
@@ -5097,7 +5097,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-30r";
+const APP_BUILD = "2026-10-30s";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
