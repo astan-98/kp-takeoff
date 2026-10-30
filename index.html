@@ -3489,7 +3489,7 @@ function renderAssemblyEditors() {
     if (S.metalIrregular) num(card, "Flat footprint SF (enter manually)", "metalFlatManual"); else prop(card, "Flat footprint (L × W)", fmt(round2(D.flat)) + " SF");
     card.appendChild(fieldSelect("Pitch factor", S.metalRoofPitch, PITCH_OPTIONS.map(o => [o.value, o.label]), v => { S.metalRoofPitch = v; render(); }));
     if (S.metalRoofPitch === "custom") num(card, "Custom rise (over 12)", "metalRoofCustomRise");
-    if (S.hasMetalRoof) { prop(card, "Roofline SF (flat × pitch)", fmt(round2(D.roof)) + " SF"); mat(card, "roof", "Roofline", [["r19", "R19"], ["r30", "R30"], ["r38", "R38"]]); }
+    if (S.hasMetalRoof) { card.appendChild(el("div", "row-title", "Roofline")); prop(card, "Roofline SF (flat × pitch)", fmt(round2(D.roof)) + " SF"); mat(card, "roof", "Roofline", [["r19", "R19"], ["r30", "R30"], ["r38", "R38"]]); }
     else prop(card, "Pitched SF (flat × pitch)", fmt(round2(D.roof)) + " SF");
     if (["roof", "gable", "wall"].some(k => S["hasMetal" + (k === "roof" ? "Roof" : k === "gable" ? "Gables" : "Walls")] && metalAreaUsesFoam(k))) { // 30z: one foam type for the building
       const cur = ["oc", "cc", "both"].includes(S.metalFoam) ? S.metalFoam : "oc";
@@ -3672,7 +3672,7 @@ function renderAssemblyEditors() {
     box.appendChild(b);
   });
 }
-const BUBBLE_TITLES = { 1.1: "Building size", 1.2: "Flat footprint + roofline", 1.3: "Gables", 1.4: "Walls", 2: "Spray foam type", 5: "Attic", 10: "Roofline", 12: "Dead air", 13: "Vaults", 14: "Knee walls", 20: "Garage roofline", 30: "Garage ceiling", 31: "Metal building",
+const BUBBLE_TITLES = { 1.1: "Building size", 1.2: "Flat footprint", 1.3: "Gables", 1.4: "Walls", 2: "Spray foam type", 5: "Attic", 10: "Roofline", 12: "Dead air", 13: "Vaults", 14: "Knee walls", 20: "Garage roofline", 30: "Garage ceiling", 31: "Metal building",
   32: "Porch", 35: "Cantilevers", 40: "Gables", 50: "Baffles", 60: "Walls", 62: "Interior walls", 64: "Between floors", 66: "Dense-pack floors",
   80: "Daylight walls", 81: "Concrete walls", 82: "UFBC (unfinished basement ceiling)", 83: "Separation walls", 84: "Crawl – new batts", 85: "Crawl touch-up", 86: "Crawl space", 87: "Crawl walls", 95: "Miscellaneous", 99: "Bands / rim" };
 
@@ -4924,7 +4924,7 @@ function newJob() {
 
 // ---------- 30r: Sky's address auto-fill — Google Places API (New): Autocomplete + Place Details (Essentials) ----------
 // Key is injected at build time (KP_PLACES_KEY), referrer-locked to https://astan-98.github.io/*. Blank key / offline = plain typing.
-let PLACES_KEY = "";
+let PLACES_KEY = "AIzaSyAkX9ZWhityvhiVDHIDAZED6uMDgGhKPrg";
 const PLACES_BIAS = { circle: { center: { latitude: 34.05, longitude: -83.55 }, radius: 50000 } }; // NE Georgia (Winder–Athens–Jefferson); bias only, not a limit
 let placesSess = "", placesTimer = 0, placesSeq = 0;
 function placesOn() { return !!PLACES_KEY && typeof fetch === "function" && navigator.onLine !== false; }
@@ -5335,7 +5335,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30z";
+const APP_BUILD = "2026-10-30aa";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
