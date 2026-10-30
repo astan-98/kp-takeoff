@@ -1681,9 +1681,9 @@ const WALL_SECS = ["Wall — 2x4 exterior (R-13)", "Wall — 2x6 exterior (R-19)
 const INT_SECS = ["Wall — Interior", "Interior walls"];
 const FG_RULES = [
   // —— blown ——
-  { id: "blow_fg_plain", label: "Blown fiberglass (plain price line)", key: "Blown fiberglass", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, conf: "sure", note: "30e: Asher 10/30 — Knauf Jet Stream." },
-  ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r, label: "Blown fiberglass R-" + r + " (new)", key: "Blown fiberglass R-" + r, sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, rv: "key", conf: "sure", note: "RValue column carries R" + r + ". Alt: Owens Corning ProPink L77." })),
-  ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r + "_retro", label: "Blown fiberglass R-" + r + " (retro / Add Attic Blow)", key: "Blown fiberglass R-" + r + " (retro)", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, rv: "key", conf: "sure", note: "Same item as new; FG showed 'R38 Retro Blow: Knauf Jet Stream…' so retro is set by the estimate, not the item." })),
+  { id: "blow_fg_plain", label: "Blown fiberglass (plain price line)", key: "Blown fiberglass", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, uomBlank: true /* 30l: Knauf has no unit in FG inventory — UnitOfMeasure left blank */, conf: "sure", note: "30e: Asher 10/30 — Knauf Jet Stream." },
+  ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r, label: "Blown fiberglass R-" + r + " (new)", key: "Blown fiberglass R-" + r, sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, uomBlank: true /* 30l: Knauf has no unit in FG inventory — UnitOfMeasure left blank */, rv: "key", conf: "sure", note: "RValue column carries R" + r + ". Alt: Owens Corning ProPink L77." })),
+  ...["19", "30", "38", "49"].map(r => ({ id: "blow_fg_r" + r + "_retro", label: "Blown fiberglass R-" + r + " (retro / Add Attic Blow)", key: "Blown fiberglass R-" + r + " (retro)", sec: "*", items: ["Knauf Jet Stream Ultra Blowing Wool"] /* 30k: FG inventory has no (Owens Corning) */, uomBlank: true /* 30l: Knauf has no unit in FG inventory — UnitOfMeasure left blank */, rv: "key", conf: "sure", note: "Same item as new; FG showed 'R38 Retro Blow: Knauf Jet Stream…' so retro is set by the estimate, not the item." })),
   ...["30", "38"].map(r => ({ id: "blow_cel_r" + r, label: "Blown cellulose R" + r, key: "Blown cellulose R" + r, sec: "*", items: ["Blown Cellulose Insulation for Open Attics" + OC], rv: "key", conf: "sure", note: "Alt: GreenFiber Cellulose." })),
   // —— batts: walls ——
   // 30i: Asher (887 Bluejay Way): exterior 2x4 R13 never R13/16 (8'/9' precut, else 9'); R19 walls always R19/15 (16 OC) or R19/24 (24 OC), no heights
@@ -1731,7 +1731,7 @@ const FG_RULES = [
   { id: "dehu", label: "Dehumidifier", key: "Dehumidifier", sec: "*", items: ["Santa - Fe Compact 70 Pint Dehumidifier"], uom: "Ea.", conf: "sure", note: "Alt: 90 pint; pump kit not added." },
   // —— misc materials ——
   { id: "housewrap", label: "House wrap (knee / gable / porch gable-off)", key: "House wrap", sec: "*", items: ["House Wrap"], conf: "sure", note: "" },
-  { id: "baffles", label: "Cardboard baffles", key: "Cardboard baffles", sec: "*", items: ['Baffles - {W}"'], uom: "Pieces", conf: "sure", note: "Follows the baffle width picker (16\" or 24\", default 24\")." },
+  { id: "baffles", label: "Cardboard baffles", key: "Cardboard baffles", sec: "*", items: ['Baffles - {W}"'], uom: "Ea." /* 30l: FG inventory unit is Ea. (Pieces was rejected) */, conf: "sure", note: "Follows the baffle width picker (16\" or 24\", default 24\")." },
   { id: "polyvent", label: "Poly vents (closed vault)", key: "Poly vent", sec: "*", items: ['{W}" Poly-Vent'], uom: "Pieces", conf: "sure", note: "Follows the vault's batt width: 16\"/24\" Poly-Vent; 19\" → none, flagged." },
   { id: "airseal", label: "Air seal (caulk & foam)", key: "Air seal", sec: "*", items: ["Standard Caulk & Foam Air Package"], uom: "Ea.", conf: "sure", note: "Alt: Right Choice / Premium / Energy Star package, Attic Air Seal Kit." },
   { id: "airseal_add", label: "Air seal add-on $", key: "Air seal add-on", sec: "*", items: ["Standard Caulk & Foam Labor"], uom: "Ea.", conf: "sure", note: "Fixed $ → UnitPrice always filled." },
@@ -1791,7 +1791,7 @@ function fgResolve(L) {
   if (rule.depth) { const dm = (String(L.description || "") + " " + key).match(/(\d+(?:\.\d+)?)"/); if (dm) depth = Number(dm[1]); }
   const rv = typeof rule.rv === "number" ? rule.rv : (rule.rv === "key" && v.r ? Number(v.r) : "");
   const u = String(L.unit || "").toUpperCase();
-  const uom = rule.uom || (u === "SF" || u === "LF" ? "SqFt" : u === "EA" ? "Ea." : u === "BAGS" ? "Bags" : "Ea.");
+  const uom = rule.uomBlank ? "" : rule.uom || (u === "SF" || u === "LF" ? "SqFt" : u === "EA" ? "Ea." : u === "BAGS" ? "Bags" : "Ea.");
   return { item, area, depth, rv, uom, rule, flag };
 }
 function fgEstimateType(pkg) {
@@ -4933,7 +4933,7 @@ function trainOpen(i) {
   trainRender();
 }
 
-const APP_BUILD = "2026-10-30k";
+const APP_BUILD = "2026-10-30l";
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";
