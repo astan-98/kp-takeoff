@@ -150,6 +150,16 @@ button { cursor: pointer; border: none; background: none; }
   padding: 12px; margin-bottom: 10px;
 }
 .row-card .row-title { font-weight: 700; font-size: .9rem; margin-bottom: 8px; }
+.cust-sub { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
+.cust-sub-h { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text2); margin-bottom: 4px; }
+.cust-sub .toggle-row.tight { padding: 4px 0; margin: 0; min-height: 0; }
+.cust-sub .field { margin-bottom: 8px; }
+.cust-sub .grid3 { display: grid; grid-template-columns: 1.4fr .7fr 1fr; gap: 8px; }
+.cust-details { gap: 8px; align-items: end; }
+.cust-details .field { margin-bottom: 0; }
+.cust-details input[type="date"] { min-width: 0; width: 100%; }
+#sec-customer > .status:empty { display: none; }
+@media (max-width: 360px) { .cust-details { grid-template-columns: 1fr; } }
 .coords-link { font-weight: 700; text-decoration: underline; }
 .coords-out { margin-top: 6px; }
 .row-card > .row-edit-btn { float: right; margin: -4px 0 0 8px; min-height: 0; padding: 3px 12px; }
@@ -170,6 +180,9 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .archive-card .meta { font-size: .78rem; color: var(--text2); margin-bottom: 4px; }
 .archive-card .title { font-weight: 700; margin-bottom: 8px; }
 .archive-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.archive-sent { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.btn-sent { background: var(--ok-bg, #e5f4ea); color: var(--ok-ink, #1d6b35); border: 1px solid var(--ok-ink, #1d6b35); }
+.archive-skyday { margin: 8px 0; }
 .archive-quick { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 2px 0 6px; }
 .archive-selbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
 .archive-selbar.floating { position: fixed; left: 12px; right: 12px; bottom: calc(var(--nav-h) + var(--safe-b) + 8px); z-index: 45; margin: 0;
@@ -406,17 +419,25 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <div class="field"><label>Site pin (paste coordinates)</label><input id="siteCoords" placeholder="Apple Maps: drop pin → copy coordinates → paste" autocomplete="off" inputmode="text">
         <div class="coords-out cap" id="coordsOut"></div></div>
       <div class="field"><label>Subdivision (optional)</label><input id="subdivision"></div>
-      <div class="toggle-row"><span>Billing address same as job site</span><button type="button" class="switch" id="billSame"></button></div>
-      <div id="billFields" class="hidden">
-        <div class="field"><label>Billing address</label><input id="billAddress"></div>
-        <div class="grid2">
-          <div class="field"><label>City</label><input id="billCity"></div>
-          <div class="field"><label>State</label><input id="billState"></div>
+      <div class="cust-sub"><!-- 30al: billing + job details tidied into two compact groups -->
+        <div class="cust-sub-h">Billing</div>
+        <div class="toggle-row tight"><span>Same as job site</span><button type="button" class="switch" id="billSame" aria-label="Billing address same as job site"></button></div>
+        <div id="billFields" class="hidden">
+          <div class="field"><label>Billing address</label><input id="billAddress"></div>
+          <div class="grid3">
+            <div class="field"><label>City</label><input id="billCity"></div>
+            <div class="field"><label>State</label><input id="billState"></div>
+            <div class="field"><label>Zip</label><input id="billZip" inputmode="numeric"></div>
+          </div>
         </div>
-        <div class="field"><label>Zip</label><input id="billZip" inputmode="numeric"></div>
       </div>
-      <div class="field"><label>Date measured</label><input id="dateMeasured" type="date"></div>
-      <div class="field"><label>Keywords / notes</label><input id="keywords" placeholder="searchable notes"></div>
+      <div class="cust-sub">
+        <div class="cust-sub-h">Job details</div>
+        <div class="grid2 cust-details">
+          <div class="field"><label>Date measured</label><input id="dateMeasured" type="date"></div>
+          <div class="field"><label>Keywords / notes</label><input id="keywords" placeholder="searchable notes"></div>
+        </div>
+      </div>
       <p class="status" id="statusNote"></p>
     </div>
 
@@ -697,6 +718,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <span class="sel-badge hidden" id="archSelCount">0 selected</span>
         <button type="button" class="btn btn-primary btn-sm hidden" id="archSendSel" disabled>Send 0 to Crew</button>
       </div>
+      <div class="archive-skyday" id="archSkyDay"><button type="button" class="btn btn-primary btn-block" id="archSkyBatch">Send office today's jobs → FieldGroove</button><p class="cap" id="archSkyNote"></p></div>
       <div id="archiveList"></div>
     </div>
   </section>
@@ -1982,6 +2004,40 @@ function fgXlsx(rows) {
 function fgFileName(foamChoice) {
   const sfx = !foamCompareOn() ? "" : foamChoice === "both" ? " - Open vs Closed Cell" : foamChoice === "cc" ? " - Closed Cell" : " - Open Cell";
   return ((S.address || "").trim() || (S.builder || "").trim() || "Job").replace(/[\\/:*?"<>|]+/g, "-") + sfx + " - FieldGroove import.xlsx"; }
+// 30an: share sheet (phone) or download; resolves true when handed off / downloaded, false when cancelled
+function fgMarkOpen() { S.fgSentAt = new Date().toISOString(); if (S.jobId && (S._fullJobs || []).some(j => j.id === S.jobId)) markJobsSent([S.jobId], "fg"); schedule && schedule(); }
+function fgDeliver(bytes, name, title) {
+  const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  let file = null; try { file = new File([bytes], name, { type: XT }); } catch (e) {}
+  const dl = () => { const url = URL.createObjectURL(new Blob([bytes], { type: XT }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); return true; };
+  if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] }))
+    return navigator.share({ files: [file], title: title || name }).then(() => true, err => (err && err.name === "AbortError") ? false : dl());
+  return Promise.resolve(dl());
+}
+// 30an: FieldGroove rows for a saved Library job (compare jobs export both options in one file)
+function fgRowsForJob(job) {
+  return withJobState(job, () => { let r = fgBuildRows(); if (r.needChoice) r = fgBuildRows("both"); return { rows: r.rows || [], name: fgFileName(foamCompareOn() ? "both" : undefined) }; });
+}
+const SENT_KEYS = { fg: "fgSentAt", sky: "skySentAt" };
+function markJobsSent(ids, kind) {
+  const k = SENT_KEYS[kind], at = new Date().toISOString(), jobs = (S._fullJobs || []).filter(j => ids.indexOf(j.id) >= 0);
+  if (S.jobId && ids.indexOf(S.jobId) >= 0) S[k] = at;
+  return Promise.all(jobs.map(j => { j[k] = at; if (j.draft) j.draft[k] = at; return idbPut(j).then(() => { try { cloudQueueJob(j, cloudJobSf(j)); } catch (e) {} }); })).then(() => refreshArchive());
+}
+function sentLabel(at) { if (!at) return ""; const d = new Date(at); return (d.getMonth() + 1) + "/" + d.getDate() + " " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
+function archSendFg(ids, kind) { // kind "fg" = export for FieldGroove import; "sky" = FieldGroove export sent to office
+  const jobs = ids.map(id => (S._fullJobs || []).find(j => j.id === id)).filter(Boolean); if (!jobs.length) return Promise.resolve(false);
+  let rows = [], name = ""; jobs.forEach(j => { const r = fgRowsForJob(j); rows = rows.concat(r.rows); name = r.name; });
+  if (!rows.length) { setStatus("Nothing to export — no mapped FieldGroove lines."); return Promise.resolve(false); }
+  if (jobs.length > 1) name = "office - " + (jobs[0].dateMeasured || isoDaysAgo(0)) + " - " + jobs.length + " jobs - FieldGroove import.xlsx";
+  return fgDeliver(fgXlsx(rows), name, kind === "sky" ? "FieldGroove export for office" : name).then(ok => {
+    if (!ok) { setStatus("Share cancelled — not marked sent."); return false; }
+    return markJobsSent(jobs.map(j => j.id), kind).then(() => { setStatus((kind === "sky" ? "Sent to office" : "Sent to FieldGroove") + ": " + jobs.length + " job" + (jobs.length > 1 ? "s" : "") + " · " + rows.length + " lines."); return true; });
+  });
+}
+function skyJobsOn(day) { return (S._fullJobs || []).filter(j => j.owner === "sky" && j.dateMeasured === day); }
 function exportFieldGroove(foamChoice) {
   const st = $("fgStatus");
   const res = fgBuildRows(foamChoice);
@@ -1998,9 +2054,9 @@ function exportFieldGroove(foamChoice) {
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); if (st) st.textContent = "Downloaded " + name + " — " + msg; };
   if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
     return navigator.share({ files: [file], title: name }).then(() => { if (st) st.textContent = "Shared " + name + " — " + msg; },
-      err => { if (err && err.name === "AbortError") { if (st) st.textContent = "Share cancelled."; } else dl(); });
+      err => { if (err && err.name === "AbortError") { if (st) st.textContent = "Share cancelled."; } else { dl(); fgMarkOpen(); } }).then(r => { if (st && /^Shared/.test(st.textContent)) fgMarkOpen(); return r; });
   }
-  dl(); return Promise.resolve();
+  dl(); fgMarkOpen(); return Promise.resolve();
 }
 function renderFgMap() {
   const box = $("fgMapList"); if (!box) return;
@@ -4156,7 +4212,15 @@ function renderArchive() {
       cb.onclick = ev => { ev.stopPropagation(); toggle(cb.checked); };
       card.onclick = ev => { if (ev.target.closest("button,a,input,label")) return; toggle(!ARCH_SEL.has(j.id)); };
     }
-    actions.appendChild(open); actions.appendChild(send); actions.appendChild(del); card.appendChild(actions); list.appendChild(card);
+    actions.appendChild(open); actions.appendChild(send); actions.appendChild(del); card.appendChild(actions);
+    // 30an: Sent to FieldGroove (every job) + Sent to office (office's jobs only) — tap to send the FieldGroove export, status shows when done
+    const sent = el("div", "archive-sent");
+    const sb = (cls, label, at, kind) => { const b = el("button", "btn btn-sm " + (at ? "btn-sent" : "btn-secondary") + " " + cls); b.type = "button";
+      b.textContent = at ? "✓ " + label + " · " + sentLabel(at) : (kind === "sky" ? "Send FG export to office" : "Send to FieldGroove"); b.title = at ? "Sent " + sentLabel(at) + " — tap to send again" : "";
+      b.onclick = ev => { ev.stopPropagation(); archSendFg([j.id], kind); }; return b; };
+    sent.appendChild(sb("arch-fg", "Sent to FieldGroove", j.fgSentAt, "fg"));
+    if (j.owner === "sky") sent.appendChild(sb("arch-sky", "Sent to office", j.skySentAt, "sky"));
+    card.appendChild(sent); list.appendChild(card);
   });
 }
 
@@ -4182,6 +4246,8 @@ function renderArchSelBar() {
   b.textContent = ARCH_SELECT ? "Done" : "Select";
   $("archSelBar").classList.toggle("floating", ARCH_SELECT); const L = $("archiveList"); if (L) L.classList.toggle("sel-pad", ARCH_SELECT);
   ["archSelAll", "archSelCount", "archSendSel"].forEach(id => $(id).classList.toggle("hidden", !ARCH_SELECT));
+  { const day = S.filterFrom && S.filterFrom === S.filterTo ? S.filterFrom : isoDaysAgo(0), k = skyJobsOn(day).length, b = $("archSkyBatch"); // 30an
+    if (b) { b.textContent = "Send office's " + k + " job" + (k === 1 ? "" : "s") + " from " + (day === isoDaysAgo(0) ? "today" : day) + " → FieldGroove (one file)"; b.disabled = !k; } }
   const allOn = ARCH_SHOWN.length && ARCH_SHOWN.every(id => ARCH_SEL.has(id));
   $("archSelAll").textContent = allOn ? "Clear shown" : "Select all shown";
   $("archSelCount").textContent = n + " selected" + (hidden > 0 ? " (+" + hidden + " hidden by filters, not sent)" : "");
@@ -4190,6 +4256,9 @@ function renderArchSelBar() {
 function wireArchiveBatch() {
   const on = (id, fn) => { const e = $(id); if (e) e.onclick = fn; };
   on("archToday", () => archSetDay(isoDaysAgo(0)));
+  on("archSkyBatch", () => { const day = S.filterFrom && S.filterFrom === S.filterTo ? S.filterFrom : isoDaysAgo(0), js = skyJobsOn(day); // 30an
+    if (!js.length) { $("archSkyNote").textContent = "No office jobs measured " + day + "."; return; }
+    archSendFg(js.map(j => j.id), "sky").then(ok => { $("archSkyNote").textContent = ok ? "Sent " + js.length + " office job(s) from " + day + " in one FieldGroove file." : "Not sent."; }); });
   on("archYesterday", () => archSetDay(isoDaysAgo(1)));
   on("archAnyDate", () => archSetDay(""));
   on("archSelect", () => { ARCH_SELECT = !ARCH_SELECT; if (!ARCH_SELECT) ARCH_SEL.clear(); renderArchive(); });
@@ -4870,7 +4939,8 @@ function refreshArchive() {
       id: j.id, dateMeasured: j.dateMeasured, owner: j.owner, builder: j.builder,
       city: j.city, address: j.address, packageLabel: j.packageLabel, keywords: j.keywords || "",
       miscText: j.miscText || "", photoCount: ((j.draft && j.draft.photos) || []).length,
-      chaseBlocked: !!j.chaseBlocked, chaseNote: j.chaseNote || "", siteCoords: (j.draft && j.draft.siteCoords) || "" // 30ah
+      chaseBlocked: !!j.chaseBlocked, chaseNote: j.chaseNote || "", siteCoords: (j.draft && j.draft.siteCoords) || "", // 30ah
+      fgSentAt: j.fgSentAt || (j.draft && j.draft.fgSentAt) || "", skySentAt: j.skySentAt || (j.draft && j.draft.skySentAt) || "" // 30an
     }));
     S._fullJobs = jobs;
     renderArchive();
@@ -5202,7 +5272,7 @@ function trainSteps() {
   const fld = (label, inner) => '<div class="field"><label>' + escHtml(label) + "</label>" + inner + "</div>";
   const inp = ph => '<input tabindex="-1" placeholder="' + escHtml(ph || "") + '">';
   const sel = t => '<select tabindex="-1"><option>' + escHtml(t) + "</option></select>";
-  const M = "Measure", MJ = "Measure · Job header";
+  const M = "Measure", MJ = "Measure · Job header", MT = "Measure · Job type";
   return [
     { sec: "Start", title: "Welcome to training",
       html: "<p>This walks a brand-new rep through measuring a whole house in the app, in the order you'll do it on site, then the Summary, Library and Pricing tabs. A short fireplace part comes near the end.</p>" +
@@ -5214,38 +5284,55 @@ function trainSteps() {
       html: "<p>Tap <b>＋ New job</b> at the top of the screen. It starts a fresh, empty job dated today.</p>" +
         "<p>Everything you type autosaves as a draft while you go, so you won't lose work if the phone locks. When the job is done you'll tap <b>Save to Library</b>.</p>" +
         trainDemo('<button type="button" tabindex="-1" class="btn btn-primary btn-block">＋ New job</button>') },
-    { sec: MJ, title: "New construction or retro?",
-      html: "<p>The first question in the <b>Job header</b>. Tap <b>New construction</b> for a house being built, or <b>Retro</b> for an existing house.</p>" +
-        "<p><b>Retro</b> then asks <b>Attic retro</b> or <b>Crawl retro</b> and the path:</p>" +
-        ul(["<b>Attic retro path</b>: select the attic package.", "<b>Crawl retro path</b>: select the crawl package."]) +
-        trainDemo(fld("New construction or retro?", trainSeg(["New construction", "Retro"], 0))) },
-    { sec: MJ, title: "Package type",
-      html: "<p>On new construction, pick the <b>Package type</b>. It decides which areas the app asks about and what material each line uses:</p>" +
-        ul(["<b>Standard (blow + batts)</b> — blown attic, batt walls.", "<b>Total Batt (R38 batts, no blow)</b> — like Standard, but the attic goes in as R38 batts instead of blow.",
-          "<b>Hybrid Foam Roofline / Misc Walls</b> — spray foam on the roof deck, with your choice of wall material.",
-          "<b>Total foam</b> — foam roofline and foam walls.", "<b>Crawl encapsulation</b> — crawl walls foamed, poly on the floor.", "<b>Custom mix</b> — pick the roofline/attic and wall materials yourself."]) +
-        trainDemo(fld("Package type", sel("Standard (blow + batts)"))) },
-    { sec: MJ, title: "What the package turns on",
-      html: "<p>Picking a package sets the usual answers for you. You can still change any of them.</p>" +
-        ul(["<b>Standard</b> and <b>Total Batt</b> turn on Dead air, Knee walls, Vaults, Baffles, Air seal and Walls.",
-          "<b>Foam roofline</b> packages turn on Gables and Walls. Dead air, vaults and knees are left out (the foam is on the roof deck), but baffles are still included on new construction.",
-          "Gables are only asked on foam roofline jobs."]) },
-    { sec: MJ, title: "Compare packages (Options A, B, C)",
-      html: "<p>Want to price the same house more than one way? Turn on <b>Compare packages (2–3 options)?</b> and tap 2 or 3 packages under <b>Options to price</b>.</p>" +
-        "<p>You measure once. The app asks for every area any option needs, and the Summary tab gives each option its own sheet — <b>Option A</b>, <b>Option B</b>, <b>Option C</b>.</p>" +
-        trainDemo(trainSwitch("Compare packages (2–3 options)?", true) + fld("Options to price (pick 2–3)", trainSeg(["Standard", "Foam Roofline + Batt Walls", "Total foam"], 0))) },
-    { sec: MJ, title: "Foundation",
-      html: "<p>Pick the foundation type.</p>" +
-        trainDemo(fld("Foundation", sel("Crawl space"))) },
+    { sec: MJ, title: "The Measure page, top to bottom",
+      html: "<p>The top of Measure always goes in this order:</p>" +
+        ul(["<b>Job header</b> — whose job it is, at the very top.", "<b>Customer</b> — who and where.", "<b>Job type</b> — New construction, Retro or Metal building.", "<b>Package type</b>, then <b>Foundation</b>."]) +
+        "<p>Then the house areas below. Fill it in top to bottom.</p>" },
     { sec: "Measure · Customer / builder", title: "Customer / builder",
       html: "<p>Fill in <b>Builder / company</b>, <b>City</b>, <b>Job site address</b>, <b>State</b>, <b>Zip</b> and <b>Subdivision (optional)</b>.</p>" +
+        "<p>On copies with <b>address search</b>, start typing the address and pick it from the list — city, state and zip fill in for you. If it can't find it, just type them.</p>" +
         "<p>The city, state and zip also set the default roofline foam depth, so get them right.</p>" +
         trainDemo('<div class="grid2">' + fld("Builder / company", inp("Smith Homes")) + fld("City", inp("Gainesville")) + "</div>" + fld("Job site address", inp("123 Main St"))) },
     { sec: "Measure · Customer / builder", title: "Customer details and billing",
       html: "<p>The same Customer box also has First name, Last name, Phone and Email — one place, also what FieldGroove gets. An existing FieldGroove customer fills in by itself.</p>" +
         "<p><b>Billing address same as job site</b> — turn it off to type a separate billing address, city, state and zip.</p>" +
-        "<p>Below that: <b>Date measured</b> (today on a new job) and <b>Keywords / notes</b> — anything you type there is searchable in the Library later.</p>" +
+        "<p>Below that, grouped together: <b>Date measured</b> (today on a new job) and <b>Keywords / notes</b> — anything you type there is searchable in the Library later.</p>" +
+        "<p>There are no New job / Save buttons inside this box — use <b>＋ New job</b> at the top and <b>Save to Library</b> at the bottom.</p>" +
         trainDemo(trainSwitch("Billing address same as job site", true)) },
+    { sec: MT, title: "New construction or retro?",
+      html: "<p>Right under the Customer box: tap <b>New construction</b> for a house being built, <b>Retro</b> for an existing house, or <b>Metal building</b> for a metal shop / barn.</p>" +
+        "<p><b>Retro</b> then asks <b>Attic retro</b> or <b>Crawl retro</b> and the path:</p>" +
+        ul(["<b>Attic retro path</b>: select the attic package.", "<b>Crawl retro path</b>: select the crawl package."]) +
+        trainDemo(fld("New construction or retro?", trainSeg(["New construction", "Retro", "Metal building"], 0))) },
+    { sec: MT, title: "Metal building",
+      html: "<p><b>Metal building</b> swaps the house areas for a short metal card: <b>Roofline</b>, <b>Gables</b>, <b>Walls</b> and <b>Miscellaneous</b>.</p>" +
+        ul(["Packages are <b>Total Batt</b>, <b>Total foam</b> or <b>Foam Roofline + Batt Walls</b> — no blown insulation on metal.",
+          "Foam areas pick <b>open cell</b>, <b>closed cell</b> or both. Closed cell uses the <b>CC depth</b> dropdown (1\"–8\").",
+          "Gables: pick the shape, add as many gables as you need, and turn on <b>house wrap</b> only if the job needs it (off by default).",
+          "Baffles are off and <b>Air seal</b> starts off on metal — turn it on only if the job calls for it."]) },
+    { sec: MT, title: "Package type",
+      html: "<p>On new construction, pick the <b>Package type</b>. It decides which areas the app asks about and what material each line uses:</p>" +
+        ul(["<b>Standard (blow + batts)</b> — blown attic, batt walls.", "<b>Total Batt (R38 batts, no blow)</b> — like Standard, but the attic goes in as R38 batts instead of blow.",
+          "<b>Hybrid Foam Roofline / Misc Walls</b> — spray foam on the roof deck, with your choice of wall material.",
+          "<b>Total foam</b> — foam roofline and foam walls.", "<b>Crawl encapsulation</b> — crawl walls foamed, poly on the floor.", "<b>Custom mix</b> — pick the roofline/attic and wall materials yourself."]) +
+        trainDemo(fld("Package type", sel("Standard (blow + batts)"))) },
+    { sec: MT, title: "What the package turns on",
+      html: "<p>Picking a package sets the usual answers for you. You can still change any of them.</p>" +
+        ul(["<b>Standard</b> and <b>Total Batt</b> turn on Dead air, Knee walls, Vaults, Baffles, Air seal and Walls.",
+          "<b>Foam roofline</b> packages turn on Gables and Walls. Dead air, vaults and knees are left out (the foam is on the roof deck), but baffles are still included on new construction.",
+          "Gables are only asked on foam roofline jobs."]) },
+    { sec: MT, title: "Compare packages (Options A, B, C)",
+      html: "<p>Want to price the same house more than one way? Turn on <b>Compare packages (2–3 options)?</b> and tap 2 or 3 packages under <b>Options to price</b>.</p>" +
+        "<p>You measure once. The app asks for every area any option needs, and the Summary tab gives each option its own sheet — <b>Option A</b>, <b>Option B</b>, <b>Option C</b>.</p>" +
+        trainDemo(trainSwitch("Compare packages (2–3 options)?", true) + fld("Options to price (pick 2–3)", trainSeg(["Standard", "Foam Roofline + Batt Walls", "Total foam"], 0))) },
+    { sec: MT, title: "Foundation",
+      html: "<p>Pick the foundation type.</p>" +
+        trainDemo(fld("Foundation", sel("Crawl space"))) },
+    { sec: "Measure · Customer / builder", title: "Site pin (coordinates)",
+      html: ul(["On site, drop a pin in Apple Maps, copy the coordinates, and paste them into the coordinates field in the Customer box.",
+        "They save with the job, print on the work order and go in the work order email" + (choice || APP_EDITION === "sky" ? "." : " to office."),
+        "Tap the saved coordinates (here or after reopening from the Library) to open them in your phone's maps app."]) +
+        trainDemo(fld("Site coordinates", inp("34.0012, -83.7201"))) },
     { sec: "Measure · Photos", title: "Photos",
       html: "<p>Tap <b>📷 Add photo</b> to snap or pick photos. They're saved with the takeoff.</p>" },
     { sec: "Measure · Job site access", title: "Job site access",
@@ -5261,7 +5348,8 @@ function trainSteps() {
     { sec: "Measure · Flat footprint", title: "Flat footprint",
       html: "<p>Type the house's <b>Flat footprint SF (once)</b> — the flat floor area under the roof. The app uses it everywhere it can, so you only type it once.</p>" +
         ul(["<b>Attic blow SF</b> = flat footprint minus dead air SF minus vault flat SF. On Total Batt it reads <b>Total Batt R38 dead air SF (no blow)</b>.",
-          "Pick the roof pitch — the app applies it automatically."]) +
+          "Pick the roof pitch — the app applies it automatically.",
+          "<b>Air seal</b> is priced per SF of this flat footprint."]) +
         trainDemo('<div class="field"><label>Flat footprint SF (once)</label><input tabindex="-1" value="2000"></div><div class="props"><span class="k">Attic blow SF</span><span class="v">1850 SF</span></div>') },
     { sec: "Measure · Attic", title: "Attic blow",
       html: ul(["<b>New construction</b> blow is always R-38 — nothing to pick.",
@@ -5271,7 +5359,8 @@ function trainSteps() {
     { sec: "Measure · Roofline foam", title: "Roofline foam",
       html: "<p>On foam roofline jobs the <b>Spray foam type (job)</b> section picks <b>Open cell (default)</b>, <b>Closed cell</b>, or <b>Show both (compare)</b>.</p>" +
         ul(["<b>Roofline foam depth (job)</b> fills in from the job site address: Athens-Clarke County 8\", Highlands NC 10\", everywhere else 5.5\". Pick a depth to override it.",
-          "Closed cell needs a <b>closed-cell depth</b> picked — the app warns you until you do."]) +
+          "Closed cell needs a <b>closed-cell depth</b> picked — the app warns you until you do.",
+          "Foam on the roofline uses the roof <b>pitch</b> (sloped SF), not the flat SF."]) +
         trainDemo(fld("Foam type", sel("Open cell (default)"))) },
     { sec: "Measure · Attic areas", title: "Dead air, vaults and knee walls",
       html: ul(["<b>Dead air #</b>: SF and Batt width (R38). Tap <b>Add dead air</b> to add another measurement or a different material to dead air.",
@@ -5290,6 +5379,15 @@ function trainSteps() {
           "Batts are unfaced by default — turn on <b>Kraft faced (default unfaced)</b> for kraft.",
           "Tap <b>Add wall area</b> to add a new wall type or material."]) +
         trainDemo(fld("Type", sel("2x4 exterior (R-13)")) + fld("Cavities", '<input tabindex="-1" value="120">') + trainSwitch("Kraft faced (default unfaced)", false)) },
+    { sec: "Measure · Walls", title: "Interior and separation walls",
+      html: ul(["<b>Interior walls</b> are measured by <b>cavities</b>, stud spacing and height — there's no linear-feet option.",
+        "Interior walls are R-13 unfaced by default; pick <b>2x6</b> when the job asks for 2x6 interior walls (R-19).",
+        "With a finished basement, <b>Separation walls (basement)</b> get their own section — 2x4 (R-13) or 2x6 (R-19)."]) },
+    { sec: "Measure · Walls", title: "Edit and Reassign",
+      html: "<p>Each measurement card collapses once it's filled in. Tap <b>Edit</b> to open it again.</p>" +
+        "<p>Put a wall in the wrong place? <b>Reassign to</b> moves it to another wall type or section (for example exterior → interior) and keeps every spec: 2x4/2x6, stud spacing, height, cavities and material.</p>" },
+    { sec: "Measure · Garage", title: "Garage ceiling",
+      html: "<p>When the garage is on, <b>Garage ceiling</b> gets its own line with R-19, R-30 or R-38 batts — separate from the garage walls.</p>" },
     { sec: "Measure · Walls", title: "Basement walls",
       html: "<p>With a basement foundation, daylight and concrete walls get their own sections.</p>" +
         ul(["<b>Daylight basement (R-19)</b> walls are measured like exterior walls.",
@@ -5297,9 +5395,10 @@ function trainSteps() {
     { sec: "Measure · Rim / band", title: "Rim / band",
       html: "<p>Type the rim joist length in <b>LF</b>. The app multiplies it by 1.2 for the SF (shown in the section title). Tap <b>Add rim</b> to add another measurement or a different material to the rim / band.</p>" +
         "<p>On new construction foam roofline jobs (not Total foam), you can turn on <b>Foam band/rim joist (instead of R19 batts)</b>.</p>" +
+        "<p>With a basement, the <b>main</b> band and the <b>basement</b> band are measured separately so each prints on its own line.</p>" +
         trainDemo('<div class="row-title">Rim #1 · ×1.2 → 180</div>' + fld("LF", '<input tabindex="-1" value="150">')) },
     { sec: "Measure · Air sealing / extra labor", title: "Air sealing and extra labor",
-      html: ul(["<b>Air seal?</b> adds the air sealing package (caulk & foam at the base plate, openings and penetrations) as one line, priced per square foot of the flat footprint (Pricing tab).",
+      html: ul(["<b>Air seal?</b> adds the air sealing package (caulk & foam at the base plate, openings and penetrations) as one line, priced <b>per SF of the flat footprint</b> (Pricing tab).",
         "<b>Extra labor $</b> (with an optional note) is a job-wide labor add — a fixed amount, on every option when you compare."]) +
         trainDemo(trainSwitch("Air seal?", true)) },
     { sec: "Measure · Miscellaneous", title: "Miscellaneous",
@@ -5307,7 +5406,10 @@ function trainSteps() {
     { sec: M, title: "Save to Library and the empty-fields check",
       html: "<p>The <b>Save to Library</b> button stays pinned at the bottom of the screen. Tap it when the job is measured.</p>" +
         "<p>If something's blank — a baffle count, a wall's cavities — a <b>⚠ Some fields are empty</b> sheet lists it. Tap <b>Go back</b> to fill it in, or <b>Continue anyway</b>.</p>" +
+        "<p>After you save, the job <b>stays on screen</b> so you can keep checking or tweaking it. It only clears when you tap <b>＋ New job</b>.</p>" +
         trainDemo('<button type="button" tabindex="-1" class="btn btn-primary btn-block">Save to Library</button>') },
+    { sec: M, title: "Calculator",
+      html: "<p>Need quick math on site? Tap <b>🧮 Calculator</b> next to Save to Library. It opens full screen; <b>swipe down</b> on it to close — the page won't refresh and your job stays put.</p>" },
     { sec: "Summary tab", title: "Summary — the Excel takeoff",
       html: "<p><b>Takeoff summary</b> lists every line: Work area · Product · Description · Footage · Bags.</p>" +
         ul(["Comparing packages? Switch between options, then <b>Export this option (.xlsx)</b> or <b>Export all options</b>.", "<b>Preview work order</b> shows exactly what goes to office, with <b>Print / save as PDF</b>."]) },
@@ -5317,7 +5419,10 @@ function trainSteps() {
         trainDemo('<button type="button" tabindex="-1" class="btn btn-primary btn-block">Work order → ' + who + "</button>") },
     { sec: "Summary tab", title: "FieldGroove import",
       html: '<div class="train-banner" id="trainFgBanner">' + escHtml(TRAIN_FG_BANNER) + "</div>" +
-        "<p>You can skip the <b>FieldGroove</b> part of the Summary tab for now. Measure and save your jobs as usual.</p>" },
+        "<p>You can skip the <b>FieldGroove</b> part of the Summary tab for now. Measure and save your jobs as usual.</p>" +
+        ul(["Once a job goes to FieldGroove, the Library marks it <b>Sent to FieldGroove</b> with the date."].concat(choice || APP_EDITION === "sky" ? [] : [
+          "office's jobs also show <b>Sent to office</b> once the work order is sent to her.",
+          "To export several of office's jobs at once, use <b>Send office today's jobs → FieldGroove</b> in the Library."])) },
     { sec: "Library tab", title: "Library — find and reopen jobs",
       html: "<p>Every job you save goes in the <b>Library</b>.</p>" +
         ul(["<b>Free-text search</b> plus Builder, City, " + (ALLOW_OWNER_SWITCH ? "Owner, " : "") + "Package contains, and From / To dates. <b>Today</b>, <b>Yesterday</b> and <b>Any date</b> are quick date filters.",
@@ -5337,7 +5442,7 @@ function trainSteps() {
       html: "<p>Every fireplace job shows this yellow notice. Saving, sending, or opening " + escHtml(trainSheet()) + " on a fireplace job pops it up first — tap <b>I'll check the manual</b> to go on, or <b>Go back</b>.</p>" +
         trainDemo(trainNotice()) },
     { sec: "Done", title: "You're ready",
-      html: "<p>That's a whole job: <b>＋ New job</b> → Job header → Customer / builder → What's on this house? → measure each section → <b>Save to Library</b> → Summary.</p>" +
+      html: "<p>That's a whole job: <b>＋ New job</b> → Job header → Customer → Job type → Package → Foundation → What's on this house? → measure each section → <b>Save to Library</b> → Summary.</p>" +
         "<p>After you tap <b>Finish</b>, open training again anytime from the <b>Training</b> button at the top of the <b>Pricing</b> tab.</p>" }
   ];
 }
@@ -5418,7 +5523,31 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30ak";
+const APP_BUILD = "2026-10-30ao";
+// 30am: auto-update (the owner + coworker copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
+// foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
+(function autoUpdate() {
+  if (typeof APP_EDITION === "undefined" || !(APP_EDITION === "asher" || APP_EDITION === "lance")) return;
+  if (!/^https?:$/.test(location.protocol)) return;
+  let pending = null, busy = false;
+  const idle = () => !document.hidden ? !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) && !document.querySelector(".xl-modal,.calc-sheet.open,#missModal") : true;
+  const apply = () => {
+    if (!pending || !idle()) return;
+    const k = "kp-autoupd-" + pending; if (sessionStorage.getItem(k)) return; // one reload per new build (no loops)
+    sessionStorage.setItem(k, "1");
+    try { if (typeof saveDraft === "function") saveDraft(); } catch (e) {}
+    const u = new URL(location.href); u.searchParams.set("v", pending); location.replace(u.toString());
+  };
+  const check = () => {
+    if (busy) return; busy = true;
+    fetch(new URL("version.json", location.href).toString() + "?t=" + Date.now(), { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null).then(j => { if (j && j.build && j.build !== APP_BUILD) { pending = j.build; apply(); } })
+      .catch(() => {}).then(() => { busy = false; });
+  };
+  setTimeout(check, 8000); setInterval(check, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); else apply(); });
+  document.addEventListener("focusout", () => setTimeout(apply, 1500), true);
+})();
 function showVersion() {
   const v = $("appVer"); if (!v) return;
   let upd = "";

@@ -393,9 +393,10 @@ function routeSheet(name,day,rep){
   const ownCtl=(!free&&canEditOwn&&mine.length)?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="ad" style="flex:1">${r.any[rep]?"✓ ":""}Order doesn't matter for my remaining jobs</button><button class="cl" style="flex:1">Clear my stops</button></div>
      <button class="ok big snd" ${ownDone?"":"disabled"}>${r.req&&r.req.to===rep?"✔ Done — lock route":theirs.length?"Send route request to "+REPS[other]:"✔ Lock route"}</button>`:"";
   const unplaced=js.filter(j=>!placed(j.id));
-  const canAuto=!r.locked&&!r.counter&&(RMODE==="override"?js.length>1:unplaced.length>0&&!free&&canEditOwn&&unplaced.every(j=>r.any[CREWS[j.crew].rep]));
+  const bothODM=["asher","lance"].every(rp=>r.any[rp]||!js.some(j=>CREWS[j.crew].rep===rp)); // both reps (with jobs that day) pressed "Order doesn't matter"
+  const canAuto=!r.locked&&!r.counter&&bothODM&&unplaced.length>0&&(RMODE==="override"||(!free&&canEditOwn));
   const autoHtml=`<div class="card" style="margin-top:10px;border:2px dashed var(--blue)"><b>🤖 Free auto-route</b><div class="small">Office (33 Apex Dr) → jobs → ${CREW_HOME[name]?"crew house ("+CREW_HOME[name].label+")":"last job (Sammy's house TBD)"}. Shortest drive — free, no Google.</div>
-    ${canAuto?`<button class="ok big au" style="margin-top:6px">🤖 Auto-route ${RMODE==="override"?"all stops":"the order-doesn't-matter stops"}</button>`:`<div class="mut small" style="margin-top:4px">${r.locked?"Route locked"+(rep==="asher"?" — use Asher override to re-run.":"."):"Available once the remaining jobs are marked \"Order doesn't matter\" by whoever owns them."+(rep==="asher"?" Asher override can auto-route everything.":"")}</div>`}
+    ${canAuto?`<button class="ok big au" style="margin-top:6px">Auto-Route</button>`:`<div class="mut small" style="margin-top:4px">${r.locked?"Route locked"+(rep==="asher"?" — use Asher override to re-run.":"."):(bothODM?"All stops are placed.":"Available after BOTH Asher and Lance tap \"Order doesn't matter\" (waiting on "+["asher","lance"].filter(rp=>!r.any[rp]&&js.some(j=>CREWS[j.crew].rep===rp)).map(rp=>REPS[rp]).join(" & ")+").")+" Stops you already placed stay put — Auto-Route only fills the empty ones."}</div>`}
     ${r.auto?`<div class="small" style="margin-top:4px">Last auto-route: ≈${r.auto.mi} mi · ≈${r.auto.min} min driving (estimate)</div>`:""}</div>`;
   sheet(`<h1>🧭 ${esc(name)}'s route · ${DAYS_EN[day]}</h1><div class="mut small">${js.length} jobs (Asher + Lance). Tap one of ${free?"the":"your"} jobs, then tap an empty stop.</div>${routeStatus(name,day)}
     <div class="step" style="margin-top:12px">Stops</div>${slotHtml}
@@ -410,7 +411,7 @@ function routeSheet(name,day,rep){
       else if(cur&&(free||CREWS[J(cur).crew].rep===rep&&canEditOwn)){r.slots[i]=null;re();}});
     const on=(q,f)=>{const e=m.querySelector(q);if(e)e.onclick=f;};
     on(".ad",()=>{r.any[rep]=!r.any[rep];re();});
-    on(".au",()=>{const d=autoFill(name,day,RMODE==="override");if(d!=null){logH("auto-route",{addr:name+" · ≈"+Math.round(d)+" mi",crew:repKey(rep,name)},{day});toast("Auto-routed ≈"+Math.round(d)+" mi");}re();});
+    on(".au",()=>{const d=autoFill(name,day,false);if(d!=null){logH("auto-route",{addr:name+" · ≈"+Math.round(d)+" mi",crew:repKey(rep,name)},{day});toast("Auto-routed ≈"+Math.round(d)+" mi");}re();});
     on(".cl",()=>{r.slots=r.slots.map(id=>id&&CREWS[J(id).crew].rep===rep?null:id);re();});
     on(".snd",()=>{r.sent[rep]=true;
       if(r.req&&r.req.to===rep){r.locked=true;logH("route locked",{addr:"",crew:repKey(rep,name)},{day});ping(other,"ready",`${REPS[rep]} finished ${name}'s route — locked`);}
