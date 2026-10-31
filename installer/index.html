@@ -422,16 +422,17 @@ function oConfirm(rep,mine){
   const other=rep==="asher"?"lance":"asher";
   h(`<p class="mut small">${REPS[other]} confirms his own crews separately — never holds up yours. Crews see their day only after both reps with jobs that day have confirmed AND the joint route is locked.</p>`);
 }
+const alertWhy=x=>{const t=x.text||"";return /wrong cent/i.test(t)?"📏 Wrong centers":/wrong material/i.test(t)?"❌ Wrong material":x.kind==="short"?"📦 Material shortage":x.kind==="photo"?"📷 Completed with NO photos":x.kind==="labor"?"💪 Request Extra on Payroll":x.kind==="complete"?"✅ Job complete":x.kind==="ready"?"🧭 Route":"🔔 Alert";};
 function oInbox(rep){
   h('<h1>Alerts</h1>');
   const labs=S.jobs.flatMap(j=>j.labor.map(l=>({j,l}))).filter(x=>CREWS[x.l.crew].rep===rep);
-  labs.forEach(({j,l})=>{const d=h(`<div class="card" style="border-left:5px solid var(--blue)"><div style="display:flex;justify-content:space-between"><b>💪 ${l.office?"Extra labor added by "+esc(l.by||"office"):"Extra labor"} · ${esc(CREWS[l.crew].name)}</b><span class="pill ${l.status==="approved"?"ok":l.status==="denied"?"bad":"warn"}">${l.status}</span></div>
+  labs.forEach(({j,l})=>{const d=h(`<div class="card" style="border-left:5px solid var(--blue)"><div style="display:flex;justify-content:space-between"><b>💪 ${l.office?"Extra labor added by "+esc(l.by||"office"):"Request Extra on Payroll"} · ${esc(CREWS[l.crew].name)}</b><span class="pill ${l.status==="approved"?"ok":l.status==="denied"?"bad":"warn"}">${l.status}</span></div>
    <div>${esc(j.addr)}</div><div>${l.office?"Amount: <b>$"+l.amt+"</b> (approved)":"Crew picked: <b>"+LAB_EN[l.lvl]+"</b> → "+(l.amt?"<b>$"+l.amt+"</b>":"you set the amount")}</div>
    <div><i>“${esc(l.en)}”</i> <span class="mut small">(orig: ${esc(l.es)})</span></div><div class="thumbs"><div class="thumb">photo</div></div>
    ${l.status==="pending"?`${l.amt?"":'<label>Amount (over $100)</label><input class="ca" inputmode="decimal" placeholder="150">'}<div style="display:flex;gap:8px;margin-top:10px"><button class="ok ap" style="flex:2">Approve${l.amt?" $"+l.amt:""}</button><button class="dn" style="flex:1">Deny</button></div>`:""}</div>`);
    const a=d.querySelector(".ap");if(a){a.onclick=()=>{if(!l.amt){const v=Number(d.querySelector(".ca").value);if(!(v>100))return toast("Enter an amount over $100");l.amt=v;}l.status="approved";go();};d.querySelector(".dn").onclick=()=>{l.status="denied";go();};}});
   const it=S.inbox.filter(x=>x.rep===rep&&x.kind!=="labor");
-  it.forEach(x=>{h(`<div class="card" ${x.kind==="short"?'style="border-left:5px solid var(--warn)"':""}><div class="mut small">${x.t} ${x.pushed?"· 📲 pushed":"· inbox only"}</div><div style="font-size:1.02rem">${esc(x.text)}</div></div>`);x.seen=true;});
+  it.forEach(x=>{h(`<div class="card" ${x.kind==="short"?'style="border-left:5px solid var(--warn)"':""}><div class="mut small">${x.t} ${x.pushed?"· 📲 pushed":"· inbox only"}</div><div class="why" style="font-weight:800;font-size:1.08rem">${alertWhy(x)}</div><div style="font-size:1.02rem">${esc(x.text)}</div></div>`);x.seen=true;});
   S.inbox.filter(x=>x.rep===rep).forEach(x=>x.seen=true);
   if(!labs.length&&!it.length)h('<div class="card mut">Nothing yet. Switch to one of your crews (menu at top) and try check-in, extra labor, material problem or complete.</div>');
 }
