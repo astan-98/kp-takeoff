@@ -122,6 +122,11 @@ function seedAlerts(st){const J=a=>st.jobs.find(j=>j.addr.startsWith(a)),ib=(rep
     H(T(5,8,30),"Asher","added","17 Oak St, Jefferson, GA","asher_sammy",{day:0}),
     H(T(9,14,0),"Asher","removed","77 Old Rd, Winder, GA","asher_santos",{day:0})];
   m.pri="high";pr.pri="today";
+  // Demo: Jorge's Monday is already confirmed by Asher + Lance and the route is locked, so "Jorge (crew)" can walk the full day.
+  [m,lk,df].forEach(j=>{j.done=false;j.checkedIn=false;});
+  st.confirmed.asher_jorge=true;st.confirmed.lance_jorge=true;st.crewNotifs.asher_jorge=st.crewNotifs.lance_jorge="4:12 PM";
+  st.routes=st.routes||{};st.routes["Jorge|0"]={slots:[m.id,lk.id,df.id],any:{asher:false,lance:false},sent:{asher:true,lance:true},req:null,counter:null,locked:true,talk:false};
+  st.hist.unshift(H(T(0,16,12),"Asher","confirmed","Jorge's jobs","asher_jorge",{day:0}),H(T(0,16,10),"Asher","route locked","Jorge · 3 stops","asher_jorge",{day:0}),H(T(0,16,5),"Lance","confirmed","512 Old Federal Rd, Dahlonega, GA","lance_jorge",{day:0}));
   return st;}
 let S=seedAlerts(fresh());
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
