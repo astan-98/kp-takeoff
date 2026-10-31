@@ -383,9 +383,26 @@ function payrollTicket(c,rep,mode){const emp=CREWS[c].type==="emp",js=S.jobs.fil
    <p style="font-size:14pt;margin:10px 0 0"><b>${emp?"Add-ons this week (plus hourly pay from timesheet): "+money(G+X):"TOTAL DUE THIS WEEK: "+money(P+G+X)}</b></p>
    <p style="font-size:9.5pt;margin:4px 0 0">Gas from 33 Apex Dr, Jefferson GA: under 40 mi $0 · 40–60 mi $25 · 60+ mi $50.${emp?"":" Sub rates: fiberglass & poly 8¢/SF · rockwool 15¢/SF · baffles & poly vents 30¢ ea · prehangs & air seal $75 default (by size) · removal 25¢/SF."}</p>
    </div>`;}
+function crewWeek(c){const emp=CREWS[c].type==="emp";let P=0,G=0,X=0;S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6).forEach(j=>{if(!emp)P+=pieceLines(j).reduce((s,x)=>s+x.pay,0);G+=mileTier(j.miles);X+=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);});return{P,G,X,T:emp?G+X:P+G+X,emp};}
+const payBoth=()=>S.payOK&&S.payOK.asher&&S.payOK.lance;
+const payWaiting=()=>["asher","lance"].filter(r=>!(S.payOK||{})[r]).map(r=>REPS[r]).join(" & ");
+// Detailed report: Asher's crews section + subtotal, Lance's crews section + subtotal, combined week total
+function printDetailedAll(){const sec=r=>{const cs=Object.keys(CREWS).filter(k=>CREWS[k].rep===r);const sub=cs.reduce((s,c)=>s+crewWeek(c).T,0);
+    return cs.map(c=>payrollTicket(c,r,"detail").replace('<div class="tk">','<div class="tk"><div style="font-size:10pt;font-weight:bold;letter-spacing:.08em">'+REPS[r].toUpperCase()+"'S CREWS</div>")).join("")+
+      `<div class="tk"><h1>${REPS[r]}'s crews — subtotal</h1><table style="font-size:13pt"><tr><th>Crew</th><th class="r">Week total</th></tr>${cs.map(c=>`<tr><td>${esc(CREWS[c].name)}${crewWeek(c).emp?" (employee — + timesheet pay)":""}</td><td class="r">${money(crewWeek(c).T)}</td></tr>`).join("")}<tr><th>${REPS[r]} subtotal</th><th class="r">${money(sub)}</th></tr></table></div>`;};
+  const all=["asher","lance"].map(r=>Object.keys(CREWS).filter(k=>CREWS[k].rep===r).reduce((s,c)=>s+crewWeek(c).T,0));
+  $("#print").innerHTML=sec("asher")+sec("lance")+`<div class="tk"><h1>Week total — all crews</h1><div>Week of ${DAYS_EN[0]} – ${DAYS_EN[5]}, 2026</div><table style="font-size:14pt;margin-top:10px"><tr><td>Asher's crews</td><td class="r">${money(all[0])}</td></tr><tr><td>Lance's crews</td><td class="r">${money(all[1])}</td></tr><tr><th>COMBINED WEEK TOTAL</th><th class="r" style="font-size:18pt">${money(all[0]+all[1])}</th></tr></table>
+    <p style="font-size:10pt">Sammy (both reps) is an employee — totals above are gas + extra only; base pay from timesheet.</p><div class="sig"><div>Asher</div><div>Lance</div><div>Front office</div></div></div>`;window.print();}
 function printPayroll(cs,rep,mode){$("#print").innerHTML=cs.map(c=>payrollTicket(c,rep,mode)).join("");window.print();}
 function oPayroll(rep,mine){
   h(`<h1>Weekly payroll</h1><p class="mut small">Week of Nov 2 · Subs: piece rate from the work order + gas + extra labor. Gas from ${OFFICE_LABEL}: under 40 mi $0 · 40–60 mi $25 · 60+ mi $50. Crews never see dollars.</p>`);
+  S.payOK=S.payOK||{asher:false,lance:false};const other=rep==="asher"?"lance":"asher",both=payBoth();
+  const gc=h(`<div class="card" style="border:2px solid ${both?"var(--ok)":"var(--warn)"}"><h2>${both?"🔓 Payroll confirmed by Asher & Lance":"🔒 Confirm payroll"}</h2>
+   <div style="font-size:1.02rem">${REPS[rep]} (your crews): ${S.payOK[rep]?'<b style="color:var(--ok)">✓ confirmed</b>':"<b>not confirmed</b>"} · ${REPS[other]}: ${S.payOK[other]?'<b style="color:var(--ok)">✓ confirmed</b>':"<b>waiting</b>"}</div>
+   ${S.payOK[rep]?'<button class="link pu">Undo my confirm</button>':`<button class="ok big pc">✔ Confirm ${REPS[rep]}'s crews' payroll</button>`}
+   <p class="mut small" style="margin:6px 0 0">${both?"Week totals and printing are unlocked.":"Week totals and printing unlock after both Asher and Lance confirm their own crews (waiting on "+payWaiting()+"). Each of you confirms independently."}</p></div>`);
+  const pc=gc.querySelector(".pc");if(pc)pc.onclick=()=>{S.payOK[rep]=true;toast(REPS[rep]+"'s payroll confirmed");go();};const pu=gc.querySelector(".pu");if(pu)pu.onclick=()=>{S.payOK[rep]=false;go();};
+  const LOCK=`<span class="mut">🔒 waiting on ${payWaiting()}</span>`;
   mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6);let gm=0,lb=0;
     const emp=CREWS[c].type==="emp";let pr=0;
     const rows=js.map(j=>{const g=mileTier(j.miles),l=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);gm+=g;lb+=l;
@@ -395,13 +412,14 @@ function oPayroll(rep,mine){
       return`<tr><td>${DAYS_EN[j.day].split(" ")[0]}</td><td>${esc(j.addr.split(",")[0])}<br><span class="mut small">${j.miles} mi</span>${det}${ex}<button class="link ox" data-j="${j.id}">＋ Add extra labor</button></td>${emp?"":`<td>${money(pj)}</td>`}<td>$${g}</td><td>$${l}</td></tr>`;}).join("");
     h(`<div class="card"><h2>${esc(CREWS[c].name)} ${typeTag(c)}</h2>
      <p class="small mut" style="margin:0 0 6px">${emp?"Employee (hourly / salary, in training) — not piece rate. Gas + extra labor shown for reference; base pay comes from timesheet.":"Sub crew — paid piece rate per job + gas + approved extra labor."}</p>
-     <table><tr><th>Day</th><th>Job</th>${emp?"":"<th>Piece</th>"}<th>Gas</th><th>Extra</th></tr>${rows}<tr><th></th><th>Total</th>${emp?"":`<th>${money(pr)}</th>`}<th>$${gm}</th><th>$${lb}</th></tr></table>
-     <p style="font-size:1.15rem;margin:10px 0 0"><b>${emp?"Add-ons this week: "+money(gm+lb):"Total this week: "+money(pr+gm+lb)}</b>${emp?' <span class="mut small">+ hourly pay from timesheet</span>':""}</p><div class="step" style="margin-top:12px">🖨 Print ${esc(CREWS[c].name)}${/s$/i.test(CREWS[c].name)?"'":"'s"} payroll</div><div style="display:flex;gap:8px"><button class="pp" data-c="${c}" data-m="sum" style="flex:1">Normal — week total</button><button class="pp" data-c="${c}" data-m="detail" style="flex:1">Detailed — each job</button></div></div>`);});
+     <table><tr><th>Day</th><th>Job</th>${emp?"":"<th>Piece</th>"}<th>Gas</th><th>Extra</th></tr>${rows}${both?`<tr><th></th><th>Total</th>${emp?"":`<th>${money(pr)}</th>`}<th>$${gm}</th><th>$${lb}</th></tr>`:""}</table>
+     <p style="font-size:1.15rem;margin:10px 0 0"><b>${!both?(emp?"Add-ons this week: ":"Total this week: ")+LOCK:emp?"Add-ons this week: "+money(gm+lb):"Total this week: "+money(pr+gm+lb)}</b>${emp?' <span class="mut small">+ hourly pay from timesheet</span>':""}</p><div class="step" style="margin-top:12px">🖨 Print ${esc(CREWS[c].name)}${/s$/i.test(CREWS[c].name)?"'":"'s"} payroll</div><div style="display:flex;gap:8px"><button class="pp" data-c="${c}" data-m="sum" style="flex:1" ${both?"":"disabled"}>Provided Labor ticket${both?"":" 🔒"}</button></div></div>`);});
   document.querySelectorAll(".ox").forEach(b=>b.onclick=()=>officeExtra(S.jobs.find(x=>x.id===+b.dataset.j),rep));
   document.querySelectorAll(".fl").forEach(i=>i.onchange=()=>{const j=S.jobs.find(x=>x.id===+i.dataset.j);j.flat=j.flat||{};j.flat[i.dataset.i]=Number(i.value)||0;go();});
   document.querySelectorAll(".pp").forEach(b=>b.onclick=()=>printPayroll([b.dataset.c],rep,b.dataset.m));
-  const pa=h(`<div class="card"><h2>🖨 Print all ${mine.length} crews</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pa" data-m="sum" style="flex:1">Normal — week total</button><button class="pa" data-m="detail" style="flex:1">Detailed — each job</button></div><p class="mut small">Normal = Name + Provided Labor + total (front office ticket). Detailed = every job and its payout, plus the week total.</p></div>`);
-  pa.querySelectorAll(".pa").forEach(b=>b.onclick=()=>printPayroll(mine,rep,b.dataset.m));
+  const pa=h(`<div class="card"><h2>🖨 Print</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pa" style="flex:1" ${both?"":"disabled"}>Normal — Provided Labor tickets (my ${mine.length} crews)</button><button class="pd" style="flex:1" ${both?"":"disabled"}>Detailed — Asher + Lance, every job</button></div>
+   <p class="mut small">${both?"":"🔒 Unlocks after Asher and Lance both confirm (waiting on "+payWaiting()+"). "}Normal = one ticket per crew: Name + Provided Labor + total. Detailed = every job's payout, Asher's crews subtotal, Lance's crews subtotal, combined week total.</p></div>`);
+  pa.querySelector(".pa").onclick=()=>printPayroll(mine,rep,"sum");pa.querySelector(".pd").onclick=()=>printDetailedAll();
   h(`<details class="card"><summary>Sub piece rates (Jorge, Santos)</summary><table class="small">${Object.values(PIECE).map(P=>`<tr><td>${P.label}</td><td>${P.flat?"$"+P.flat+" default per "+(P.unit==="job"?"house":"each")+" — edit per job by size":money(P.rate)+" / "+P.unit}</td></tr>`).join("")}</table><p class="mut small">Sammy is an employee in training — not piece rate.</p></details>`);
 }
 function oMore(rep){
