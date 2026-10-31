@@ -8310,10 +8310,12 @@ function parseLine(raw){let t=raw.replace(/^\s*(?:[•*\-]|\d{1,2}[.)])\s+/,"").
   const cityM=addr.match(/,\s*([A-Za-z .]+?),?\s*(?:GA|Ga|ga|Georgia)\b/)||addr.match(/\s([A-Z][a-z]+(?:\s[A-Z][a-z]+)?),?\s*(?:GA|Ga)\b/);
   return {cust,addr,city:cityM?cityM[1].trim():"",note,time,mode:hint(t+" "+note)};}
 function parseDoc(text){const days={};let cur=null;
-  text.split(/\r?\n/).forEach(l=>{const s=l.trim();if(!s)return;
+  text.replace(/\uFEFF/g,"").split(/\r?\n/).forEach(l=>{const s=l.trim();if(!s||/^[*•\-\s]*$/.test(s))return;
     const h=s.toLowerCase().match(/^[#*\s]*(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)[a-z]*\b[\s,.:\-–—]*(\d{1,2}\/\d{1,2})?[\s:\-–—]*$/);
     if(h){cur=DOWS.findIndex(d=>d.startsWith(h[1].slice(0,3)));days[cur]=days[cur]||[];return;}
-    if(cur==null)return;const j=parseLine(s);if(j)days[cur].push(j);});
+    if(cur==null)return;const L=days[cur],prev=L[L.length-1];
+    if(/^\s{2,}[*•\-]/.test(l)&&prev){const t=s.replace(/^[*•\-]\s*/,"").trim();prev.note=prev.note?prev.note+" · "+t:t;const tm=parseTime(t);if(tm!=null&&prev.time==null)prev.time=tm;prev.mode=hint(prev.note);return;}
+    const j=parseLine(s);if(j)L.push(j);});
   return days;}
 // geocode: Places (New) searchText with the app's key, then free Nominatim
 async function geo(q){try{if(K().placesKey()){const r=await fetch("https://places.googleapis.com/v1/places:searchText",{method:"POST",headers:{"Content-Type":"application/json","X-Goog-Api-Key":K().placesKey(),"X-Goog-FieldMask":"places.location,places.formattedAddress"},body:JSON.stringify({textQuery:q})});
