@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>KP Installer — preview</title>
+<style>
+:root{--bg:#f4f3f3;--card:#fff;--ink:#141212;--mut:#5e5a5a;--line:#d6d2d2;--acc:#c8102e;--ok:#17713a;--warn:#a05f00;--bad:#b3261e;--chip:#e9e7e7;--blue:#2f6fd6}
+@media (prefers-color-scheme:dark){:root{--bg:#0b0a0a;--card:#1a1818;--ink:#f6f3f3;--mut:#b3adad;--line:#383434;--acc:#ff4a50;--ok:#4cc27a;--warn:#f0ad40;--bad:#ff6b63;--chip:#2a2727;--blue:#6aa0ff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--acc);color:#fff;padding:8px 12px;display:flex;gap:8px;align-items:center}
+header b{font-size:1.05rem;margin-right:auto}header select{font:inherit;font-size:.9rem;padding:6px;border-radius:10px;border:0;max-width:62%}
+.banner{background:#fff3cd;color:#5c4400;font-size:.78rem;padding:5px 12px;text-align:center}
+main{max-width:720px;margin:0 auto;padding:12px 12px 100px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin:12px 0}
+h1{font-size:1.45rem;margin:6px 0 2px}h2{font-size:1.15rem;margin:0 0 6px}
+.mut{color:var(--mut)}.small{font-size:.85rem}
+.step{font-size:.78rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin-bottom:6px}
+button{font:inherit;font-size:1.05rem;min-height:52px;border-radius:14px;border:2px solid var(--line);background:var(--chip);color:var(--ink);padding:10px 14px;cursor:pointer}
+button:disabled{opacity:.4;cursor:not-allowed}
+.big{width:100%;min-height:68px;font-size:1.2rem;font-weight:800;margin-top:12px;border-radius:16px}
+.p{background:var(--acc);border-color:var(--acc);color:#fff}.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.act{display:block;width:100%;min-height:62px;text-align:left;font-weight:700;margin-top:10px}
+.act.lab{border-color:var(--blue)}.act.mat{border-color:var(--warn)}.act.need{border-color:var(--bad)}.act.done{border-color:var(--ok)}
+.link{background:none;border:0;min-height:40px;color:var(--mut);font-size:.9rem;text-decoration:underline;padding:4px}
+.job{display:block;width:100%;text-align:left;min-height:84px;padding:14px 16px;margin-top:10px;background:var(--card);border-radius:16px}
+.job .a{font-size:1.15rem;font-weight:800}.job .s{font-size:.95rem;color:var(--mut);margin-top:4px}
+.lock{text-align:center;padding:34px 14px}.lock .ico{font-size:3rem}
+.pill{display:inline-block;font-size:.75rem;font-weight:800;padding:3px 9px;border-radius:99px;background:var(--chip)}
+.pill.ok{background:var(--ok);color:#fff}.pill.warn{background:var(--warn);color:#fff}.pill.bad{background:var(--bad);color:#fff}
+table{width:100%;border-collapse:collapse;font-size:.95rem}td,th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+input,textarea{font:inherit;width:100%;padding:12px;border-radius:12px;border:2px solid var(--line);background:var(--bg);color:var(--ink)}
+textarea{min-height:90px}label{display:block;font-weight:700;margin:12px 0 4px}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.thumb{width:60px;height:60px;border-radius:10px;background:linear-gradient(135deg,#7a9,#365);color:#fff;font-size:.62rem;display:flex;align-items:flex-end;padding:3px;position:relative}
+.thumb.mk::after{content:"✎";position:absolute;top:2px;right:5px}
+.toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:#111;color:#fff;padding:12px 16px;border-radius:14px;font-size:.95rem;max-width:92%;z-index:30;box-shadow:0 4px 16px #0007}
+.modal{position:fixed;inset:0;background:#0009;z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:720px;border-radius:20px 20px 0 0;padding:18px 16px 24px;max-height:92vh;overflow:auto}
+.bar{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);z-index:6;padding-bottom:env(safe-area-inset-bottom)}
+.bar button{flex:1;border:0;border-radius:0;background:none;min-height:66px;font-size:.8rem;font-weight:800;color:var(--mut);padding:4px}
+.bar button .i{display:block;font-size:1.35rem}.bar button.on{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
+details summary{font-weight:800;min-height:48px;display:flex;align-items:center;cursor:pointer}
+.cal{overflow-x:auto;margin:10px -12px;padding:0 12px}.cal table{min-width:620px;border-collapse:separate;border-spacing:6px}
+.cal th{border:0;font-size:.85rem;text-align:center}.cal th.tm{color:var(--acc)}
+.cal td{border:2px dashed var(--line);border-radius:12px;min-width:104px;height:96px;padding:6px;background:var(--card);font-size:.78rem;cursor:pointer}
+.cal td.tm{border-color:var(--acc)}.cal td.over{background:var(--chip);border-style:solid;border-color:var(--blue)}
+.cal td.crew{border:0;background:none;cursor:default;font-size:.9rem;min-width:84px}
+.cal .f{background:var(--chip);border-radius:8px;padding:3px 5px;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal .plus{color:var(--mut);text-align:center;margin-top:4px}
+.tag{font-size:.7rem;font-weight:800;padding:1px 6px;border-radius:6px;background:var(--chip);margin-left:4px}
+.tag.emp{background:var(--blue);color:#fff}
+</style></head><body>
+<header><b>KP Installer</b><button id="lang" style="min-height:36px;padding:4px 10px;font-size:.8rem;border-radius:10px;border:0">ES / EN</button><select id="who" aria-label="Who is using the app"></select></header>
+<div class="banner">PREVIEW · sample data · nothing is sent · switch user at top ↑</div>
+<main id="app"></main>
+<input type="file" id="fpick" multiple accept=".pdf,image/*,.xlsx" hidden>
+<script>
+"use strict";
+let LANG=(()=>{try{return localStorage.getItem("kpPrevLang")||"en";}catch(e){return "en";}})();const L=(es,en)=>LANG==="es"?es:en;
+const OFFICE_LABEL="33 Apex Dr, Jefferson, GA";
+const REPS={asher:"Asher",lance:"Lance"};
+// Each rep runs the same pattern: two piece-rate sub crews (Jorge, Santos) + one employee crew in training (Sammy).
+const CREWS={};
+["asher","lance"].forEach(r=>[["jorge","Jorge","sub"],["santos","Santos","sub"],["sammy","Sammy","emp"]].forEach(([k,n,t])=>CREWS[r+"_"+k]={name:n,rep:r,type:t}));
+const crewLabel=c=>CREWS[c].name+" ("+REPS[CREWS[c].rep]+")";
+const typeTag=c=>CREWS[c].type==="emp"?'<span class="tag emp">Employee · training</span>':'<span class="tag">Sub · piece rate</span>';
+const DAYS=["Lun 2","Mar 3","Mié 4","Jue 5","Vie 6"],DAYS_EN=["Mon 11/2","Tue 11/3","Wed 11/4","Thu 11/5","Fri 11/6"],TOM=0; // tomorrow = Mon 11/2
+let JID=100;
+function mkJob(crew,day,addr,cust,miles,nc,lines,load,file,coords){return{id:++JID,crew,day,addr,cust,miles,nc,lines,load,coords:coords||"",file:file||null,
+  checkedIn:false,checkinMiles:null,photos:[],wallPhotos:0,crawlPhoto:false,notes:[],labor:[],short:[],done:false};}
+const fresh=()=>{const J=[
+  mkJob("asher_jorge",0,"2009 Massey Ln, Winder, GA","Brookstone Homes",21,true,[["Paredes 2x4","R-13 sin papel 15\"","1,840 SF"],["Ático","Soplado R-38","2,150 SF"],["Crawl (piso)","R-19 16\"","1,600 SF"]],[["R-13 15\"",23,"bultos"],["Soplado R-38",31,"bolsas"],["R-19 16\"",14,"bultos"]],"WO - 2009 Massey Ln.pdf","34.0012, -83.7201"),
+  mkJob("asher_jorge",0,"145 Lakeview Dr, Commerce, GA","Daniel & Rosa Pike",47,false,[["Ático retro","Soplado R-38 encima","1,300 SF"]],[["Soplado R-38",19,"bolsas"]],"WO - 145 Lakeview.pdf"),
+  mkJob("asher_santos",0,"88 Pine Ridge Ct, Hoschton, GA","Rockhaven Builders",18,true,[["Paredes 2x6","R-19 sin papel 15\"","2,210 SF"],["Crawl (piso)","R-19 16\"","1,450 SF"]],[["R-19 15\"",30,"bultos"],["R-19 16\"",13,"bultos"]],"WO - 88 Pine Ridge.pdf"),
+  mkJob("asher_sammy",0,"17 Oak St, Jefferson, GA","Mary Collins",4,false,[["Ático","Soplado R-38","900 SF"]],[["Soplado R-38",13,"bolsas"]],"WO - 17 Oak St.jpg"),
+  mkJob("asher_jorge",1,"301 Hwy 124, Braselton, GA","Brookstone Homes",26,true,[["Paredes 2x4","R-13","1,700 SF"]],[["R-13 15\"",21,"bultos"]],"WO - 301 Hwy 124.pdf"),
+  mkJob("lance_jorge",0,"512 Old Federal Rd, Dahlonega, GA","Mountain Crest LLC",63,true,[["Paredes 2x4","R-13 sin papel 15\"","1,500 SF"],["Ático","Soplado R-38","1,900 SF"]],[["R-13 15\"",19,"bultos"],["Soplado R-38",27,"bolsas"]],"WO - 512 Old Federal.pdf","34.5321, -83.9851"),
+  mkJob("lance_santos",0,"9 Creekside Way, Gainesville, GA","Harbor Homes",29,false,[["Línea de techo","Espuma celda abierta 5.5\"","2,640 SF"]],[["Espuma celda abierta","2,640","SF"]],"WO - 9 Creekside.pdf"),
+  mkJob("lance_sammy",0,"240 Main St, Commerce, GA","Tom Reeves",44,false,[["Ático","Soplado R-30","1,100 SF"]],[["Soplado R-30",12,"bolsas"]],"WO - 240 Main St.pdf"),
+];const C={};Object.keys(CREWS).forEach(k=>C[k]=false);
+return{jobs:J,confirmed:Object.assign({},C),recapDone:Object.assign({},C),recap:{},crewNotifs:{},inbox:[],offline:false,queue:0,
+  notifPrefs:{asher:{ready:true,labor:true,short:true,photo:true,complete:false},lance:{ready:true,labor:true,short:true,photo:false,complete:true}},
+  tab:{asher:"cal",lance:"cal"},openJob:null};};
+let S=fresh();
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const now=()=>new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+function toast(t){const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2600);}
+function h(html){const d=document.createElement("div");d.innerHTML=html;$("#app").appendChild(d);return d;}
+function sheet(html,wire){const m=document.createElement("div");m.className="modal";m.innerHTML='<div class="sheet">'+html+'<button class="link x" style="display:block;margin:14px auto 0">Cerrar / Close</button></div>';m.onclick=e=>{if(e.target===m)m.remove();};m.querySelector(".x").onclick=()=>m.remove();document.body.appendChild(m);wire&&wire(m);return m;}
+// Spanish → English for office (stand-in for real translation on ingest)
+const DICT=[["tuvimos que","we had to"],["no estaba","wasn't there"],["todo bien","all good"],["falta material","short on material"],["material equivocado","wrong material"],["faltan","missing"],["falta","missing"],["bultos","bundles"],["bolsas","bags"],["paredes","walls"],["pared","wall"],["ático","attic"],["mucha","a lot of"],["basura","trash"],["limpiar","clean up"],["sacar","remove"],["vieja","old"],["viejo","old"],["insulación","insulation"],["aislamiento","insulation"],["casa","house"],["cliente","customer"],["llegamos","we arrived"],["terminamos","we finished"],["mañana","tomorrow"],["hoy","today"],["necesitamos","we need"],["sobró","left over"],["más","more"],["y","and"],["la","the"],["el","the"],["de","of"],["en","in"],["con","with"]];
+const LAB_EN_CREW={s:"A little more",m:"Quite a bit more",l:"A lot more",x:"Way more"};
+DICT.unshift(["espuma celda abierta","open cell foam"],["sin papel","unfaced"],["soplado","blown"],["encima","on top"],["línea de techo","roofline"],["ático retro","attic retro"],["crawl (piso)","crawl (floor)"],["piso","floor"],["ver archivo","see file"]);
+const tr=x=>LANG==="es"?x:toEN(String(x));
+function toEN(es){let t=" "+es.toLowerCase()+" ";DICT.forEach(([a,b])=>{t=t.replace(new RegExp("([\\s,.;:!?])"+a+"(?=[\\s,.;:!?])","g"),"$1"+b);});t=t.trim();return t.charAt(0).toUpperCase()+t.slice(1);}
+function ping(rep,kind,text){S.inbox.unshift({rep,kind,text,t:now(),pushed:!!S.notifPrefs[rep][kind]});}
+const mileTier=m=>m>=60?50:m>=40?25:0;
+function fillWho(){const w=$("#who");w.innerHTML='<optgroup label="Office (English)"><option value="office:asher">Asher (office)</option><option value="office:lance">Lance (office)</option></optgroup><optgroup label="Crews">'+Object.keys(CREWS).map(k=>`<option value="crew:${k}">${crewLabel(k)}</option>`).join("")+'</optgroup>';w.onchange=()=>{S.openJob=null;render();};}
+function render(){const[k,id]=$("#who").value.split(":");document.documentElement.lang=k==="crew"?"es":"en";$("#app").innerHTML="";document.querySelectorAll(".bar").forEach(b=>b.remove());k==="crew"?crew(id):office(id);}
+function go(){render();window.scrollTo(0,0);}
+
+/* ===================== CREW (Spanish) ===================== */
+function crew(c){
+  const C=CREWS[c],rep=REPS[C.rep],jobs=S.jobs.filter(j=>j.crew===c&&j.day===TOM);
+  if(S.openJob)return crewJob(c,S.jobs.find(j=>j.id===S.openJob));
+  if(!S.confirmed[c]){h(`<div class="card lock"><div class="ico">🔒</div><h1>${L("Ma\u00f1ana todav\u00eda no est\u00e1 listo","Tomorrow isn't ready yet")}</h1><p class="mut" style="font-size:1.05rem">${rep} ${L("tiene que confirmar tu horario.<br>Te llegar\u00e1 un aviso cuando est\u00e9 listo.","has to confirm your schedule.<br>You'll get a notification when it's ready.")}</p></div>`);return;}
+  if(S.recapDone[c]){h(`<div class="card lock"><div class="ico">✅</div><h1>${L("D\u00eda terminado","Day finished")}</h1><p class="mut" style="font-size:1.05rem">${L("Gracias. El próximo día se abre cuando "+rep+" confirme.","Thanks. The next day opens when "+rep+" confirms.")}</p></div>`);return;}
+  const left=jobs.filter(j=>!j.done).length;
+  if(S.crewNotifs[c])h(`<div class="card" style="border-left:5px solid var(--acc)">🔔 <b>${esc(S.crewNotifs[c]+" — "+L("Tus trabajos de mañana están listos.","Your jobs for tomorrow are ready."))}</b></div>`);
+  h(`<div class="step">${L(DAYS[TOM]+" nov",DAYS_EN[TOM])} · ${esc(C.name)}</div><h1>${left?L("Tus trabajos","Your jobs"):L("¡Todos los trabajos completos!","All jobs complete!")}</h1>`);
+  jobs.forEach((j,i)=>{const d=h(`<button class="job" ${j.done?'style="opacity:.55"':""}><div class="a">${j.done?"✅":j.checkedIn?"▶️":(i+1)+"."} ${esc(j.addr)}</div><div class="s">${j.done?L("Trabajo completo","Job complete"):j.checkedIn?L("Toca para seguir","Tap to continue"):L("Toca para ir y registrar llegada","Tap to go and check in")}</div></button>`);
+    d.querySelector("button").onclick=()=>{if(j.done)return;j.checkedIn?(S.openJob=j.id,go()):checkin(j);};});
+  const load={};jobs.forEach(j=>j.load.forEach(([m,q,u])=>{const k=m+"|"+u;load[k]=(load[k]||0)+Number(String(q).replace(/,/g,""));}));
+  h('<details class="card"><summary>'+L("\ud83d\ude9a Ticket de carga \u2014 qu\u00e9 subir al cami\u00f3n","\ud83d\ude9a Load ticket \u2014 what goes on the truck")+'</summary><table>'+Object.entries(load).map(([k,q])=>{const[m,u]=k.split("|");return`<tr><td>${esc(tr(m))}</td><td style="text-align:right"><b>${q.toLocaleString()}</b> ${tr(u)}</td></tr>`;}).join("")+'</table></details>');
+  if(!left){const r=h(`<button class="p big">${L("\ud83d\udcdd Terminar el d\u00eda","\ud83d\udcdd Finish the day")}</button><p class="mut" style="text-align:center">${L("Necesario para ver el pr\u00f3ximo d\u00eda.","Needed to see the next day.")}</p>`);r.querySelector("button").onclick=()=>recap(c);}
+  const o=h(`<div style="text-align:center"><button class="link">${S.offline?L("\u26a0\ufe0f Sin conexi\u00f3n \u00b7 ","\u26a0\ufe0f Offline \u00b7 ")+S.queue+L(" en cola \u2014 tocar para reconectar"," queued \u2014 tap to reconnect"):L("Demo: simular sin conexi\u00f3n","Demo: simulate offline")}</button></div>`);
+  o.querySelector("button").onclick=()=>{S.offline=!S.offline;if(!S.offline&&S.queue){toast(L("Sincronizado","Synced")+" ("+S.queue+")");S.queue=0;}go();};
+}
+function checkin(j){
+  sheet(`<h1>${L("\ud83d\udccd Registrar llegada","\ud83d\udccd Check in")}</h1><p style="font-size:1.05rem"><b>${esc(j.addr)}</b></p><p class="mut">${L("Tienes que estar a menos de 0.5 millas.","You must be within 0.5 miles.")}</p>
+   <a href="https://maps.google.com/?q=${encodeURIComponent(j.addr)}" target="_blank" style="font-size:1.05rem">${L("\ud83e\udded Abrir ruta en mapas","\ud83e\udded Open route in maps")}</a>
+   <button class="ok big" data-m="0.1">${L("\ud83d\udccd Ya llegu\u00e9","\ud83d\udccd I'm here")}</button><div class="res" style="margin-top:10px"></div>
+   <button class="link" data-m="2.3">${L("Demo: probar estando lejos (2.3 mi)","Demo: try from far away (2.3 mi)")}</button>`,m=>m.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{const mi=+b.dataset.m;
+     if(mi<=0.5){j.checkedIn=true;j.checkinMiles=mi;if(S.offline)S.queue++;m.remove();S.openJob=j.id;toast(L("✅ Llegada registrada","✅ Checked in"));go();}
+     else m.querySelector(".res").innerHTML='<b style="color:var(--bad);font-size:1.05rem">'+L("Estás a "+mi+" millas. Acércate a la obra.","You're "+mi+" miles away. Get closer to the job.")+'</b>';}));
+}
+const LAB_ES={s:"Un poco más",m:"Bastante más",l:"Mucho más",x:"Muchísimo más"},LAB_EN={s:"a little more",m:"quite a bit more",l:"a lot more",x:"way more"};
+const LAB_USD={s:25,m:50,l:100,x:null}; // office-only mapping; "x" → office types amount over $100
+function crewJob(c,j){
+  const rep=CREWS[c].rep;
+  h('<button class="link" style="font-size:1rem">'+L("\u2190 Mis trabajos","\u2190 My jobs")+'</button>').querySelector("button").onclick=()=>{S.openJob=null;go();};
+  h(`<div class="card"><h1 style="margin-top:0">${esc(j.addr)}</h1><div style="font-size:1.05rem">${L("Cliente:","Customer:")} <b>${esc(j.cust)}</b></div>${j.coords?`<a href="https://maps.google.com/?q=${j.coords.replace(/ /g,"")}" target="_blank">📍 ${j.coords}</a>`:""}</div>`);
+  h('<div class="card"><div class="step">'+L("1 \u00b7 Orden de trabajo","1 \u00b7 Work order")+'</div><table>'+j.lines.map(l=>`<tr><td><b>${tr(l[0])}</b><br><span class="mut small">${tr(l[1])}</span></td><td style="text-align:right;font-weight:800">${l[2]}</td></tr>`).join("")+'</table></div>');
+  const ph=h(`<div class="card"><div class="step">${L("2 \u00b7 Fotos","2 \u00b7 Photos")}</div>
+   ${j.nc?`<button class="act ${j.wallPhotos?"done":"need"} wb">${j.wallPhotos?"✅":"📷"} ${L("Fotos de paredes","Walls photos")} ${j.wallPhotos?"("+j.wallPhotos+")":L("\u2014 obligatorio","\u2014 required")}</button>
+   <button class="act ${j.crawlPhoto?"done":"need"} cb">${j.crawlPhoto?"✅":"📷"} ${L("Fotos del crawl","Crawl photos")} ${j.crawlPhoto?"":L("\u2014 obligatorio","\u2014 required")}</button>`:""}
+   <button class="act gb">📷 ${L("Fotos del trabajo","Job photos")} ${j.photos.length?"("+j.photos.length+")":""}</button>
+   <div class="thumbs">${j.photos.map((p,i)=>`<div class="thumb ${p.mk?"mk":""}" data-i="${i}">${p.t}</div>`).join("")}</div>${j.photos.length?'<div class="mut small">'+L("Toca una foto para marcarla \u270e","Tap a photo to mark it up \u270e")+'</div>':""}</div>`);
+  const add=t=>{j.photos.push({t,mk:false});if(S.offline)S.queue++;render();};
+  ph.querySelector(".gb").onclick=()=>add("Foto");
+  if(j.nc){ph.querySelector(".wb").onclick=()=>{j.wallPhotos++;add("Paredes");};ph.querySelector(".cb").onclick=()=>{j.crawlPhoto=true;add("Crawl");};}
+  ph.querySelectorAll(".thumb").forEach(t=>t.onclick=()=>sheet(`<h1>${L("\u270e Marcar foto","\u270e Mark up photo")}</h1><div class="thumb" style="width:100%;height:200px;font-size:1rem">${j.photos[t.dataset.i].t}</div><p class="mut">${L("Dibuja flechas o escribe sobre la foto.","Draw arrows or write on the photo.")}</p><button class="p big">${L("Guardar","Save")}</button>`,m=>m.querySelector(".p").onclick=()=>{j.photos[t.dataset.i].mk=true;m.remove();render();}));
+  const ac=h(`<div class="card"><div class="step">${L("Más trabajo, material o nota","Extra work, material or a note")}</div>
+   <button class="act lab lb">${L("\ud83d\udcaa M\u00e1s trabajo pagado","\ud83d\udcaa More paid work")}</button><button class="act mat sb">${L("\ud83d\udce6 Problema de material","\ud83d\udce6 Material problem")}</button><button class="act nb">${L("\ud83d\uddd2 Escribir una nota","\ud83d\uddd2 Write a note")} ${j.notes.length?"("+j.notes.length+")":""}</button>
+   <div class="mut small" style="margin-top:8px">${j.labor.map(l=>`• ${L("Pedido extra:","Extra request:")} ${L(LAB_ES[l.lvl],LAB_EN_CREW[l.lvl])} — ${l.status==="pending"?L("esperando a la oficina","waiting on the office"):l.status==="approved"?L("aprobado \u2705","approved \u2705"):L("no aprobado","not approved")}`).concat(j.short.map(()=>`• ${L("Aviso de material enviado a","Material alert sent to")} ${REPS[rep]} ✅`),j.notes.map(n=>"• "+esc(L(n.es,n.en)))).join("<br>")}</div></div>`);
+  ac.querySelector(".lb").onclick=()=>labor(c,j);ac.querySelector(".sb").onclick=()=>short(c,j);
+  ac.querySelector(".nb").onclick=()=>sheet(`<h1>${L("\ud83d\uddd2 Escribir una nota","\ud83d\uddd2 Write a note")}</h1><textarea placeholder="${L("Escribe aqu\u00ed\u2026","Type here\u2026")}"></textarea><button class="p big">${L("Guardar nota","Save note")}</button>`,m=>m.querySelector(".p").onclick=()=>{const v=m.querySelector("textarea").value.trim();if(v){j.notes.push({es:v,en:toEN(v)});if(S.offline)S.queue++;}m.remove();render();});
+  const block=j.nc&&!(j.wallPhotos&&j.crawlPhoto);
+  const cp=h(`<div class="step" style="margin-top:16px">${L("3 \u00b7 Terminar","3 \u00b7 Finish")}</div>${block?'<div style="color:var(--bad);font-weight:800">'+L("Faltan fotos de paredes y fotos del crawl.","Walls photos and crawl photos are still needed.")+'</div>':""}<button class="ok big" ${block?"disabled":""}>${L("\u2714 Trabajo completo","\u2714 Job complete")}</button>`);
+  cp.querySelector("button").onclick=()=>{
+    const fin=()=>{j.done=true;if(S.offline)S.queue++;ping(rep,"complete",`${crewLabel(c)} completed ${j.addr}`);if(!j.photos.length)ping(rep,"photo",`${crewLabel(c)} completed ${j.addr} with NO photos`);S.openJob=null;toast(L("✅ Trabajo completo","✅ Job complete"));go();};
+    if(!j.photos.length)sheet(`<h1>${L("\u00bfSin fotos?","No photos?")}</h1><p style="font-size:1.05rem">${L("No hay fotos de este trabajo. Toma fotos antes de terminar.","There are no photos for this job. Take photos before you finish.")}</p><button class="p big a">${L("📷 Tomar fotos","📷 Take photos")}</button><button class="link f" style="display:block;margin:12px auto">${L("Completar sin fotos","Complete without photos")}</button>`,m=>{m.querySelector(".a").onclick=()=>m.remove();m.querySelector(".f").onclick=()=>{m.remove();fin();};});
+    else fin();};
+}
+function labor(c,j){let lvl=null,n=0;
+  sheet(`<h1>${L("\ud83d\udcaa M\u00e1s trabajo pagado","\ud83d\udcaa More paid work")}</h1><p class="mut">${L("\u00bfCu\u00e1nto trabajo extra fue? La oficina decide el pago.","How much extra work was it? The office decides the pay.")}</p>${Object.entries(LAB_ES).map(([k,l])=>`<button class="act lv" data-v="${k}">${L(l,LAB_EN_CREW[k])}</button>`).join("")}
+   <label>${L("\u00bfPor qu\u00e9? (obligatorio)","Why? (required)")}</label><textarea class="rs" placeholder="${L("Ej. tuvimos que sacar insulaci\u00f3n vieja","E.g. we had to remove old insulation")}"></textarea>
+   <button class="act need ph">${L("\ud83d\udcf7 Foto \u2014 obligatoria","\ud83d\udcf7 Photo \u2014 required")}</button><button class="p big go">${L("Enviar a la oficina","Send to the office")}</button>`,m=>{
+    const pb=m.querySelector(".ph");pb.onclick=()=>{n++;pb.textContent="✅ Foto lista ("+n+")";pb.className="act done ph";};
+    m.querySelectorAll(".lv").forEach(b=>b.onclick=()=>{lvl=b.dataset.v;m.querySelectorAll(".lv").forEach(x=>{x.style.background=x===b?"var(--ink)":"";x.style.color=x===b?"var(--bg)":"";});});
+    m.querySelector(".go").onclick=()=>{const r=m.querySelector(".rs").value.trim();if(!lvl)return toast(L("Elige cuánto","Pick how much"));if(!r)return toast(L("Escribe por qué","Write why"));if(!n)return toast(L("Toma la foto","Take the photo"));
+      j.labor.push({lvl,amt:LAB_USD[lvl],es:r,en:toEN(r),status:"pending",crew:c});if(S.offline)S.queue++;
+      ping(CREWS[c].rep,"labor",`${crewLabel(c)} asks for extra labor at ${j.addr}`);m.remove();toast(L("Enviado a la oficina","Sent to the office"));render();};});}
+function short(c,j){const rep=CREWS[c].rep;let k="Falta material",n=0;
+  sheet(`<h1>${L("\ud83d\udce6 Problema de material","\ud83d\udce6 Material problem")}</h1><div style="display:flex;gap:8px"><button class="kk" data-v="Falta material" style="flex:1;background:var(--ink);color:var(--bg)">${L("Falta","Short")}</button><button class="kk" data-v="Material equivocado" style="flex:1">${L("Equivocado","Wrong")}</button></div>
+   <label>${L("\u00bfQu\u00e9 pas\u00f3? (opcional)","What happened? (optional)")}</label><textarea class="rs" placeholder="${L("Ej. faltan 6 bultos de R-13","E.g. short 6 bundles of R-13")}"></textarea>
+   <button class="act need ph">${L("\ud83d\udcf7 Foto \u2014 obligatoria","\ud83d\udcf7 Photo \u2014 required")}</button><button class="p big go">${L("\ud83d\udea8 Avisar a","\ud83d\udea8 Alert")} ${REPS[rep]}${L(" ya</button>"," now</button>")}`,m=>{
+    const pb=m.querySelector(".ph");pb.onclick=()=>{n++;pb.textContent="✅ Foto lista";pb.className="act done ph";};
+    m.querySelectorAll(".kk").forEach(b=>b.onclick=()=>{k=b.dataset.v;m.querySelectorAll(".kk").forEach(x=>{x.style.background=x===b?"var(--ink)":"";x.style.color=x===b?"var(--bg)":"";});});
+    m.querySelector(".go").onclick=()=>{if(!n)return toast(L("Toma la foto","Take the photo"));const d=m.querySelector(".rs").value.trim(),es=k+(d?": "+d:"");
+      j.short.push({es,en:toEN(es)});ping(rep,"short",`🚨 ${crewLabel(c)} at ${j.addr}: ${toEN(es)} (photo attached)`);m.remove();toast(L("🚨 Aviso enviado a ","🚨 Alert sent to ")+REPS[rep]);render();};});}
+function recap(c){sheet(`<h1>${L("\ud83d\udcdd Terminar el d\u00eda","\ud83d\udcdd Finish the day")}</h1><label>${L("\u00bfC\u00f3mo fue el d\u00eda? (opcional)","How did the day go? (optional)")}</label><textarea class="rs" placeholder="${L("Ej. terminamos todo bien","E.g. we finished, all good")}"></textarea>
+   <label>${L("\u00bfSobr\u00f3 material? (opcional)","Any material left over? (optional)")}</label><input class="lo" placeholder="${L("Ej. sobr\u00f3 3 bultos R-13","E.g. 3 bundles R-13 left")}"><button class="p big go">${L("\u2714 Enviar y cerrar el d\u00eda","\u2714 Send and close the day")}</button>`,m=>m.querySelector(".go").onclick=()=>{
+     const r=m.querySelector(".rs").value.trim()||"Sin comentarios",lo=m.querySelector(".lo").value.trim();
+     S.recapDone[c]=true;S.recap[c]={en:toEN(r),left:lo?toEN(lo):"—"};S.crewNotifs[c]=null;ping(CREWS[c].rep,"complete",`${crewLabel(c)} closed the day: "${toEN(r)}"`);m.remove();toast(L("Día cerrado","Day closed"));go();});}
+
+/* ===================== OFFICE (English) ===================== */
+function office(rep){
+  const mine=Object.keys(CREWS).filter(k=>CREWS[k].rep===rep);
+  const pend=S.jobs.reduce((s,j)=>s+j.labor.filter(l=>l.status==="pending"&&CREWS[l.crew].rep===rep).length,0)+S.inbox.filter(x=>x.rep===rep&&!x.seen).length;
+  const toConfirm=mine.filter(c=>!S.confirmed[c]).length;
+  const bar=document.createElement("nav");bar.className="bar";
+  bar.innerHTML=[["cal","📅","Calendar"],["confirm","✔","Confirm"+(toConfirm?" ("+toConfirm+")":"")],["inbox","🔔","Alerts"+(pend?" ("+pend+")":"")],["payroll","💵","Payroll"],["more","⚙️","Settings"]].map(([k,i,l])=>`<button data-t="${k}" class="${S.tab[rep]===k?"on":""}"><span class="i">${i}</span>${l}</button>`).join("");
+  bar.querySelectorAll("button").forEach(b=>b.onclick=()=>{S.tab[rep]=b.dataset.t;go();});document.body.appendChild(bar);
+  ({cal:oCal,confirm:oConfirm,inbox:oInbox,payroll:oPayroll,more:oMore})[S.tab[rep]](rep,mine);
+}
+let DROP=null;
+function oCal(rep,mine){
+  h(`<h1>Schedule</h1><p class="mut">Drag work order files (PDF / photo / Excel) onto a crew's day — or tap a day to add. This fills that crew's jobs until FieldGroove sync is ready.</p>`);
+  const d=h(`<div class="cal"><table><tr><th></th>${DAYS_EN.map((x,i)=>`<th class="${i===TOM?"tm":""}">${x}${i===TOM?"<br>tomorrow":""}</th>`).join("")}</tr>
+   ${mine.map(c=>`<tr><td class="crew"><b>${esc(CREWS[c].name)}</b><br>${typeTag(c).replace(" · training","").replace(" · piece rate","")}</td>${DAYS_EN.map((_,i)=>{const js=S.jobs.filter(j=>j.crew===c&&j.day===i);
+     return `<td class="${i===TOM?"tm":""}" data-c="${c}" data-d="${i}">${js.map(j=>`<div class="f" title="${esc(j.addr)}">📄 ${esc(j.addr.split(",")[0])}</div>`).join("")}<div class="plus">${js.length?"＋":"Drop file / tap"}</div></td>`;}).join("")}</tr>`).join("")}</table></div>`);
+  d.querySelectorAll("td[data-c]").forEach(td=>{
+    td.ondragover=e=>{e.preventDefault();td.classList.add("over");};td.ondragleave=()=>td.classList.remove("over");
+    td.ondrop=e=>{e.preventDefault();td.classList.remove("over");addFiles(td.dataset.c,+td.dataset.d,[...e.dataTransfer.files]);};
+    td.onclick=()=>{DROP=[td.dataset.c,+td.dataset.d];const f=$("#fpick");f.value="";f.click();};});
+  h(`<p class="mut small">Tip: file name like “WO - 123 Main St, Winder.pdf” fills the address. Tomorrow's column feeds the crews after you Confirm.</p>`);
+}
+$("#fpick").onchange=e=>{if(DROP)addFiles(DROP[0],DROP[1],[...e.target.files]);};
+function addFiles(c,day,files){if(!files.length)return;
+  files.forEach(f=>{const base=f.name.replace(/\.[^.]+$/,"").replace(/^\s*(WO|Work ?Order)\s*[-–:]\s*/i,"").trim()||"New job";
+    const j=mkJob(c,day,base+(/GA\b/.test(base)?"":", GA"),"(from file — edit)",Math.round(10+Math.random()*55),false,[["Ver archivo",f.name,"—"]],[],f.name);j.fileObj=f;S.jobs.push(j);
+    if(day===TOM&&S.confirmed[c]){S.confirmed[c]=false;}});
+  toast(files.length+" file(s) added to "+CREWS[c].name+" · "+DAYS_EN[day]+(day===TOM?" — re-confirm needed":""));go();}
+function oConfirm(rep,mine){
+  h(`<h1>Is tomorrow right?</h1><p class="mut" style="font-size:1.02rem">${DAYS_EN[TOM]}. Check each crew, tap Confirm. That crew gets notified and can see its jobs.</p>`);
+  mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day===TOM);
+    const d=h(`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">${esc(CREWS[c].name)} ${typeTag(c)}</h2>${S.confirmed[c]?'<span class="pill ok">Confirmed</span>':""}</div>
+     ${js.length?`<table>${js.map(j=>`<tr><td>${esc(j.addr)}<br><span class="mut small">${esc(j.cust)}${j.file?" · 📄 "+esc(j.file):""}</span></td><td class="small" style="text-align:right">${j.miles} mi</td></tr>`).join("")}</table>`:'<p class="mut">No jobs tomorrow — drop files in Calendar.</p>'}
+     ${S.confirmed[c]?'<button class="link un">Undo confirm</button>':`<button class="ok big go" ${js.length?"":"disabled"}>✔ Confirm ${esc(CREWS[c].name)}</button>`}
+     ${S.recapDone[c]?'<p class="mut small">Today’s recap is in — confirming opens the next day.</p>':""}</div>`);
+    const g=d.querySelector(".go");if(g)g.onclick=()=>{S.confirmed[c]=true;S.recapDone[c]=false;S.crewNotifs[c]=now();if(S.notifPrefs[rep].ready)toast("📲 "+CREWS[c].name+" notified");go();};
+    const u=d.querySelector(".un");if(u)u.onclick=()=>{S.confirmed[c]=false;S.crewNotifs[c]=null;go();};});
+  const other=rep==="asher"?"lance":"asher";
+  h(`<p class="mut small">${REPS[other]} confirms his own crews separately — never holds up yours.</p>`);
+}
+function oInbox(rep){
+  h('<h1>Alerts</h1>');
+  const labs=S.jobs.flatMap(j=>j.labor.map(l=>({j,l}))).filter(x=>CREWS[x.l.crew].rep===rep);
+  labs.forEach(({j,l})=>{const d=h(`<div class="card" style="border-left:5px solid var(--blue)"><div style="display:flex;justify-content:space-between"><b>💪 Extra labor · ${esc(CREWS[l.crew].name)}</b><span class="pill ${l.status==="approved"?"ok":l.status==="denied"?"bad":"warn"}">${l.status}</span></div>
+   <div>${esc(j.addr)}</div><div>Crew picked: <b>${LAB_EN[l.lvl]}</b> → ${l.amt?"<b>$"+l.amt+"</b>":"you set the amount"}</div>
+   <div><i>“${esc(l.en)}”</i> <span class="mut small">(orig: ${esc(l.es)})</span></div><div class="thumbs"><div class="thumb">photo</div></div>
+   ${l.status==="pending"?`${l.amt?"":'<label>Amount (over $100)</label><input class="ca" inputmode="decimal" placeholder="150">'}<div style="display:flex;gap:8px;margin-top:10px"><button class="ok ap" style="flex:2">Approve${l.amt?" $"+l.amt:""}</button><button class="dn" style="flex:1">Deny</button></div>`:""}</div>`);
+   const a=d.querySelector(".ap");if(a){a.onclick=()=>{if(!l.amt){const v=Number(d.querySelector(".ca").value);if(!(v>100))return toast("Enter an amount over $100");l.amt=v;}l.status="approved";go();};d.querySelector(".dn").onclick=()=>{l.status="denied";go();};}});
+  const it=S.inbox.filter(x=>x.rep===rep&&x.kind!=="labor");
+  it.forEach(x=>{h(`<div class="card" ${x.kind==="short"?'style="border-left:5px solid var(--warn)"':""}><div class="mut small">${x.t} ${x.pushed?"· 📲 pushed":"· inbox only"}</div><div style="font-size:1.02rem">${esc(x.text)}</div></div>`);x.seen=true;});
+  S.inbox.filter(x=>x.rep===rep).forEach(x=>x.seen=true);
+  if(!labs.length&&!it.length)h('<div class="card mut">Nothing yet. Switch to one of your crews (menu at top) and try check-in, extra labor, material problem or complete.</div>');
+}
+function oPayroll(rep,mine){
+  h(`<h1>Weekly payroll</h1><p class="mut small">Week of Nov 2 · gas from ${OFFICE_LABEL}: under 40 mi $0 · 40–60 mi $25 · 60+ mi $50. Crews never see dollars.</p>`);
+  mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c);let gm=0,lb=0;
+    const rows=js.map(j=>{const g=mileTier(j.miles),l=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);gm+=g;lb+=l;return`<tr><td>${DAYS_EN[j.day].split(" ")[0]}</td><td>${esc(j.addr.split(",")[0])}<br><span class="mut small">${j.miles} mi</span></td><td>$${g}</td><td>$${l}</td></tr>`;}).join("");
+    const emp=CREWS[c].type==="emp";
+    h(`<div class="card"><h2>${esc(CREWS[c].name)} ${typeTag(c)}</h2>
+     <p class="small mut" style="margin:0 0 6px">${emp?"Employee (hourly / salary, in training) — not piece rate. Gas + extra labor shown for reference; base pay comes from timesheet.":"Sub crew — paid piece rate per job + gas + approved extra labor."}</p>
+     <table><tr><th>Day</th><th>Job</th><th>Gas</th><th>Extra</th></tr>${rows}<tr><th></th><th>Total</th><th>$${gm}</th><th>$${lb}</th></tr></table>
+     <p style="font-size:1.1rem;margin:10px 0 0"><b>${emp?"Add-ons":"Extras"} this week: $${gm+lb}</b>${emp?' <span class="mut small">+ hourly pay</span>':' <span class="mut small">+ piece rate</span>'}</p></div>`);});
+}
+function oMore(rep){
+  const P=S.notifPrefs[rep],L={ready:"Crew notified when I confirm",labor:"Extra labor requested",short:"Material problem (immediate)",photo:"Job completed with no photos",complete:"Job completed / day recap"};
+  const d=h(`<h1>Settings</h1><div class="card"><h2>📲 Push me for…</h2>${Object.keys(L).map(k=>`<label style="display:flex;gap:12px;align-items:center;font-weight:600;min-height:48px;margin:0"><input type="checkbox" data-k="${k}" ${P[k]?"checked":""} style="width:26px;height:26px"> ${L[k]}</label>`).join("")}
+   <label>Afternoon reminder</label><div style="display:flex;gap:8px"><button class="rm" style="flex:1;background:var(--ink);color:var(--bg)">5:00 PM</button><button class="rm" style="flex:1">6:00 PM</button></div></div>
+   <div class="card"><h2>Crews</h2>${Object.keys(CREWS).filter(k=>CREWS[k].rep===rep).map(c=>`<div style="min-height:40px">${esc(CREWS[c].name)} ${typeTag(c)}</div>`).join("")}</div>
+   <button class="link rs">Reset preview data</button>`);
+  d.querySelectorAll("[data-k]").forEach(i=>i.onchange=()=>{P[i.dataset.k]=i.checked;});
+  d.querySelectorAll(".rm").forEach(b=>b.onclick=()=>d.querySelectorAll(".rm").forEach(x=>{x.style.background=x===b?"var(--ink)":"";x.style.color=x===b?"var(--bg)":"";}));
+  d.querySelector(".rs").onclick=()=>{S=fresh();toast("Preview reset");go();};
+}
+fillWho();
+const langBtn=$("#lang");const setLangLbl=()=>{langBtn.textContent=LANG==="es"?"Crew: Español → EN":"Crew: English → ES";};setLangLbl();
+langBtn.onclick=()=>{LANG=LANG==="es"?"en":"es";try{localStorage.setItem("kpPrevLang",LANG);}catch(e){}setLangLbl();render();};
+render();
+</script></body></html>
