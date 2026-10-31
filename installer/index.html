@@ -228,7 +228,7 @@ function oConfirm(rep,mine){
   mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day===TOM);
     const d=h(`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">${esc(CREWS[c].name)} ${typeTag(c)}</h2>${S.confirmed[c]?'<span class="pill ok">Confirmed</span>':""}</div>
      ${js.length?`<table>${js.map(j=>`<tr><td>${esc(j.addr)}<br><span class="mut small">${esc(j.cust)}${j.file?" · 📄 "+esc(j.file):""}</span></td><td class="small" style="text-align:right">${j.miles} mi</td></tr>`).join("")}</table>`:'<p class="mut">No jobs tomorrow — drop files in Calendar.</p>'}
-     ${S.confirmed[c]?'<button class="link un">Undo confirm</button>':`<button class="ok big go" ${js.length?"":"disabled"}>✔ Confirm ${esc(CREWS[c].name)}'s jobs</button>`}
+     ${S.confirmed[c]?'<button class="link un">Undo confirm</button>':`<button class="ok big go" ${js.length?"":"disabled"}>✔ Confirm ${esc(CREWS[c].name)}${/s$/i.test(CREWS[c].name)?"'":"'s"} jobs</button>`}
      ${S.recapDone[c]?'<p class="mut small">Today’s recap is in — confirming opens the next day.</p>':""}</div>`);
     const g=d.querySelector(".go");if(g)g.onclick=()=>{S.confirmed[c]=true;S.recapDone[c]=false;S.crewNotifs[c]=now();if(S.notifPrefs[rep].ready)toast("📲 "+CREWS[c].name+" notified");go();};
     const u=d.querySelector(".un");if(u)u.onclick=()=>{S.confirmed[c]=false;S.crewNotifs[c]=null;go();};});
