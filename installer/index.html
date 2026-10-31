@@ -260,7 +260,7 @@ function office(rep){
   const pend=S.jobs.reduce((s,j)=>s+j.labor.filter(l=>l.status==="pending"&&CREWS[l.crew].rep===rep).length,0)+S.inbox.filter(x=>x.rep===rep&&!x.seen).length;
   const toConfirm=mine.filter(c=>!S.confirmed[c]).length;
   const bar=document.createElement("nav");bar.className="bar";
-  bar.innerHTML=[["cal","📅","Calendar"],["confirm","✔","Confirm"+(toConfirm?" ("+toConfirm+")":"")],["inbox","🔔","Alerts"+(pend?" ("+pend+")":"")],["payroll","💵","Payroll"],["more","⚙️","Settings"]].map(([k,i,l])=>`<button data-t="${k}" class="${S.tab[rep]===k?"on":""}"><span class="i">${i}</span>${l}</button>`).join("");
+  bar.innerHTML=[["cal","📅","Calendar"],["confirm","✔","Confirm"+(toConfirm?" ("+toConfirm+")":"")],["inbox","🔔","Alerts"+(pend?" ("+pend+")":"")],["payroll","💵","Payroll"+(S.payOK&&S.payOK[rep==="asher"?"lance":"asher"]&&!S.payOK[rep]?" (!)":"")],["more","⚙️","Settings"]].map(([k,i,l])=>`<button data-t="${k}" class="${S.tab[rep]===k?"on":""}"><span class="i">${i}</span>${l}</button>`).join("");
   bar.querySelectorAll("button").forEach(b=>b.onclick=()=>{S.tab[rep]=b.dataset.t;go();});document.body.appendChild(bar);
   ({cal:oCal,confirm:oConfirm,inbox:oInbox,payroll:oPayroll,more:oMore})[S.tab[rep]](rep,mine);
 }
@@ -429,7 +429,7 @@ function oConfirm(rep,mine){
   const other=rep==="asher"?"lance":"asher";
   h(`<p class="mut small">${REPS[other]} confirms his own crews separately — never holds up yours. Crews see their day only after both reps with jobs that day have confirmed AND the joint route is locked.</p>`);
 }
-const alertWhy=x=>{const t=x.text||"";return /wrong cent/i.test(t)?"📏 Wrong centers":/wrong material/i.test(t)?"❌ Wrong material":x.kind==="short"?"📦 Material shortage":x.kind==="photo"?"📷 Completed with NO photos":x.kind==="labor"?"💪 Request Extra on Payroll":x.kind==="complete"?"✅ Job complete":x.kind==="ready"?"🧭 Route":"🔔 Alert";};
+const alertWhy=x=>{const t=x.text||"";return /wrong cent/i.test(t)?"📏 Wrong centers":/wrong material/i.test(t)?"❌ Wrong material":x.kind==="short"?"📦 Material shortage":x.kind==="photo"?"📷 Completed with NO photos":x.kind==="labor"?"💪 Request Extra on Payroll":x.kind==="complete"?"✅ Job complete":x.kind==="payroll"?(/unlocked/.test(t)?"💵 Payroll fully confirmed":"💵 Confirm your end of payroll"):x.kind==="ready"?"🧭 Route":"🔔 Alert";};
 function loadTicket(x){let t=x.ticket;if(!t){const m=(x.text||"").match(/🚨\s*(.+?) at (.+?): (.+?)(?: \(photo attached\))?$/);t=m?{crew:m[1],addr:m[2],items:m[3].replace(/^Material shortage: need /,"").replace(/^Wrong material — /,"").split(/, (?=\d)/)}:{crew:"",addr:"",items:[x.text]};}
   const j=S.jobs.find(q=>q.addr===t.addr),co=t.coords||(j&&j.coords);
   return "KP LOAD TICKET — deliver to job\nJob: "+t.addr+(t.cust||(j&&j.cust)?"\nCustomer: "+(t.cust||j.cust):"")+(co?"\nMap: https://maps.google.com/?q="+String(co).replace(/\s/g,""):"")+"\nCrew on site: "+t.crew+"\nMaterials needed:\n"+t.items.map(i=>"• "+i).join("\n")+"\nReported: "+x.t;}
@@ -519,7 +519,7 @@ function oPayroll(rep,mine){
    <div style="font-size:1.02rem">${REPS[rep]} (your crews): ${S.payOK[rep]?'<b style="color:var(--ok)">✓ confirmed</b>':"<b>not confirmed</b>"} · ${REPS[other]}: ${S.payOK[other]?'<b style="color:var(--ok)">✓ confirmed</b>':"<b>waiting</b>"}</div>
    ${S.payOK[rep]?'<button class="link pu">Undo my confirm</button>':`<button class="ok big pc">✔ Confirm ${REPS[rep]}'s crews' payroll</button>`}
    <p class="mut small" style="margin:6px 0 0">${both?"Week totals and printing are unlocked.":"Week totals and printing unlock after both Asher and Lance confirm their own crews (waiting on "+payWaiting()+"). Each of you confirms independently."}</p></div>`);
-  const pc=gc.querySelector(".pc");if(pc)pc.onclick=()=>{S.payOK[rep]=true;toast(REPS[rep]+"'s payroll confirmed");go();};const pu=gc.querySelector(".pu");if(pu)pu.onclick=()=>{S.payOK[rep]=false;go();};
+  const pc=gc.querySelector(".pc");if(pc)pc.onclick=()=>{S.payOK[rep]=true;if(!S.payOK[other]){ping(other,"payroll",`💵 ${REPS[rep]} confirmed his end of payroll (week of Nov 2) — confirm your crews' payroll to unlock totals and printing`);S.inbox[0].pushed=true;toast(REPS[rep]+"'s payroll confirmed — "+REPS[other]+" notified to confirm his end");}else{ping(other,"payroll",`💵 ${REPS[rep]} confirmed his end — payroll is fully confirmed and printing is unlocked`);toast(REPS[rep]+"'s payroll confirmed — both done, printing unlocked");}go();};const pu=gc.querySelector(".pu");if(pu)pu.onclick=()=>{S.payOK[rep]=false;go();};
   const LOCK=`<span class="mut">🔒 waiting on ${payWaiting()}</span>`;
   mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6);let gm=0,lb=0;
     const emp=CREWS[c].type==="emp";let pr=0;
