@@ -38,7 +38,7 @@ textarea{min-height:90px}label{display:block;font-weight:700;margin:12px 0 4px}
 .bar button{flex:1;border:0;border-radius:0;background:none;min-height:66px;font-size:.8rem;font-weight:800;color:var(--mut);padding:4px}
 .bar button .i{display:block;font-size:1.35rem}.bar button.on{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
 details summary{font-weight:800;min-height:48px;display:flex;align-items:center;cursor:pointer}
-.cal{overflow-x:auto;margin:10px -12px;padding:0 12px}.cal table{min-width:620px;border-collapse:separate;border-spacing:6px}
+.cal{overflow-x:auto;margin:10px -12px;padding:0 12px}.cal table{min-width:740px;border-collapse:separate;border-spacing:6px}
 .cal th{border:0;font-size:.85rem;text-align:center}.cal th.tm{color:var(--acc)}
 .cal td{border:2px dashed var(--line);border-radius:12px;min-width:104px;height:96px;padding:6px;background:var(--card);font-size:.78rem;cursor:pointer}
 .cal td.tm{border-color:var(--acc)}.cal td.over{background:var(--chip);border-style:solid;border-color:var(--blue)}
@@ -63,7 +63,7 @@ const CREWS={};
 ["asher","lance"].forEach(r=>[["jorge","Jorge","sub"],["santos","Santos","sub"],["sammy","Sammy","emp"]].forEach(([k,n,t])=>CREWS[r+"_"+k]={name:n,rep:r,type:t}));
 const crewLabel=c=>CREWS[c].name+" ("+REPS[CREWS[c].rep]+")";
 const typeTag=c=>CREWS[c].type==="emp"?'<span class="tag emp">Employee · training</span>':'<span class="tag">Sub · piece rate</span>';
-const DAYS=["Lun 2","Mar 3","Mié 4","Jue 5","Vie 6"],DAYS_EN=["Mon 11/2","Tue 11/3","Wed 11/4","Thu 11/5","Fri 11/6"],TOM=0; // tomorrow = Mon 11/2
+const DAYS=["Lun 2","Mar 3","Mié 4","Jue 5","Vie 6","Sáb 7"],DAYS_EN=["Mon 11/2","Tue 11/3","Wed 11/4","Thu 11/5","Fri 11/6","Sat 11/7"],TOM=0; // tomorrow = Mon 11/2
 let JID=100;
 function mkJob(crew,day,addr,cust,miles,nc,lines,load,file,coords){return{id:++JID,crew,day,addr,cust,miles,nc,lines,load,coords:coords||"",file:file||null,
   checkedIn:false,checkinMiles:null,photos:[],wallPhotos:0,crawlPhoto:false,notes:[],labor:[],short:[],done:false};}
