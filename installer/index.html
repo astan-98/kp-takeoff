@@ -171,6 +171,10 @@ function short(c,j,kind){const rep=CREWS[c].rep;let k=kind||"Falta material",n=0
    ${wrong?`<div class="card" style="border:2px solid var(--warn)"><div class="step">${L("Centros equivocados","Wrong centers")}</div>
      <label>${L("¿Qué material está mal?","Which material is wrong?")}</label>${mats.map((x,i)=>`<button class="act wm" data-i="${i}">${esc(tr(x))}</button>`).join("")}<button class="act wm" data-i="other">${L("Otro (escribir abajo)","Other (type below)")}</button>
      <label>${L("¿Qué ancho / centros se necesita?","What width / on-center is needed?")}</label><div class="wwrow" style="display:flex;gap:8px"></div><div class="mut small wwnote"></div></div>`:""}
+   ${wrong?"":`<div class="card" style="border:2px solid var(--warn)"><div class="step">${L("¿Qué material falta? (puedes elegir varios)","Which material are you short on? (pick one or more)")}</div>
+     ${j.load.map((x,i)=>`<div class="srow" data-i="${i}" style="border-top:1px solid var(--line);padding:8px 0"><button class="act sm" style="margin-top:0">☐ ${esc(tr(x[0]))}</button>
+       <div class="sdet" hidden style="display:flex;gap:8px;align-items:center;margin-top:8px"><button class="su" data-u="bolsas" style="flex:1">${L("Bolsas","Bags")}</button><button class="su" data-u="bultos" style="flex:1">${L("Bultos","Bundles")}</button>
+       <input class="sq" inputmode="numeric" placeholder="${L("¿Cuántos?","How many?")}" style="flex:1;font-size:1.1rem"></div></div>`).join("")}</div>`}
    <label>${L("\u00bfQu\u00e9 pas\u00f3? (opcional)","What happened? (optional)")}</label><textarea class="rs" placeholder="${k==="Material equivocado"?L("Ej. llegó R-13, la orden dice R-19","E.g. R-13 came, the order says R-19"):L("Ej. faltan 6 bultos de R-13","E.g. short 6 bundles of R-13")}"></textarea>
    <button class="act need ph">${L("\ud83d\udcf7 Foto \u2014 obligatoria","\ud83d\udcf7 Photo \u2014 required")}</button><button class="p big go">${L("\ud83d\udea8 Avisar a","\ud83d\udea8 Alert")} ${REPS[rep]}${L(" ya</button>"," now</button>")}`,m=>{
     const pb=m.querySelector(".ph");pb.onclick=()=>{n++;pb.textContent="✅ Foto lista";pb.className="act done ph";};
@@ -182,10 +186,22 @@ function short(c,j,kind){const rep=CREWS[c].rep;let k=kind||"Falta material",n=0
       row.innerHTML=["16","19","24"].filter(w=>w!==cur).map(w=>`<button class="ww" data-w="${w}" style="flex:1;font-size:1.2rem;font-weight:800">${w}"</button>`).join("");
       m.querySelector(".wwnote").textContent=cur?L("Ahora está a "+cur+'" — elige el correcto.',"It's "+cur+'" now — pick the correct one.'):"";pick(".ww",b=>{ww=b.dataset.w;});};
     pick(".wm",b=>{wm=b.dataset.i==="other"?"other":mats[+b.dataset.i];drawW();});drawW();
+    const SH={};
+    m.querySelectorAll(".srow").forEach(r=>{const i=+r.dataset.i,x=j.load[i],det=r.querySelector(".sdet"),b=r.querySelector(".sm");
+      const setU=u=>{SH[i].u=u;r.querySelectorAll(".su").forEach(z=>{const on=z.dataset.u===u;z.style.background=on?"var(--ink)":"";z.style.color=on?"var(--bg)":"";});};
+      b.onclick=()=>{if(SH[i]){delete SH[i];det.hidden=true;det.style.display="none";b.textContent="☐ "+tr(x[0]);b.className="act sm";}
+        else{SH[i]={u:null,q:""};det.hidden=false;det.style.display="flex";b.textContent="☑ "+tr(x[0]);b.className="act done sm";setU(/bolsa/.test(x[2])?"bolsas":"bultos");}};
+      det.style.display="none";r.querySelectorAll(".su").forEach(z=>z.onclick=()=>setU(z.dataset.u));r.querySelector(".sq").oninput=e=>{if(SH[i])SH[i].q=e.target.value.trim();};});
     m.querySelector(".go").onclick=()=>{const d=m.querySelector(".rs").value.trim();
+      const picks=Object.keys(SH).map(i=>({mat:j.load[+i][0],u:SH[i].u,q:Number(SH[i].q)}));
+      if(!wrong&&!picks.length)return toast(L("Elige qué material falta","Pick which material you're short on"));
+      if(!wrong&&picks.some(p=>!(p.q>0)))return toast(L("Escribe cuántos faltan","Enter how many more you need"));
       if(wrong&&!wm)return toast(L("Elige qué material está mal","Pick which material is wrong"));if(wrong&&!ww)return toast(L("Elige 16, 19 o 24","Pick 16, 19 or 24"));
       if(wrong&&wm==="other"&&!d)return toast(L("Escribe qué material","Type which material"));
       if(!n)return toast(L("Toma la foto","Take the photo"));
+      if(!wrong){const es="Falta material: "+picks.map(p=>p.q+" "+p.u+" "+p.mat).join(", ")+(d?" · "+d:"");
+        const en="Material shortage: need "+picks.map(p=>p.q+" more "+(p.u==="bolsas"?"bags":"bundles")+" of "+toEN(p.mat)).join(", ")+(d?" · "+toEN(d):"");
+        j.short.push({es,en,shortage:picks});ping(rep,"short",`🚨 ${crewLabel(c)} at ${j.addr}: ${en} (photo attached)`);m.remove();toast(L("🚨 Aviso enviado a ","🚨 Alert sent to ")+REPS[rep]);render();return;}
       const es=wrong?"Material equivocado — centros: "+(wm==="other"?d:wm)+" → necesita "+ww+'"'+(d&&wm!=="other"?" · "+d:""):k+(d?": "+d:"");
       const en=wrong?"Wrong material — wrong centers: "+(wm==="other"?toEN(d):toEN(wm))+" → needs "+ww+'" on center'+(d&&wm!=="other"?" · "+toEN(d):""):toEN(es);
       j.short.push({es,en,wrongCenters:wrong?{material:wm==="other"?d:wm,needs:ww}:null});ping(rep,"short",`🚨 ${crewLabel(c)} at ${j.addr}: ${en} (photo attached)`);m.remove();toast(L("🚨 Aviso enviado a ","🚨 Alert sent to ")+REPS[rep]);render();};});}
