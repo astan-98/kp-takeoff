@@ -8298,7 +8298,7 @@ const opsKey=()=>{try{return localStorage.getItem("kpOpsKey")||"";}catch(e){retu
 let STORE=null; // {mine:{date:[jobs]}, plans:{date:plan}} — lives in KPI Ops (source of truth)
 async function loadStore(fresh){if(!opsKey()){STORE={mine:JSON.parse(localStorage.getItem("kpMyJobs")||"{}"),plans:{},ov:JSON.parse(localStorage.getItem("kpMyOv")||"{}"),local:1,doc:null};return STORE;}
   try{const r=await fetch(OPS+"/api/measure?k="+encodeURIComponent(opsKey())+(fresh?"&fresh=1":""),{cache:"no-store"});const d=await r.json();if(d.error)throw 0;STORE={mine:d.mine||{},plans:d.plans||{},ov:d.ov||{},doc:d.doc||null};}catch(e){STORE=STORE||{mine:{},plans:{},err:1,doc:null};}return STORE;}
-function dayCounts(day){const D=STORE&&STORE.doc&&STORE.doc.text?parseDoc(STORE.doc.text).days[new Date(day+"T12:00").getDay()]:null;
+function dayCounts(day){const t0=iso(new Date()),t6=iso(new Date(Date.now()+6*864e5)),D=STORE&&STORE.doc&&STORE.doc.text&&day>=t0&&day<=t6?parseDoc(STORE.doc.text).days[new Date(day+"T12:00").getDay()]:null;
   return {doc:D?D.jobs.length:0,inDoc:!!D,mine:((STORE&&STORE.mine[day])||[]).length,plan:!!(STORE&&STORE.plans[day])};}
 function saveStore(part){if(!STORE)return;if(STORE.local){localStorage.setItem("kpMyJobs",JSON.stringify(STORE.mine));localStorage.setItem("kpMyOv",JSON.stringify(STORE.ov||{}));return;}
   fetch(OPS+"/api/measure?k="+encodeURIComponent(opsKey()),{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify(part)}).catch(()=>{});}
