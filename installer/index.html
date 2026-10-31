@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>KP Installer — preview</title>
+<title>KPI Installer / KPI Ops — preview</title>
 <style>
 :root{--bg:#f4f3f3;--card:#fff;--ink:#141212;--mut:#5e5a5a;--line:#d6d2d2;--acc:#c8102e;--ok:#17713a;--warn:#a05f00;--bad:#b3261e;--chip:#e9e7e7;--blue:#2f6fd6}
 @media (prefers-color-scheme:dark){:root{--bg:#0b0a0a;--card:#1a1818;--ink:#f6f3f3;--mut:#b3adad;--line:#383434;--acc:#ff4a50;--ok:#4cc27a;--warn:#f0ad40;--bad:#ff6b63;--chip:#2a2727;--blue:#6aa0ff}}
@@ -53,7 +53,7 @@ details summary{font-weight:800;min-height:48px;display:flex;align-items:center;
  #print .tk{page-break-after:always;padding:0 4mm}#print .tk:last-child{page-break-after:auto}#print table{width:100%;border-collapse:collapse;font-size:10.5pt}
  #print td,#print th{border:1px solid #000;padding:4px 5px;vertical-align:top;text-align:left}#print .r{text-align:right}#print h1{font-size:17pt;margin:0}#print .sig{display:flex;gap:30px;margin-top:28px}#print .sig div{flex:1;border-top:1px solid #000;padding-top:3px;font-size:10pt}}
 </style></head><body>
-<header><b>KP Installer</b><button id="lang" style="min-height:36px;padding:4px 10px;font-size:.8rem;border-radius:10px;border:0">ES / EN</button><select id="who" aria-label="Who is using the app"></select></header>
+<header><b id="brand">KPI Installer</b><button id="lang" style="min-height:36px;padding:4px 10px;font-size:.8rem;border-radius:10px;border:0">ES / EN</button><select id="who" aria-label="Who is using the app"></select></header>
 <div class="banner">PREVIEW · sample data · nothing is sent · switch user at top ↑</div>
 <main id="app"></main>
 <div id="print"></div>
@@ -138,7 +138,7 @@ function toEN(es){let t=" "+es.toLowerCase()+" ";DICT.forEach(([a,b])=>{t=t.repl
 function ping(rep,kind,text){S.inbox.unshift({rep,kind,text,t:now(),pushed:!!S.notifPrefs[rep][kind]});}
 const mileTier=m=>m>=60?50:m>=40?25:0;
 function fillWho(){const w=$("#who");w.innerHTML='<optgroup label="Office (English)"><option value="office:asher">Asher (office)</option><option value="office:lance">Lance (office)</option></optgroup><optgroup label="Crews">'+PHYS.map(n=>`<option value="crew:${n}">${n}</option>`).join("")+'</optgroup>';w.onchange=()=>{S.openJob=null;render();};}
-function render(){const[k,id]=$("#who").value.split(":");document.documentElement.lang=k==="crew"?"es":"en";$("#app").innerHTML="";document.querySelectorAll(".bar").forEach(b=>b.remove());k==="crew"?crew(id):office(id);}
+function render(){const[k,id]=$("#who").value.split(":");$("#brand").textContent=k==="office"?"KPI Ops":"KPI Installer";document.title=k==="office"?"KPI Ops":"KPI Installer";document.documentElement.lang=k==="crew"?"es":"en";$("#app").innerHTML="";document.querySelectorAll(".bar").forEach(b=>b.remove());k==="crew"?crew(id):office(id);}
 function go(){render();window.scrollTo(0,0);}
 
 /* ===================== CREW (Spanish) ===================== */
