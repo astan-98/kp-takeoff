@@ -8373,6 +8373,7 @@ async function makeJob(s,day,stop,eta){const {S,newJob,draftPayload,idbPut}=K();
   const snap={id:S.jobId,savedAt:new Date().toISOString(),dateMeasured:day,owner:S.owner,builder:S.builder,city:S.city,address:S.address,packageLabel:"Measure list · needs measure (stop "+stop+")",packageType:S.pkg,jobMode:S.jobMode,gasType:S.gasType,keywords:S.keywords,airSealed:false,excelRows:[],fgRows:[],
     dayPlan:{stop,eta,time:s.time},draft:draftPayload()};await idbPut(snap);return snap.id;}
 function mapsUrl(p){return "https://www.google.com/maps/dir/"+[OFFICE.q].concat(p.stops.map(s=>s.addr),[ENDPT.q]).map(encodeURIComponent).join("/");}
+function appleUrl(p){const e=encodeURIComponent;return "https://maps.apple.com/directions?source="+e(OFFICE.q)+p.stops.map(x=>"&waypoint="+e(x.addr)).join("")+"&destination="+e(ENDPT.q)+"&mode=driving";}
 function showPlan(){const p=JSON.parse(localStorage.getItem(LSK)||"null");if(!p){importSheet();return;}
   const m=sheet(`<h2 style="margin:0">🗺️ Measure route · ${new Date(p.day+"T12:00").toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})}</h2>
    <p class="dp-m">Start ${esc(OFFICE.label)} → end ${esc(ENDPT.label)} · leave at ${fmtT((+p.start.slice(0,2))*60+(+p.start.slice(3)))} · ~${p.drive} min driving · ${MEASURE_MIN} min per measure${p.late?` · ⚠️ ${p.late} min late for a meet time`:""}</p>
@@ -8380,7 +8381,7 @@ function showPlan(){const p=JSON.parse(localStorage.getItem(LSK)||"null");if(!p)
      <div class="dp-m">${esc(s.addr)}${s.note?" · "+esc(s.note):""}${s.time!=null?` · <b style="color:#c8102e">meet ${fmtT(s.time)}</b>`:""}</div>
      <div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="btn btn-primary dp-ms" data-id="${s.id}" style="flex:2">📐 Measure</button><a class="btn btn-secondary" style="flex:1;text-align:center" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.addr)}">Go</a></div></div>`).join("")}
    <div class="dp-row" style="background:rgba(0,0,0,.03)"><span class="dp-n" style="background:#333">🏁</span><b>End · ${esc(ENDPT.label)}</b><span style="float:right;font-weight:800">${p.endEta!=null?fmtT(p.endEta):""}</span></div>
-   <a class="btn btn-secondary" style="display:block;text-align:center;margin-top:6px" target="_blank" href="${mapsUrl(p)}">Open whole route in Google Maps</a>
+   <div class="grid2" style="margin-top:6px"><a class="btn btn-primary" style="text-align:center" target="_blank" href="${appleUrl(p)}"> Apple Maps (all stops)</a><a class="btn btn-secondary" style="text-align:center" target="_blank" href="${mapsUrl(p)}">Google Maps (all stops)</a></div><p class="dp-m">Office → stops in order → Massey Ln. Apple Maps multi-stop needs iOS 18.4+. Meet times stay here in the app.</p>
    <button type="button" class="btn btn-secondary dp-new" style="width:100%;margin-top:6px">📋 Import another day's list</button>`);
   m.querySelectorAll(".dp-ms").forEach(b=>b.onclick=()=>{m.remove();K().openArchiveJob(b.dataset.id);});m.querySelector(".dp-new").onclick=()=>{m.remove();importSheet();};}
 window.kpDayPlan={importSheet,showPlan,parseDoc,parseLine,plan};
