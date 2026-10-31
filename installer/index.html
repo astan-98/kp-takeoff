@@ -351,6 +351,19 @@ function routeCard(name,day,rep){const n=physJobs(name,day).length,reps=repsWith
    <div class="mut small">${reps.map(r=>REPS[r]+": "+physJobs(name,day).filter(j=>CREWS[j.crew].rep===r).length).join(" · ")}</div>
    <button class="rb big" data-n="${esc(name)}" data-d="${day}" style="background:var(--card)">🧭 Route</button></div>`;}
 let RSEL=null,RMODE=null; // RSEL = job picked to place; RMODE = null | "counter" | "override"
+// ---- FREE auto-route: client-side, haversine × road factor, exact best order (no paid API) ----
+const OFFICE_LL=[34.1235,-83.6005]; // 33 Apex Dr, Jefferson GA (approx)
+const CREW_HOME={Jorge:{ll:[33.9519,-83.3576],label:"Athens, GA"},Santos:{ll:[33.9519,-83.3576],label:"Athens, GA"},Sammy:null}; // Sammy house TBD
+const TOWN_LL={winder:[33.9926,-83.7202],commerce:[34.2040,-83.4571],hoschton:[34.0965,-83.7613],braselton:[34.1093,-83.7627],dahlonega:[34.5326,-83.9849],jefferson:[34.1173,-83.5724],gainesville:[34.2979,-83.8241],athens:[33.9519,-83.3576]};
+function jobLL(j){if(j.coords){const m=String(j.coords).match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);if(m)return[+m[1],+m[2]];}const t=Object.keys(TOWN_LL).find(k=>j.addr.toLowerCase().includes(k));return t?TOWN_LL[t]:null;}
+const hav=(a,b)=>{const R=3958.8,r=x=>x*Math.PI/180,dl=r(b[0]-a[0]),dn=r(b[1]-a[1]);const h=Math.sin(dl/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(h))*1.25;}; // ×1.25 road factor
+function routeMiles(seq,name){const pts=[OFFICE_LL,...seq.map(jobLL)];const h=CREW_HOME[name];if(h)pts.push(h.ll);let d=0;for(let i=1;i<pts.length;i++)d+=hav(pts[i-1],pts[i]);return d;}
+function perms(a){if(a.length<=1)return[a];return a.flatMap((x,i)=>perms(a.slice(0,i).concat(a.slice(i+1))).map(p=>[x,...p]));}
+function autoFill(name,day,all){const r=RT(name,day),js=physJobs(name,day);const fixed=all?r.slots.map(()=>null):r.slots.slice();
+  const free=js.filter(j=>!fixed.includes(j.id)),holes=fixed.map((id,i)=>id?null:i).filter(i=>i!==null);
+  if(js.some(j=>!jobLL(j))){toast("A job has no location — can't auto-route");return null;}let best=null,bd=1e9;
+  perms(free).forEach(p=>{const sl=fixed.slice();holes.forEach((h,k)=>sl[h]=p[k].id);const seq=sl.map(id=>js.find(j=>j.id===id));const d=routeMiles(seq,name);if(d<bd){bd=d;best=sl;}});
+  if(best)r.slots=best;r.auto={mi:Math.round(bd),min:Math.round(bd/40*60)};return bd;}
 function openRoute(name,day,rep){document.querySelectorAll(".modal").forEach(m=>m.remove());RSEL=null;routeSheet(name,day,rep);}
 function routeSheet(name,day,rep){
   const r=RT(name,day),js=physJobs(name,day),other=rep==="asher"?"lance":"asher",mine=js.filter(j=>CREWS[j.crew].rep===rep),theirs=js.filter(j=>CREWS[j.crew].rep===other);
@@ -370,11 +383,16 @@ function routeSheet(name,day,rep){
   const ownDone=mine.every(j=>placed(j.id))||r.any[rep];
   const ownCtl=(!free&&canEditOwn&&mine.length)?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="ad" style="flex:1">${r.any[rep]?"✓ ":""}Order doesn't matter for my remaining jobs</button><button class="cl" style="flex:1">Clear my stops</button></div>
      <button class="ok big snd" ${ownDone?"":"disabled"}>${r.req&&r.req.to===rep?"✔ Done — lock route":theirs.length?"Send route request to "+REPS[other]:"✔ Lock route"}</button>`:"";
+  const unplaced=js.filter(j=>!placed(j.id));
+  const canAuto=!r.locked&&!r.counter&&(RMODE==="override"?js.length>1:unplaced.length>0&&!free&&canEditOwn&&unplaced.every(j=>r.any[CREWS[j.crew].rep]));
+  const autoHtml=`<div class="card" style="margin-top:10px;border:2px dashed var(--blue)"><b>🤖 Free auto-route</b><div class="small">Office (33 Apex Dr) → jobs → ${CREW_HOME[name]?"crew house ("+CREW_HOME[name].label+")":"last job (Sammy's house TBD)"}. Shortest drive — free, no Google.</div>
+    ${canAuto?`<button class="ok big au" style="margin-top:6px">🤖 Auto-route ${RMODE==="override"?"all stops":"the order-doesn't-matter stops"}</button>`:`<div class="mut small" style="margin-top:4px">${r.locked?"Route locked"+(rep==="asher"?" — use Asher override to re-run.":"."):"Available once the remaining jobs are marked \"Order doesn't matter\" by whoever owns them."+(rep==="asher"?" Asher override can auto-route everything.":"")}</div>`}
+    ${r.auto?`<div class="small" style="margin-top:4px">Last auto-route: ≈${r.auto.mi} mi · ≈${r.auto.min} min driving (estimate)</div>`:""}</div>`;
   sheet(`<h1>🧭 ${esc(name)}'s route · ${DAYS_EN[day]}</h1><div class="mut small">${js.length} jobs (Asher + Lance). Tap one of ${free?"the":"your"} jobs, then tap an empty stop.</div>${routeStatus(name,day)}
     <div class="step" style="margin-top:12px">Stops</div>${slotHtml}
     <div class="step" style="margin-top:12px">${REPS[rep]}'s jobs</div>${pool(mine,free||canEditOwn)}
     <div class="step" style="margin-top:10px">${REPS[other]}'s jobs</div>${pool(theirs,free)}
-    ${ownCtl}<div style="margin-top:10px">${act}</div>
+    ${autoHtml}${ownCtl}<div style="margin-top:10px">${act}</div>
     ${!r.locked&&!free&&rep==="asher"?'<button class="link ov">Asher override — set the full route myself</button>':""}${rep==="lance"?'<p class="mut small">Lance cannot override; use Decline → counter.</p>':""}`,m=>{
     const re=()=>{m.remove();routeSheet(name,day,rep);};
     m.querySelectorAll(".rp").forEach(b=>b.onclick=()=>{RSEL=RSEL===+b.dataset.j?null:+b.dataset.j;re();});
@@ -383,6 +401,7 @@ function routeSheet(name,day,rep){
       else if(cur&&(free||CREWS[J(cur).crew].rep===rep&&canEditOwn)){r.slots[i]=null;re();}});
     const on=(q,f)=>{const e=m.querySelector(q);if(e)e.onclick=f;};
     on(".ad",()=>{r.any[rep]=!r.any[rep];re();});
+    on(".au",()=>{const d=autoFill(name,day,RMODE==="override");if(d!=null){logH("auto-route",{addr:name+" · ≈"+Math.round(d)+" mi",crew:repKey(rep,name)},{day});toast("Auto-routed ≈"+Math.round(d)+" mi");}re();});
     on(".cl",()=>{r.slots=r.slots.map(id=>id&&CREWS[J(id).crew].rep===rep?null:id);re();});
     on(".snd",()=>{r.sent[rep]=true;
       if(r.req&&r.req.to===rep){r.locked=true;logH("route locked",{addr:"",crew:repKey(rep,name)},{day});ping(other,"ready",`${REPS[rep]} finished ${name}'s route — locked`);}
