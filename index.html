@@ -8438,7 +8438,9 @@ function mount(){if(IS_OPS)return;const sec=document.getElementById("tab-archive
   sec.insertBefore(d,sec.firstChild);d.querySelector("#dpImport").onclick=()=>importSheet();d.querySelector("#dpRoute").onclick=()=>showPlan();
   const info=document.createElement("p");info.className="cap";info.style.marginTop="6px";d.appendChild(info);
   if(!opsKey()){info.innerHTML="Not connected to KPI Ops yet — open Takeoffs once from KPI Ops ▸ 📏 Measure row ▸ “Open in KPI Takeoffs”.";return;}
-  loadStore().then(()=>{const t=iso(new Date()),c=dayCounts(t),tm=iso(new Date(Date.now()+864e5)),c2=dayCounts(tm);info.textContent="From KPI Ops · today "+(c.doc+c.mine)+" job"+(c.doc+c.mine===1?"":"s")+(c.plan?" (route ready)":"")+" · tomorrow "+(c2.doc+c2.mine)+(c2.plan?" (route ready)":"");});}
+  loadStore().then(()=>{const t=iso(new Date()),c=dayCounts(t),n=c.doc+c.mine;if(!n){info.textContent="KPI Ops · nothing on today's measure list yet.";return;}
+    info.innerHTML=`<button type="button" class="btn btn-primary" id="dpPrompt" style="width:100%">📥 Import today's ${n} measure job${n===1?"":"s"} from KPI Ops?</button><span class="dp-m">Nothing is added until you tap — fill out the Asher · Measure row in Ops first.</span>`;
+    info.querySelector("#dpPrompt").onclick=()=>c.plan?showPlan(t):importSheet(t);});}
 async function deepLink(){if(IS_OPS)return;const hm=(window.__kpHash||"").match(/mjob=([^&]+)/);if(!hm)return;const [day,src,i]=decodeURIComponent(hm[1]).split("~");await loadStore();
   let j=null;if(src==="mine")j=(STORE.mine[day]||[])[+i];else{const D=STORE.doc&&STORE.doc.text?parseDoc(STORE.doc.text).days[new Date(day+"T12:00").getDay()]:null;const b=D&&D.jobs[+i];if(b){const o=((STORE.ov||{})[day]||{})[ovKey(b)]||{};j=Object.assign({},b,{pkg:pkgHint(b.note),fnd:fndHint(b.note)},o,{src:"doc"});}}
   if(!j){alert("That measure job wasn't found in KPI Ops.");return;}const id=await makeJob(j,day,0,null);K().refreshArchive();setTimeout(()=>K().openArchiveJob(id),300);}
