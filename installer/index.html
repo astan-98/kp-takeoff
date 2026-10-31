@@ -279,7 +279,7 @@ function addFiles(c,day,files){if(!files.length)return;
     if(day===TOM&&S.confirmed[c]){S.confirmed[c]=false;}});
   toast(files.length+" file(s) added to "+CREWS[c].name+" · "+DAYS_EN[day]+(day===TOM?" — re-confirm needed":""));go();}
 function oConfirm(rep,mine){
-  h(`<h1>Is tomorrow right?</h1><p class="mut" style="font-size:1.02rem">${DAYS_EN[TOM]}. Check each crew, tap Confirm. That crew gets notified and can see its jobs.</p>`);
+  h(`<h1>Are Tomorrow's Jobs Ready?</h1><p class="mut" style="font-size:1.02rem">${DAYS_EN[TOM]}. Check each crew, tap Confirm. That crew gets notified and can see its jobs.</p>`);
   mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day===TOM);
     const d=h(`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">${esc(CREWS[c].name)} ${typeTag(c)}</h2>${S.confirmed[c]?'<span class="pill ok">Confirmed</span>':""}</div>
      ${js.length?`<table>${js.map(j=>`<tr><td>${esc(j.addr)}<br><span class="mut small">${esc(j.cust)}${j.file?" · 📄 "+esc(j.file):""}</span></td><td class="small" style="text-align:right">${j.miles} mi</td></tr>`).join("")}</table>`:'<p class="mut">No jobs tomorrow — drop files in Calendar.</p>'}
