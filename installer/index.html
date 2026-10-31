@@ -238,10 +238,10 @@ function short(c,j,kind){const rep=CREWS[c].rep;let k=kind||"Falta material",n=0
       if(!n)return toast(L("Toma la foto","Take the photo"));
       if(!wrong){const es="Falta material: "+picks.map(p=>p.q+" "+p.u+" "+p.mat).join(", ")+(d?" · "+d:"");
         const en="Material shortage: need "+picks.map(p=>p.q+" more "+(p.u==="bolsas"?"bags":"bundles")+" of "+toEN(p.mat)).join(", ")+(d?" · "+toEN(d):"");
-        j.short.push({es,en,shortage:picks});ping(rep,"short",`🚨 ${crewLabel(c)} at ${j.addr}: ${en} (photo attached)`);m.remove();toast(L("🚨 Aviso enviado a ","🚨 Alert sent to ")+REPS[rep]);render();return;}
+        j.short.push({es,en,shortage:picks});ping(rep,"short",`🚨 ${crewLabel(c)} at ${j.addr}: ${en} (photo attached)`);S.inbox[0].ticket={addr:j.addr,cust:j.cust,coords:j.coords,crew:crewLabel(c),items:j.short[j.short.length-1].shortage?j.short[j.short.length-1].shortage.map(p=>p.q+" "+(p.u==="bolsas"?"bags":"bundles")+" — "+toEN(p.mat)):[j.short[j.short.length-1].en.replace(/^Wrong material — /,"")]};m.remove();toast(L("🚨 Aviso enviado a ","🚨 Alert sent to ")+REPS[rep]);render();return;}
       const es=wrong?"Material equivocado — centros: "+(wm==="other"?d:wm)+" → necesita "+ww+'"'+(d&&wm!=="other"?" · "+d:""):k+(d?": "+d:"");
       const en=wrong?"Wrong material — wrong centers: "+(wm==="other"?toEN(d):toEN(wm))+" → needs "+ww+'" on center'+(d&&wm!=="other"?" · "+toEN(d):""):toEN(es);
-      j.short.push({es,en,wrongCenters:wrong?{material:wm==="other"?d:wm,needs:ww}:null});ping(rep,"short",`🚨 ${crewLabel(c)} at ${j.addr}: ${en} (photo attached)`);m.remove();toast(L("🚨 Aviso enviado a ","🚨 Alert sent to ")+REPS[rep]);render();};});}
+      j.short.push({es,en,wrongCenters:wrong?{material:wm==="other"?d:wm,needs:ww}:null});ping(rep,"short",`🚨 ${crewLabel(c)} at ${j.addr}: ${en} (photo attached)`);S.inbox[0].ticket={addr:j.addr,cust:j.cust,coords:j.coords,crew:crewLabel(c),items:j.short[j.short.length-1].shortage?j.short[j.short.length-1].shortage.map(p=>p.q+" "+(p.u==="bolsas"?"bags":"bundles")+" — "+toEN(p.mat)):[j.short[j.short.length-1].en.replace(/^Wrong material — /,"")]};m.remove();toast(L("🚨 Aviso enviado a ","🚨 Alert sent to ")+REPS[rep]);render();};});}
 function recap(c){sheet(`<h1>${L("\ud83d\udcdd Terminar el d\u00eda","\ud83d\udcdd Finish the day")}</h1><label>${L("\u00bfC\u00f3mo fue el d\u00eda? (opcional)","How did the day go? (optional)")}</label><textarea class="rs" placeholder="${L("Ej. terminamos todo bien","E.g. we finished, all good")}"></textarea>
    <label>${L("\u00bfSobr\u00f3 material? (opcional)","Any material left over? (optional)")}</label><input class="lo" placeholder="${L("Ej. sobr\u00f3 3 bultos R-13","E.g. 3 bundles R-13 left")}"><button class="p big go">${L("\u2714 Enviar y cerrar el d\u00eda","\u2714 Send and close the day")}</button>`,m=>m.querySelector(".go").onclick=()=>{
      const r=m.querySelector(".rs").value.trim()||"Sin comentarios",lo=m.querySelector(".lo").value.trim();
@@ -423,6 +423,13 @@ function oConfirm(rep,mine){
   h(`<p class="mut small">${REPS[other]} confirms his own crews separately — never holds up yours. Crews see their day only after both reps with jobs that day have confirmed AND the joint route is locked.</p>`);
 }
 const alertWhy=x=>{const t=x.text||"";return /wrong cent/i.test(t)?"📏 Wrong centers":/wrong material/i.test(t)?"❌ Wrong material":x.kind==="short"?"📦 Material shortage":x.kind==="photo"?"📷 Completed with NO photos":x.kind==="labor"?"💪 Request Extra on Payroll":x.kind==="complete"?"✅ Job complete":x.kind==="ready"?"🧭 Route":"🔔 Alert";};
+function loadTicket(x){let t=x.ticket;if(!t){const m=(x.text||"").match(/🚨\s*(.+?) at (.+?): (.+?)(?: \(photo attached\))?$/);t=m?{crew:m[1],addr:m[2],items:m[3].replace(/^Material shortage: need /,"").replace(/^Wrong material — /,"").split(/, (?=\d)/)}:{crew:"",addr:"",items:[x.text]};}
+  const j=S.jobs.find(q=>q.addr===t.addr),co=t.coords||(j&&j.coords);
+  return "KP LOAD TICKET — deliver to job\nJob: "+t.addr+(t.cust||(j&&j.cust)?"\nCustomer: "+(t.cust||j.cust):"")+(co?"\nMap: https://maps.google.com/?q="+String(co).replace(/\s/g,""):"")+"\nCrew on site: "+t.crew+"\nMaterials needed:\n"+t.items.map(i=>"• "+i).join("\n")+"\nReported: "+x.t;}
+function shareLoad(x){const txt=loadTicket(x);sheet(`<h1>🚚 Load ticket</h1><pre style="white-space:pre-wrap;font:inherit;background:var(--card);padding:12px;border-radius:12px" class="lt"></pre>
+  <button class="ok big ls">📤 Share / text to warehouse</button><a class="big" style="display:block;text-align:center;margin-top:8px" href="sms:?&body=${encodeURIComponent(txt)}">💬 Open in Messages</a><button class="big lc" style="margin-top:8px">📋 Copy</button>`,m=>{m.querySelector(".lt").textContent=txt;
+  m.querySelector(".ls").onclick=()=>{if(navigator.share)navigator.share({title:"KP load ticket",text:txt}).catch(()=>{});else{navigator.clipboard&&navigator.clipboard.writeText(txt);toast("Copied — paste into a text to the warehouse");}};
+  m.querySelector(".lc").onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(txt);toast("Copied");};});}
 function oInbox(rep){
   h('<h1>Alerts</h1>');
   const labs=S.jobs.flatMap(j=>j.labor.map(l=>({j,l}))).filter(x=>CREWS[x.l.crew].rep===rep);
@@ -432,7 +439,7 @@ function oInbox(rep){
    ${l.status==="pending"?`${l.amt?"":'<label>Amount (over $100)</label><input class="ca" inputmode="decimal" placeholder="150">'}<div style="display:flex;gap:8px;margin-top:10px"><button class="ok ap" style="flex:2">Approve${l.amt?" $"+l.amt:""}</button><button class="dn" style="flex:1">Deny</button></div>`:""}</div>`);
    const a=d.querySelector(".ap");if(a){a.onclick=()=>{if(!l.amt){const v=Number(d.querySelector(".ca").value);if(!(v>100))return toast("Enter an amount over $100");l.amt=v;}l.status="approved";go();};d.querySelector(".dn").onclick=()=>{l.status="denied";go();};}});
   const it=S.inbox.filter(x=>x.rep===rep&&x.kind!=="labor");
-  it.forEach(x=>{h(`<div class="card" ${x.kind==="short"?'style="border-left:5px solid var(--warn)"':""}><div class="mut small">${x.t} ${x.pushed?"· 📲 pushed":"· inbox only"}</div><div class="why" style="font-weight:800;font-size:1.08rem">${alertWhy(x)}</div><div style="font-size:1.02rem">${esc(x.text)}</div></div>`);x.seen=true;});
+  it.forEach(x=>{h(`<div class="card" ${x.kind==="short"?'style="border-left:5px solid var(--warn)"':""}><div class="mut small">${x.t} ${x.pushed?"· 📲 pushed":"· inbox only"}</div><div class="why" style="font-weight:800;font-size:1.08rem">${alertWhy(x)}</div><div style="font-size:1.02rem">${esc(x.text)}</div>${x.kind==="short"?'<button class="ok big slt" style="margin-top:10px">🚚 Share load ticket</button>':""}</div>`);x.seen=true;const sb=document.querySelectorAll(".slt");if(x.kind==="short")sb[sb.length-1].onclick=()=>shareLoad(x);});
   S.inbox.filter(x=>x.rep===rep).forEach(x=>x.seen=true);
   if(!labs.length&&!it.length)h('<div class="card mut">Nothing yet. Switch to one of your crews (menu at top) and try check-in, extra labor, material problem or complete.</div>');
 }
