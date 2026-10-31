@@ -84,6 +84,9 @@ const fresh=()=>{const J=[
   mkJob("asher_sammy",0,"17 Oak St, Jefferson, GA","Mary Collins",4,false,[["Ático","Soplado R-38","900 SF"]],[["Soplado R-38",13,"bolsas"]],"WO - 17 Oak St.jpg"),
   mkJob("asher_jorge",1,"301 Hwy 124, Braselton, GA","Brookstone Homes",26,true,[["Paredes 2x4","R-13","1,700 SF"]],[["R-13 15\"",21,"bultos"]],"WO - 301 Hwy 124.pdf"),
   mkJob("lance_jorge",0,"512 Old Federal Rd, Dahlonega, GA","Mountain Crest LLC",63,true,[["Paredes 2x4","R-13 sin papel 15\"","1,500 SF"],["Ático","Soplado R-38","1,900 SF"]],[["R-13 15\"",19,"bultos"],["Soplado R-38",27,"bolsas"]],"WO - 512 Old Federal.pdf","34.5321, -83.9851"),
+  mkJob("asher_jorge",0,"55 Mulberry St, Hoschton, GA","Mulberry Park Homes",19,true,[["Paredes 2x4","R-13 sin papel 15\"","1,350 SF"],["Ático","Soplado R-38","1,500 SF"]],[["R-13 15\"",17,"bultos"],["Soplado R-38",22,"bolsas"]],"WO - 55 Mulberry.pdf","34.0968, -83.7609"),
+  mkJob("asher_jorge",0,"820 Hwy 82, Statham, GA","Gary & Lynn Webb",24,false,[["Ático retro","Soplado R-30 encima","1,100 SF"]],[["Soplado R-30",14,"bolsas"]],"WO - 820 Hwy 82.pdf","33.9651, -83.5963"),
+  mkJob("lance_jorge",0,"390 Maple Ave, Maysville, GA","Harbor Homes",22,true,[["Paredes 2x6","R-19 sin papel 15\"","1,600 SF"],["Ático","Soplado R-38","1,700 SF"]],[["R-19 15\"",22,"bultos"],["Soplado R-38",25,"bolsas"]],"WO - 390 Maple.pdf","34.2526, -83.5616"),
   mkJob("asher_santos",1,"412 Bramble Ct, Jefferson, GA","Adams Homes",12,true,[["Puertas","Prehang (sellar)","3 ea"],["Sellado","Masilla y espuma air seal","1 casa"],["Paredes 2x4","R-13","1,200 SF"]],[["R-13 15\"","12","bultos"]],"WO - 412 Bramble.pdf"),
   mkJob("lance_jorge",1,"77 Dove Ln, Gainesville, GA","Adams Homes",31,true,[["Puertas","Prehang (sellar)","2 ea"],["Sellado","Masilla y espuma air seal","1 casa"]],[["Espuma","4","latas"]],"WO - 77 Dove.pdf"),
   mkJob("lance_santos",0,"9 Creekside Way, Gainesville, GA","Harbor Homes",29,false,[["Línea de techo","Espuma celda abierta 5.5\"","2,640 SF"]],[["Espuma celda abierta","2,640","SF"]],"WO - 9 Creekside.pdf"),
@@ -122,11 +125,11 @@ function seedAlerts(st){const J=a=>st.jobs.find(j=>j.addr.startsWith(a)),ib=(rep
     H(T(5,8,30),"Asher","added","17 Oak St, Jefferson, GA","asher_sammy",{day:0}),
     H(T(9,14,0),"Asher","removed","77 Old Rd, Winder, GA","asher_santos",{day:0})];
   m.pri="high";pr.pri="high";
-  // Demo: Jorge's Monday is already confirmed by Asher + Lance and the route is locked, so "Jorge (crew)" can walk the full day.
+  // Demo: Jorge's Monday = 6 jobs (4 Asher, 2 Lance), both reps confirmed, both marked "Order doesn't matter" — open Route → 🤖 Auto-route → Lock.
   [m,lk,df].forEach(j=>{j.done=false;j.checkedIn=false;});
   st.confirmed.asher_jorge=true;st.confirmed.lance_jorge=true;st.crewNotifs.asher_jorge=st.crewNotifs.lance_jorge="4:12 PM";
-  st.routes=st.routes||{};st.routes["Jorge|0"]={slots:[m.id,lk.id,df.id],any:{asher:false,lance:false},sent:{asher:true,lance:true},req:null,counter:null,locked:true,talk:false};
-  st.hist.unshift(H(T(0,16,12),"Asher","confirmed","Jorge's jobs","asher_jorge",{day:0}),H(T(0,16,10),"Asher","route locked","Jorge · 3 stops","asher_jorge",{day:0}),H(T(0,16,5),"Lance","confirmed","512 Old Federal Rd, Dahlonega, GA","lance_jorge",{day:0}));
+  st.routes=st.routes||{};st.routes["Jorge|0"]={slots:Array(6).fill(null),any:{asher:true,lance:true},sent:{asher:false,lance:false},req:null,counter:null,locked:false,talk:false};
+  st.hist.unshift(H(T(0,16,12),"Asher","confirmed","Jorge's jobs","asher_jorge",{day:0}),H(T(0,16,5),"Lance","confirmed","Jorge's jobs","lance_jorge",{day:0}));
   return st;}
 let S=seedAlerts(fresh());
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
