@@ -119,6 +119,7 @@ function seedAlerts(st){const J=a=>st.jobs.find(j=>j.addr.startsWith(a)),ib=(rep
     H(T(3,10,41),"Asher","added","145 Lakeview Dr, Commerce, GA","asher_jorge",{day:0}),
     H(T(5,8,30),"Asher","added","17 Oak St, Jefferson, GA","asher_sammy",{day:0}),
     H(T(9,14,0),"Asher","removed","77 Old Rd, Winder, GA","asher_santos",{day:0})];
+  m.pri="high";pr.pri="today";
   return st;}
 let S=seedAlerts(fresh());
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -134,24 +135,25 @@ const tr=x=>LANG==="es"?x:toEN(String(x));
 function toEN(es){let t=" "+es.toLowerCase()+" ";DICT.forEach(([a,b])=>{t=t.replace(new RegExp("([\\s,.;:!?])"+a+"(?=[\\s,.;:!?])","g"),"$1"+b);});t=t.trim();return t.charAt(0).toUpperCase()+t.slice(1);}
 function ping(rep,kind,text){S.inbox.unshift({rep,kind,text,t:now(),pushed:!!S.notifPrefs[rep][kind]});}
 const mileTier=m=>m>=60?50:m>=40?25:0;
-function fillWho(){const w=$("#who");w.innerHTML='<optgroup label="Office (English)"><option value="office:asher">Asher (office)</option><option value="office:lance">Lance (office)</option></optgroup><optgroup label="Crews">'+Object.keys(CREWS).map(k=>`<option value="crew:${k}">${crewLabel(k)}</option>`).join("")+'</optgroup>';w.onchange=()=>{S.openJob=null;render();};}
+function fillWho(){const w=$("#who");w.innerHTML='<optgroup label="Office (English)"><option value="office:asher">Asher (office)</option><option value="office:lance">Lance (office)</option></optgroup><optgroup label="Crews">'+PHYS.map(n=>`<option value="crew:${n}">${n}</option>`).join("")+'</optgroup>';w.onchange=()=>{S.openJob=null;render();};}
 function render(){const[k,id]=$("#who").value.split(":");document.documentElement.lang=k==="crew"?"es":"en";$("#app").innerHTML="";document.querySelectorAll(".bar").forEach(b=>b.remove());k==="crew"?crew(id):office(id);}
 function go(){render();window.scrollTo(0,0);}
 
 /* ===================== CREW (Spanish) ===================== */
 function crew(c){
-  const C=CREWS[c],rep=REPS[C.rep],jobs=dayJobs(c,TOM);
-  if(S.openJob)return crewJob(c,S.jobs.find(j=>j.id===S.openJob));
-  if(!S.confirmed[c]){h(`<div class="card lock"><div class="ico">🔒</div><h1>${L("Ma\u00f1ana todav\u00eda no est\u00e1 listo","Tomorrow isn't ready yet")}</h1><p class="mut" style="font-size:1.05rem">${rep} ${L("tiene que confirmar tu horario.<br>Te llegar\u00e1 un aviso cuando est\u00e9 listo.","has to confirm your schedule.<br>You'll get a notification when it's ready.")}</p></div>`);return;}
-  if(S.recapDone[c]){h(`<div class="card lock"><div class="ico">✅</div><h1>${L("D\u00eda terminado","Day finished")}</h1><p class="mut" style="font-size:1.05rem">${L("Gracias. El próximo día se abre cuando "+rep+" confirme.","Thanks. The next day opens when "+rep+" confirms.")}</p></div>`);return;}
+  const name=c,jobs=routeOrder(name,TOM),rep=repsWithJobs(name,TOM).map(r=>REPS[r]).join(L(" y "," and "))||"Asher";
+  if(S.openJob){const jj=S.jobs.find(j=>j.id===S.openJob);return crewJob(jj.crew,jj);}
+  const C={name};
+  if(!crewReady(name,TOM)){h(`<div class="card lock"><div class="ico">🔒</div><h1>${L("Ma\u00f1ana todav\u00eda no est\u00e1 listo","Tomorrow isn't ready yet")}</h1><p class="mut" style="font-size:1.05rem">${rep} ${L("tiene que confirmar tu horario.<br>Te llegar\u00e1 un aviso cuando est\u00e9 listo.","has to confirm your schedule.<br>You'll get a notification when it's ready.")}</p></div>`);return;}
+  if(S.recapDone[name]){h(`<div class="card lock"><div class="ico">✅</div><h1>${L("D\u00eda terminado","Day finished")}</h1><p class="mut" style="font-size:1.05rem">${L("Gracias. El próximo día se abre cuando "+rep+" confirme.","Thanks. The next day opens when "+rep+" confirms.")}</p></div>`);return;}
   const left=jobs.filter(j=>!j.done).length;
-  if(S.crewNotifs[c])h(`<div class="card" style="border-left:5px solid var(--acc)">🔔 <b>${esc(S.crewNotifs[c]+" — "+L("Tus trabajos de mañana están listos.","Your jobs for tomorrow are ready."))}</b></div>`);
+  h(`<div class="card" style="border-left:5px solid var(--acc)">🔔 <b>${L("Tu ruta de mañana está lista.","Your route for tomorrow is ready.")}</b></div>`);
   h(`<div class="step">${L(DAYS[TOM]+" nov",DAYS_EN[TOM])} · ${esc(C.name)}</div><h1>${left?L("Tus trabajos","Your jobs"):L("¡Todos los trabajos completos!","All jobs complete!")}</h1>`);
-  jobs.forEach((j,i)=>{const d=h(`<button class="job" ${j.done?'style="opacity:.55"':""}><div class="a">${j.done?"✅":j.checkedIn?"▶️":(i+1)+"."} ${esc(j.addr)}</div><div class="s">${j.done?L("Trabajo completo","Job complete"):j.checkedIn?L("Toca para seguir","Tap to continue"):L("Toca para ir y registrar llegada","Tap to go and check in")}</div></button>`);
+  jobs.forEach((j,i)=>{const d=h(`<button class="job" ${j.done?'style="opacity:.55"':""}><div class="a">${j.done?"✅":j.checkedIn?"▶️":L("Parada ","Stop ")+(i+1)+" ·"} ${esc(j.addr)}</div>${j.pri||j.touchup?`<div style="margin-top:4px">${priTag(j,"crew")}</div>`:""}<div class="s">${j.done?L("Trabajo completo","Job complete"):j.checkedIn?L("Toca para seguir","Tap to continue"):L("Toca para ir y registrar llegada","Tap to go and check in")}</div></button>`);
     d.querySelector("button").onclick=()=>{if(j.done)return;j.checkedIn?(S.openJob=j.id,go()):checkin(j);};});
   const load={};jobs.forEach(j=>j.load.forEach(([m,q,u])=>{const k=m+"|"+u;load[k]=(load[k]||0)+Number(String(q).replace(/,/g,""));}));
   h('<details class="card"><summary>'+L("\ud83d\ude9a Ticket de carga \u2014 qu\u00e9 subir al cami\u00f3n","\ud83d\ude9a Load ticket \u2014 what goes on the truck")+'</summary><table>'+Object.entries(load).map(([k,q])=>{const[m,u]=k.split("|");return`<tr><td>${esc(tr(m))}</td><td style="text-align:right"><b>${q.toLocaleString()}</b> ${tr(u)}</td></tr>`;}).join("")+'</table></details>');
-  if(!left){const r=h(`<button class="p big">${L("\ud83d\udcdd Terminar el d\u00eda","\ud83d\udcdd Finish the day")}</button><p class="mut" style="text-align:center">${L("Necesario para ver el pr\u00f3ximo d\u00eda.","Needed to see the next day.")}</p>`);r.querySelector("button").onclick=()=>recap(c);}
+  if(!left){const r=h(`<button class="p big">${L("\ud83d\udcdd Terminar el d\u00eda","\ud83d\udcdd Finish the day")}</button><p class="mut" style="text-align:center">${L("Necesario para ver el pr\u00f3ximo d\u00eda.","Needed to see the next day.")}</p>`);r.querySelector("button").onclick=()=>recap(name);}
   const o=h(`<div style="text-align:center"><button class="link">${S.offline?L("\u26a0\ufe0f Sin conexi\u00f3n \u00b7 ","\u26a0\ufe0f Offline \u00b7 ")+S.queue+L(" en cola \u2014 tocar para reconectar"," queued \u2014 tap to reconnect"):L("Demo: simular sin conexi\u00f3n","Demo: simulate offline")}</button></div>`);
   o.querySelector("button").onclick=()=>{S.offline=!S.offline;if(!S.offline&&S.queue){toast(L("Sincronizado","Synced")+" ("+S.queue+")");S.queue=0;}go();};
 }
@@ -168,7 +170,7 @@ const LAB_USD={s:25,m:50,l:100,x:null}; // office-only mapping; "x" → office t
 function crewJob(c,j){
   const rep=CREWS[c].rep;
   h('<button class="link" style="font-size:1rem">'+L("\u2190 Mis trabajos","\u2190 My jobs")+'</button>').querySelector("button").onclick=()=>{S.openJob=null;go();};
-  h(`<div class="card"><h1 style="margin-top:0">${esc(j.addr)}</h1><div style="font-size:1.05rem">${L("Cliente:","Customer:")} <b>${esc(j.cust)}</b></div>${j.coords?`<a href="https://maps.google.com/?q=${j.coords.replace(/ /g,"")}" target="_blank">📍 ${j.coords}</a>`:""}</div>`);
+  h(`<div class="card">${j.pri?`<div style="margin-bottom:6px">${priTag(j,"crew")}</div>`:""}<h1 style="margin-top:0">${esc(j.addr)}</h1>${j.touchup?`<div class="card" style="border:2px solid #6b3fa0;margin:8px 0"><b>🔧 ${L("Retoque — qué arreglar:","Touch-up — what to fix:")}</b> ${esc(j.touchup.issue)}</div>`:""}<div style="font-size:1.05rem">${L("Cliente:","Customer:")} <b>${esc(j.cust)}</b></div>${j.coords?`<a href="https://maps.google.com/?q=${j.coords.replace(/ /g,"")}" target="_blank">📍 ${j.coords}</a>`:""}</div>`);
   h('<div class="card"><div class="step">'+L("1 \u00b7 Orden de trabajo","1 \u00b7 Work order")+'</div><table>'+j.lines.map(l=>`<tr><td><b>${tr(l[0])}</b><br><span class="mut small">${tr(l[1])}</span></td><td style="text-align:right;font-weight:800">${l[2]}</td></tr>`).join("")+'</table></div>');
   const ph=h(`<div class="card"><div class="step">${L("2 \u00b7 Fotos","2 \u00b7 Photos")}</div>
    ${j.nc?`<button class="act ${j.wallPhotos?"done":"need"} wb">${j.wallPhotos?"✅":"📷"} ${L("Fotos de paredes","Walls photos")} ${j.wallPhotos?"("+j.wallPhotos+")":L("\u2014 obligatorio","\u2014 required")}</button>
@@ -243,7 +245,7 @@ function short(c,j,kind){const rep=CREWS[c].rep;let k=kind||"Falta material",n=0
 function recap(c){sheet(`<h1>${L("\ud83d\udcdd Terminar el d\u00eda","\ud83d\udcdd Finish the day")}</h1><label>${L("\u00bfC\u00f3mo fue el d\u00eda? (opcional)","How did the day go? (optional)")}</label><textarea class="rs" placeholder="${L("Ej. terminamos todo bien","E.g. we finished, all good")}"></textarea>
    <label>${L("\u00bfSobr\u00f3 material? (opcional)","Any material left over? (optional)")}</label><input class="lo" placeholder="${L("Ej. sobr\u00f3 3 bultos R-13","E.g. 3 bundles R-13 left")}"><button class="p big go">${L("\u2714 Enviar y cerrar el d\u00eda","\u2714 Send and close the day")}</button>`,m=>m.querySelector(".go").onclick=()=>{
      const r=m.querySelector(".rs").value.trim()||"Sin comentarios",lo=m.querySelector(".lo").value.trim();
-     S.recapDone[c]=true;S.recap[c]={en:toEN(r),left:lo?toEN(lo):"—"};S.crewNotifs[c]=null;ping(CREWS[c].rep,"complete",`${crewLabel(c)} closed the day: "${toEN(r)}"`);m.remove();toast(L("Día cerrado","Day closed"));go();});}
+     S.recapDone[c]=true;S.recap[c]={en:toEN(r),left:lo?toEN(lo):"—"};repsWithJobs(c,TOM).forEach(rp=>{S.recapDone[repKey(rp,c)]=true;S.recap[repKey(rp,c)]=S.recap[c];ping(rp,"complete",`${c} closed the day: "${toEN(r)}"`);});m.remove();toast(L("Día cerrado","Day closed"));go();});}
 
 /* ===================== OFFICE (English) ===================== */
 function office(rep){
@@ -263,7 +265,7 @@ function oCal(rep,mine){
   nav.querySelector(".wp").onclick=()=>{S.week=wk-1;go();};nav.querySelector(".wn").onclick=()=>{S.week=wk+1;go();};const wt=nav.querySelector(".wt");if(wt)wt.onclick=()=>{S.week=0;go();};
   const d=h(`<div class="cal"><table><tr><th></th>${cols.map(i=>`<th class="${i===TOM?"tm":""}">${DAYS_EN[i]}${i===TOM?"<br>tomorrow":""}</th>`).join("")}</tr>
    ${mine.map(c=>`<tr><td class="crew"><b>${esc(CREWS[c].name)}</b><br>${typeTag(c).replace(" · training","").replace(" · piece rate","")}</td>${cols.map(i=>{const js=dayJobs(c,i);
-     return `<td class="${i===TOM?"tm":""}" data-c="${c}" data-d="${i}">${js.map(j=>`<div class="f${MOVE===j.id?" sel":""}" draggable="true" data-j="${j.id}" title="${esc(j.addr)}">📄 ${esc(j.addr.split(",")[0])}</div>`).join("")}<div class="plus">${MOVE?"⬇ Move here":js.length?"＋":"Drop file / tap"}</div></td>`;}).join("")}</tr>`).join("")}</table></div>`);
+     return `<td class="${i===TOM?"tm":""}" data-c="${c}" data-d="${i}">${js.map(j=>`<div class="f${MOVE===j.id?" sel":""}" draggable="true" data-j="${j.id}" title="${esc(j.addr)}">${j.touchup?"🔧":j.pri==="today"?"🔴":j.pri==="high"?"🟠":"📄"} ${esc(j.addr.split(",")[0])}</div>`).join("")}<div class="plus">${MOVE?"⬇ Move here":js.length?"＋":"Drop file / tap"}</div></td>`;}).join("")}</tr>`).join("")}</table></div>`);
   d.querySelectorAll("td[data-c]").forEach(td=>{
     td.ondragover=e=>{e.preventDefault();td.classList.add("over");};td.ondragleave=()=>td.classList.remove("over");
     td.ondrop=e=>{e.preventDefault();td.classList.remove("over");const id=e.dataTransfer.getData("text/kp-job");
@@ -272,12 +274,14 @@ function oCal(rep,mine){
   d.querySelectorAll(".f[data-j]").forEach(f=>{
     f.ondragstart=e=>{e.dataTransfer.setData("text/kp-job",f.dataset.j);e.dataTransfer.effectAllowed="move";};
     f.onclick=e=>{e.stopPropagation();const id=+f.dataset.j;MOVE=MOVE===id?null:id;go();};});
-  if(MOVE){const j=S.jobs.find(x=>x.id===MOVE);const b=h(`<div class="card" style="position:sticky;bottom:76px;border:2px solid var(--blue)"><b>Moving: ${esc(j?j.addr.split(",")[0]:"")}</b><div class="mut small">Tap the crew + day box to move it there.</div><button class="link mc">Cancel</button> <button class="link mr" style="color:var(--bad)">Remove this job</button></div>`);b.querySelector(".mc").onclick=()=>{MOVE=null;go();};
+  if(MOVE){const j=S.jobs.find(x=>x.id===MOVE);const b=h(`<div class="card" style="position:sticky;bottom:76px;border:2px solid var(--blue)"><b>Selected: ${esc(j?j.addr.split(",")[0]:"")}</b><div class="mut small">Tap a crew + day box to move it, or set its priority:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">${[["","Normal"],["high","High priority"],["today","Must get completed today"]].map(([v,l])=>`<button class="pr" data-p="${v}" style="flex:1;min-height:44px;font-size:.85rem;${(j.pri||"")===v?"background:var(--ink);color:var(--bg)":""}">${l}</button>`).join("")}</div><button class="link mc">Cancel</button> <button class="link mr" style="color:var(--bad)">Remove this job</button></div>`);
+    b.querySelectorAll(".pr").forEach(x=>x.onclick=()=>{j.pri=x.dataset.p;logH("priority",j,{day:j.day,pri:x.dataset.p?PRI[x.dataset.p].en:"normal"});toast("Priority: "+(x.dataset.p?PRI[x.dataset.p].en:"Normal"));go();});b.querySelector(".mc").onclick=()=>{MOVE=null;go();};
     b.querySelector(".mr").onclick=()=>{if(!confirm("Remove "+j.addr+" from "+CREWS[j.crew].name+"?"))return;logH("removed",j,{day:j.day});S.jobs=S.jobs.filter(x=>x!==j);if(j.day===TOM&&S.confirmed[j.crew]){S.confirmed[j.crew]=false;S.crewNotifs[j.crew]=null;}MOVE=null;toast("Removed");go();};}
   { const hd=h(`<details class="card" ${S.histOpen?"open":""}><summary>🕘 Schedule history (last ${HIST_DAYS} days)</summary><div style="display:flex;gap:8px;margin:6px 0"><button class="hm" style="flex:1;min-height:40px">My crews</button><button class="ha" style="flex:1;min-height:40px">Everyone</button></div><div class="hl">${histHtml(rep,S.histAll)}</div><p class="mut small">Office only — crews never see this. Older than 7 days is greyed. "Night before" = changed after 5 PM for tomorrow.</p></details>`);
     const dd=hd.querySelector("details");dd.ontoggle=()=>{S.histOpen=dd.open;};// filter swaps only the list — no re-render, no jump to top
     const paint=()=>{hd.querySelector(".hl").innerHTML=histHtml(rep,S.histAll);[[".hm",!S.histAll],[".ha",S.histAll]].forEach(([q,on])=>{const b=hd.querySelector(q);b.style.background=on?"var(--ink)":"";b.style.color=on?"var(--bg)":"";});};
     hd.querySelector(".hm").onclick=()=>{S.histAll=false;paint();};hd.querySelector(".ha").onclick=()=>{S.histAll=true;paint();};paint(); }
+  h(`<button class="big tu" style="background:var(--card)">🔧 Touch-up ticket from a completed job</button>`).querySelector(".tu").onclick=()=>touchUp(rep);
   h(`<p class="mut small">Edit rights: you can only add, move, reorder or remove your own crews' jobs; confirm stays per rep. Tip: file name like “WO - 123 Main St, Winder.pdf” fills the address. Tomorrow's column feeds the crews after you Confirm.</p>`);
 }
 $("#fpick").onchange=e=>{if(DROP)addFiles(DROP[0],DROP[1],[...e.target.files]);};
@@ -293,8 +297,25 @@ function histHtml(rep,all){const H=(S.hist||[]).filter(x=>all||CREWS[x.crew].rep
   if(!H.length)return'<p class="mut">No changes yet.</p>';
   return'<table class="small">'+H.map(x=>{const d=new Date(x.t),when=d.toLocaleDateString([],{weekday:"short",month:"numeric",day:"numeric"})+" "+d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
     const late=x.day===TOM&&d.getHours()>=17&&x.action!=="confirmed";const a=esc((x.addr||"").split(",")[0]);
-    const what=x.action==="added"?`added <b>${a}</b> → ${esc(crewDay(x.crew,x.day))}`:x.action==="moved"?`moved <b>${a}</b> ${esc(crewDay(x.fromCrew,x.fromDay))} → ${esc(crewDay(x.crew,x.day))}`:x.action==="removed"?`removed <b>${a}</b> from ${esc(crewDay(x.crew,x.day))}`:x.action==="reordered"?`changed stop order: <b>${a}</b> now stop ${x.stop} · ${esc(crewDay(x.crew,x.day))}`:x.action==="confirmed"?`confirmed ${esc(crewLabel(x.crew))}'s jobs for ${DAYS_EN[x.day]}`:esc(x.action);
+    const what=x.action==="added"?`added <b>${a}</b> → ${esc(crewDay(x.crew,x.day))}`:x.action==="moved"?`moved <b>${a}</b> ${esc(crewDay(x.fromCrew,x.fromDay))} → ${esc(crewDay(x.crew,x.day))}`:x.action==="removed"?`removed <b>${a}</b> from ${esc(crewDay(x.crew,x.day))}`:x.action==="reordered"?`changed stop order: <b>${a}</b> now stop ${x.stop} · ${esc(crewDay(x.crew,x.day))}`:x.action==="confirmed"?`confirmed ${esc(crewLabel(x.crew))}'s jobs for ${DAYS_EN[x.day]}`:/route|counter/.test(x.action)?`${esc(x.action)} — ${esc(phys(x.crew))}'s route ${DAYS_EN[x.day]}${x.to?" → "+REPS[x.to]:""}`:x.action==="priority"?`set <b>${a}</b> to ${esc(x.pri)}`:esc(x.action);
     return`<tr${x.t<since?' style="opacity:.6"':""}><td style="white-space:nowrap">${when}${late?' <span class="pill warn">night before</span>':""}</td><td><b>${esc(x.who)}</b> ${what}</td></tr>`;}).join("")+"</table>";}
+// ===== Physical crews (Jorge / Santos / Sammy work for BOTH reps) + joint daily route =====
+const PHYS=["Jorge","Santos","Sammy"];const phys=c=>CREWS[c].name;
+const repKey=(rep,name)=>rep+"_"+name.toLowerCase();
+const physJobs=(name,day)=>S.jobs.filter(j=>phys(j.crew)===name&&j.day===day);
+const repsWithJobs=(name,day)=>["asher","lance"].filter(r=>physJobs(name,day).some(j=>CREWS[j.crew].rep===r));
+// Priority tag: "" normal · "high" HIGH PRIORITY · "today" MUST GET COMPLETED TODAY
+const PRI={high:{en:"HIGH PRIORITY",es:"ALTA PRIORIDAD",bg:"#e8890c"},today:{en:"MUST GET COMPLETED TODAY",es:"SE DEBE TERMINAR HOY",bg:"#c8102e"}};
+const tuTag=(j,lang)=>j.touchup?`<span class="pill" style="background:#6b3fa0;color:#fff">🔧 ${lang==="crew"?L("RETOQUE","TOUCH-UP"):"TOUCH-UP"}${j.touchup.paid?"":lang==="crew"?"":" · no pay"}</span> `:"";
+const priTag=(j,lang)=>tuTag(j,lang)+(j.pri&&PRI[j.pri]?`<span class="pill" style="background:${PRI[j.pri].bg};color:#fff">${lang==="crew"?L(PRI[j.pri].es,PRI[j.pri].en):PRI[j.pri].en}</span>`:"");
+// Route state per physical crew + day
+function RT(name,day){S.routes=S.routes||{};const k=name+"|"+day;const n=physJobs(name,day).length;
+  let r=S.routes[k];if(!r||r.slots.length!==n){r=S.routes[k]={slots:Array(n).fill(null),any:{asher:false,lance:false},sent:{asher:false,lance:false},req:null,counter:null,locked:false,talk:false};}
+  r.slots=r.slots.map(id=>id&&physJobs(name,day).some(j=>j.id===id)?id:null);return r;}
+const routeLocked=(name,day)=>{const n=physJobs(name,day).length;return n===0||RT(name,day).locked;};
+function routeOrder(name,day){const js=physJobs(name,day),r=RT(name,day),placed=r.slots.filter(Boolean),rest=js.filter(j=>!placed.includes(j.id)).sort((a,b)=>(a.ord||0)-(b.ord||0)||a.id-b.id);
+  let k=0;return r.slots.map(id=>id?js.find(j=>j.id===id):rest[k++]).concat(rest.slice(k)).filter(Boolean);}
+function crewReady(name,day){const reps=repsWithJobs(name,day);return reps.length>0&&reps.every(r=>S.confirmed[repKey(r,name)])&&routeLocked(name,day);}
 function dayJobs(c,day){return S.jobs.filter(j=>j.crew===c&&j.day===day).sort((a,b)=>(a.ord||0)-(b.ord||0)||a.id-b.id);}
 function reorder(id,dir){const j=S.jobs.find(x=>x.id===id),js=dayJobs(j.crew,j.day);js.forEach((x,i)=>x.ord=i+1);const i=js.indexOf(j),k=i+dir;if(k<0||k>=js.length)return;
   [js[i].ord,js[k].ord]=[js[k].ord,js[i].ord];logH("reordered",j,{day:j.day,stop:j.ord});if(j.day===TOM&&S.confirmed[j.crew]){S.confirmed[j.crew]=false;S.crewNotifs[j.crew]=null;toast("Order changed — re-confirm "+CREWS[j.crew].name);}go();}
@@ -314,17 +335,92 @@ function addFiles(c,day,files){if(!files.length)return;
     const j=mkJob(c,day,base+(/GA\b/.test(base)?"":", GA"),"(from file — edit)",Math.round(10+Math.random()*55),false,[["Ver archivo",f.name,"—"]],[],f.name);j.fileObj=f;S.jobs.push(j);logH("added",j,{day});
     if(day===TOM&&S.confirmed[c]){S.confirmed[c]=false;}});
   toast(files.length+" file(s) added to "+CREWS[c].name+" · "+DAYS_EN[day]+(day===TOM?" — re-confirm needed":""));go();}
+function routeStatus(name,day){const r=RT(name,day),reps=repsWithJobs(name,day);
+  if(r.locked)return'<span class="pill ok">Route locked</span>';if(r.talk)return'<span class="pill bad">Declined — talk offline</span>';
+  if(r.counter)return`<span class="pill warn">Counter from ${REPS[r.counter.by]} — waiting on ${REPS[r.counter.to]}</span>`;
+  if(r.req)return`<span class="pill warn">${REPS[r.req.from]}'s route request — waiting on ${REPS[r.req.to]}${r.req.ok?" (approved, placing)":""}</span>`;
+  return'<span class="pill">Route not set</span>';}
+function routeCard(name,day,rep){const n=physJobs(name,day).length,reps=repsWithJobs(name,day);
+  return`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><b>🧭 ${esc(name)}'s full route · ${n} stop${n===1?"":"s"}</b>${routeStatus(name,day)}</div>
+   <div class="mut small">${reps.map(r=>REPS[r]+": "+physJobs(name,day).filter(j=>CREWS[j.crew].rep===r).length).join(" · ")}</div>
+   <button class="rb big" data-n="${esc(name)}" data-d="${day}" style="background:var(--card)">🧭 Route</button></div>`;}
+let RSEL=null,RMODE=null; // RSEL = job picked to place; RMODE = null | "counter" | "override"
+function openRoute(name,day,rep){document.querySelectorAll(".modal").forEach(m=>m.remove());RSEL=null;routeSheet(name,day,rep);}
+function routeSheet(name,day,rep){
+  const r=RT(name,day),js=physJobs(name,day),other=rep==="asher"?"lance":"asher",mine=js.filter(j=>CREWS[j.crew].rep===rep),theirs=js.filter(j=>CREWS[j.crew].rep===other);
+  const free=RMODE==="counter"||RMODE==="override";
+  const canEditOwn=!r.locked&&!r.talk&&(!r.req||r.req.from===rep&&!r.sent[rep]||r.req.to===rep&&r.req.ok)&&!(r.counter);
+  const placed=id=>r.slots.includes(id);const J=id=>js.find(j=>j.id===id);
+  const slotHtml=r.slots.map((id,i)=>{const j=id&&J(id);return`<button class="rs act" data-i="${i}" style="${j?"":"border-style:dashed"}"><b>Stop ${i+1}</b> · ${j?esc(j.addr.split(",")[0])+" <span class='mut small'>("+REPS[CREWS[j.crew].rep]+")</span> "+priTag(j):'<span class="mut">empty'+((r.any.asher||r.any.lance)?" — order doesn't matter":"")+'</span>'}</button>`;}).join("");
+  const pool=(list,editable)=>list.map(j=>`<button class="rp" data-j="${j.id}" ${editable&&!placed(j.id)?"":"disabled"} style="margin:4px 4px 0 0;min-height:44px;${RSEL===j.id?"background:var(--blue);color:#fff":""}">${placed(j.id)?"✓ ":""}${esc(j.addr.split(",")[0])} ${priTag(j)}</button>`).join("")||'<span class="mut small">none</span>';
+  let act="";
+  if(r.locked)act=`<p><b style="color:var(--ok)">Route locked.</b> Crew sees: ${routeOrder(name,day).map((j,i)=>(i+1)+". "+esc(j.addr.split(",")[0])).join(" → ")}</p>${rep==="asher"?'<button class="w ov">Asher override — rearrange full route</button>':""}`;
+  else if(r.counter&&r.counter.to===rep)act=`<p><b>${REPS[r.counter.by]} sent a counter route.</b> ${r.counter.slots.map((id,i)=>(i+1)+". "+(id?esc(J(id).addr.split(",")[0]):"any")).join(" → ")}</p><div style="display:flex;gap:8px"><button class="ok ca" style="flex:1">Approve counter</button><button class="cd" style="flex:1">Decline — talk offline</button></div>`;
+  else if(r.counter)act=`<p class="mut">Counter sent to ${REPS[r.counter.to]} — waiting.</p>`;
+  else if(r.req&&r.req.to===rep&&!r.req.ok)act=`<p><b>${REPS[r.req.from]} placed his jobs and asks you to approve.</b></p><div style="display:flex;gap:8px"><button class="ok ra" style="flex:1">Approve — then place my jobs</button><button class="rdcl" style="flex:1">Decline → counter</button></div>`;
+  else if(r.req&&r.req.from===rep&&!r.req.ok)act=`<p class="mut">Waiting on ${REPS[other]} to approve your route request.</p>`;
+  if(RMODE==="counter")act=`<p><b>Counter route:</b> tap a job, then a stop (any job). </p><button class="ok big cs">Send counter to ${REPS[other]}</button><button class="link cx">Cancel</button>`;
+  if(RMODE==="override")act=`<p><b>Asher override:</b> tap a job, then a stop (any job).</p><button class="ok big os">Lock route (override)</button><button class="link cx">Cancel</button>`;
+  const ownDone=mine.every(j=>placed(j.id))||r.any[rep];
+  const ownCtl=(!free&&canEditOwn&&mine.length)?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="ad" style="flex:1">${r.any[rep]?"✓ ":""}Order doesn't matter for my remaining jobs</button><button class="cl" style="flex:1">Clear my stops</button></div>
+     <button class="ok big snd" ${ownDone?"":"disabled"}>${r.req&&r.req.to===rep?"✔ Done — lock route":theirs.length?"Send route request to "+REPS[other]:"✔ Lock route"}</button>`:"";
+  sheet(`<h1>🧭 ${esc(name)}'s route · ${DAYS_EN[day]}</h1><div class="mut small">${js.length} jobs (Asher + Lance). Tap one of ${free?"the":"your"} jobs, then tap an empty stop.</div>${routeStatus(name,day)}
+    <div class="step" style="margin-top:12px">Stops</div>${slotHtml}
+    <div class="step" style="margin-top:12px">${REPS[rep]}'s jobs</div>${pool(mine,free||canEditOwn)}
+    <div class="step" style="margin-top:10px">${REPS[other]}'s jobs</div>${pool(theirs,free)}
+    ${ownCtl}<div style="margin-top:10px">${act}</div>
+    ${!r.locked&&!free&&rep==="asher"?'<button class="link ov">Asher override — set the full route myself</button>':""}${rep==="lance"?'<p class="mut small">Lance cannot override; use Decline → counter.</p>':""}`,m=>{
+    const re=()=>{m.remove();routeSheet(name,day,rep);};
+    m.querySelectorAll(".rp").forEach(b=>b.onclick=()=>{RSEL=RSEL===+b.dataset.j?null:+b.dataset.j;re();});
+    m.querySelectorAll(".rs").forEach(b=>b.onclick=()=>{const i=+b.dataset.i,cur=r.slots[i];
+      if(RSEL){if(cur&&!free)return toast("That stop is taken");const prev=r.slots.indexOf(RSEL);if(prev>=0)r.slots[prev]=free?cur:null;r.slots[i]=RSEL;RSEL=null;re();}
+      else if(cur&&(free||CREWS[J(cur).crew].rep===rep&&canEditOwn)){r.slots[i]=null;re();}});
+    const on=(q,f)=>{const e=m.querySelector(q);if(e)e.onclick=f;};
+    on(".ad",()=>{r.any[rep]=!r.any[rep];re();});
+    on(".cl",()=>{r.slots=r.slots.map(id=>id&&CREWS[J(id).crew].rep===rep?null:id);re();});
+    on(".snd",()=>{r.sent[rep]=true;
+      if(r.req&&r.req.to===rep){r.locked=true;logH("route locked",{addr:"",crew:repKey(rep,name)},{day});ping(other,"ready",`${REPS[rep]} finished ${name}'s route — locked`);}
+      else if(!theirs.length){r.locked=true;logH("route locked",{addr:"",crew:repKey(rep,name)},{day});}
+      else{r.req={from:rep,to:other,ok:false};logH("route request",{addr:"",crew:repKey(rep,name)},{day,to:other});ping(other,"ready",`🧭 ${REPS[rep]} sent a route request for ${name} (${DAYS_EN[day]}) — approve and add your jobs`);}
+      re();});
+    on(".ra",()=>{r.req.ok=true;logH("route approved",{addr:"",crew:repKey(rep,name)},{day});ping(other,"ready",`${REPS[rep]} approved your route for ${name}`);re();});
+    on(".rdcl",()=>{logH("route declined",{addr:"",crew:repKey(rep,name)},{day});RMODE="counter";re();});
+    on(".cs",()=>{r.counter={by:rep,to:other,slots:r.slots.slice()};RMODE=null;logH("counter route",{addr:"",crew:repKey(rep,name)},{day,to:other});ping(other,"ready",`🧭 ${REPS[rep]} declined and sent a counter route for ${name}`);re();});
+    on(".ca",()=>{r.slots=r.counter.slots.slice();r.counter=null;r.locked=true;logH("counter approved",{addr:"",crew:repKey(rep,name)},{day});re();});
+    on(".cd",()=>{r.counter=null;r.req=null;r.talk=true;logH("counter declined",{addr:"",crew:repKey(rep,name)},{day});re();});
+    on(".cx",()=>{RMODE=null;re();});
+    m.querySelectorAll(".ov").forEach(b=>b.onclick=()=>{if(rep!=="asher")return;RMODE="override";r.locked=false;r.talk=false;r.counter=null;re();});
+    on(".os",()=>{r.locked=true;r.req=null;r.counter=null;RMODE=null;logH("route override",{addr:"",crew:repKey(rep,name)},{day});ping(other,"ready",`Asher set ${name}'s full route (override)`);re();});
+    m.querySelector(".x").onclick=()=>{RMODE=null;m.remove();go();};
+  });}
+function touchUp(rep){const done=S.jobs.filter(j=>j.done&&!j.touchup&&CREWS[j.crew].rep===rep);let pick=null,paid=null,day=TOM;
+  const draw=m=>{m.querySelector(".tb").innerHTML=`
+    <div class="step">1 · Completed job</div>${done.length?done.map(j=>`<button class="act tj" data-j="${j.id}" style="${pick===j.id?"background:var(--ink);color:var(--bg)":""}">${esc(j.addr)}<br><span class="small">${esc(j.cust)} · ${esc(crewLabel(j.crew))} · ${DAYS_EN[j.day]}</span></button>`).join(""):'<p class="mut">No completed jobs yet for your crews.</p>'}
+    <div class="step" style="margin-top:12px">2 · What's the issue?</div><textarea class="ti" placeholder="e.g. caulk/foam failed inspection · crawl insulation sagging"></textarea>
+    <div class="step" style="margin-top:12px">3 · Paid return trip for the crew?</div><div style="display:flex;gap:8px"><button class="tp" data-v="1" style="flex:1;${paid===true?"background:var(--ok);color:#fff":""}">Yes — office fault (crew gets paid)</button><button class="tp" data-v="0" style="flex:1;${paid===false?"background:var(--bad);color:#fff":""}">No — crew fault (no pay)</button></div>
+    <div class="step" style="margin-top:12px">4 · Day</div><div style="display:flex;gap:6px;flex-wrap:wrap">${[0,1,2,3,4,5].map(d=>`<button class="td" data-d="${d}" style="flex:1;min-width:70px;${day===d?"background:var(--ink);color:var(--bg)":""}">${DAYS_EN[d]}</button>`).join("")}</div>
+    <button class="ok big tg">Create touch-up ticket</button>`;
+    const keep=m.querySelector(".ti");
+    m.querySelectorAll(".tj").forEach(b=>b.onclick=()=>{const v=m.querySelector(".ti").value;pick=+b.dataset.j;draw(m);m.querySelector(".ti").value=v;});
+    m.querySelectorAll(".tp").forEach(b=>b.onclick=()=>{const v=m.querySelector(".ti").value;paid=b.dataset.v==="1";draw(m);m.querySelector(".ti").value=v;});
+    m.querySelectorAll(".td").forEach(b=>b.onclick=()=>{const v=m.querySelector(".ti").value;day=+b.dataset.d;draw(m);m.querySelector(".ti").value=v;});
+    m.querySelector(".tg").onclick=()=>{const issue=m.querySelector(".ti").value.trim();if(!pick)return toast("Pick the completed job");if(!issue)return toast("Describe the issue");if(paid===null)return toast("Paid return trip? Pick Yes or No");
+      const o=S.jobs.find(j=>j.id===pick),t=mkJob(o.crew,day,o.addr,o.cust,o.miles,o.nc,o.lines.map(l=>l.slice()),o.load.map(l=>l.slice()),o.file,o.coords);
+      t.touchup={of:o.id,issue,paid};t.pri="high";t.ord=99;S.jobs.push(t);logH("added",t,{day});S.hist[0].action="added";S.hist[0].addr="TOUCH-UP "+o.addr;
+      if(day===TOM&&S.confirmed[o.crew]){S.confirmed[o.crew]=false;}
+      m.remove();toast("Touch-up ticket created for "+crewLabel(o.crew)+" · "+DAYS_EN[day]+(paid?" (paid)":" (no pay)"));go();};};
+  sheet(`<h1>🔧 Touch-up ticket</h1><p class="mut small">Copies the original job (customer, address, coordinates, work order, crew) — nothing to re-enter. Office only.</p><div class="tb"></div>`,m=>draw(m));}
 function oConfirm(rep,mine){
   h(`<h1>Are Tomorrow's Jobs Ready?</h1><p class="mut" style="font-size:1.02rem">${DAYS_EN[TOM]}. Check each crew, tap Confirm. That crew gets notified and can see its jobs.</p>`);
   mine.forEach(c=>{const js=dayJobs(c,TOM);
     const d=h(`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">${esc(CREWS[c].name)} ${typeTag(c)}</h2>${S.confirmed[c]?'<span class="pill ok">Confirmed</span>':""}</div>
-     ${js.length?`<p class="mut small" style="margin:6px 0 0">Stop order — crew does them 1, 2, 3… Use ▲▼ to change.</p><table>${js.map((j,k)=>`<tr><td style="width:44px;font-size:1.3rem;font-weight:800;text-align:center">${k+1}</td><td>${esc(j.addr)}<br><span class="mut small">${esc(j.cust)}${j.file?" · 📄 "+esc(j.file):""}</span></td><td class="small" style="text-align:right;white-space:nowrap">${j.miles} mi<br><button class="ru" data-j="${j.id}" ${k?"":"disabled"} style="min-height:40px;padding:4px 10px">▲</button> <button class="rd" data-j="${j.id}" ${k<js.length-1?"":"disabled"} style="min-height:40px;padding:4px 10px">▼</button></td></tr>`).join("")}</table>`:'<p class="mut">No jobs tomorrow — drop files in Calendar.</p>'}
+     ${js.length?`<table>${js.map((j,k)=>`<tr><td>${priTag(j)} ${esc(j.addr)}<br><span class="mut small">${esc(j.cust)}${j.file?" · 📄 "+esc(j.file):""}</span></td><td class="small" style="text-align:right;white-space:nowrap">${j.miles} mi</td></tr>`).join("")}</table>${routeCard(phys(c),TOM,rep)}`:'<p class="mut">No jobs tomorrow — drop files in Calendar.</p>'}
      ${S.confirmed[c]?'<button class="link un">Undo confirm</button>':`<button class="ok big go" ${js.length?"":"disabled"}>✔ Confirm ${esc(CREWS[c].name)}${/s$/i.test(CREWS[c].name)?"'":"'s"} jobs</button>`}
      ${S.recapDone[c]?'<p class="mut small">Today’s recap is in — confirming opens the next day.</p>':""}</div>`);
-    d.querySelectorAll(".ru").forEach(b=>b.onclick=()=>reorder(+b.dataset.j,-1));d.querySelectorAll(".rd").forEach(b=>b.onclick=()=>reorder(+b.dataset.j,1));const g=d.querySelector(".go");if(g)g.onclick=()=>{S.confirmed[c]=true;logH("confirmed",{addr:"",crew:c},{day:TOM});S.recapDone[c]=false;S.crewNotifs[c]=now();if(S.notifPrefs[rep].ready)toast("📲 "+CREWS[c].name+" notified");go();};
+    d.querySelectorAll(".rb").forEach(b=>b.onclick=()=>openRoute(b.dataset.n,+b.dataset.d,rep));const g=d.querySelector(".go");if(g)g.onclick=()=>{S.confirmed[c]=true;S.recapDone[phys(c)]=false;logH("confirmed",{addr:"",crew:c},{day:TOM});S.recapDone[c]=false;S.crewNotifs[c]=now();if(S.notifPrefs[rep].ready)toast("📲 "+CREWS[c].name+" notified");go();};
     const u=d.querySelector(".un");if(u)u.onclick=()=>{S.confirmed[c]=false;S.crewNotifs[c]=null;go();};});
   const other=rep==="asher"?"lance":"asher";
-  h(`<p class="mut small">${REPS[other]} confirms his own crews separately — never holds up yours.</p>`);
+  h(`<p class="mut small">${REPS[other]} confirms his own crews separately — never holds up yours. Crews see their day only after both reps with jobs that day have confirmed AND the joint route is locked.</p>`);
 }
 function oInbox(rep){
   h('<h1>Alerts</h1>');
@@ -348,7 +444,9 @@ function pieceCat(l){const t=(l[0]+" "+l[1]).toLowerCase();
   if(/ventila|poly vent/.test(t))return"polyvent";if(/poly/.test(t))return"poly";if(/rockwool|lana de roca/.test(t))return"rockwool";
   if(/baffle|deflector/.test(t))return"baffle";if(/prehang|pre-colg/.test(t))return"prehang";if(/sellado|masilla|air seal/.test(t))return"airseal";
   if(/retiro|remoci|removal/.test(t))return"removal";if(/r-\d|soplado|batt|fibra/.test(t))return"fiberglass";return null;}
-function pieceLines(j){j.flat=j.flat||{};return j.lines.map((l,i)=>{const k=pieceCat(l);if(!k)return{i,l,k:null,qty:0,pay:0};const P=PIECE[k],q=Number(String(l[2]).replace(/[^\d.]/g,""))||1;
+// Touch-up return trips: no piece rate on the copied WO lines. Paid (office fault) = gas + office-set touch-up pay via extra labor; unpaid (crew fault) = $0.
+const jobGas=j=>j.touchup&&!j.touchup.paid?0:mileTier(j.miles);
+function pieceLines(j){j.flat=j.flat||{};if(j.touchup)return [];return j.lines.map((l,i)=>{const k=pieceCat(l);if(!k)return{i,l,k:null,qty:0,pay:0};const P=PIECE[k],q=Number(String(l[2]).replace(/[^\d.]/g,""))||1;
   if(P.flat){const each=j.flat[i]!=null?j.flat[i]:P.flat,n=k==="airseal"?1:q;return{i,l,k,qty:n,each,pay:each*n,flat:true};}return{i,l,k,qty:q,pay:Math.round(q*P.rate*100)/100};});}
 const money=x=>"$"+(Math.round(x*100)/100).toLocaleString(undefined,{minimumFractionDigits:x%1?2:0,maximumFractionDigits:2});
 function officeExtra(j,rep){let amt=null;
@@ -364,7 +462,7 @@ function officeExtra(j,rep){let amt=null;
      j.labor.push({office:true,amt:a,en:r,es:r,status:"approved",crew:j.crew,photo:ph,by:REPS[rep]});m.remove();toast("Extra labor added for "+CREWS[j.crew].name);go();};});}
 // Print-friendly payroll ticket per crew (front office) — same numbers as the Payroll screen
 function payrollTicket(c,rep,mode){const emp=CREWS[c].type==="emp",js=S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6).sort((a,b)=>a.day-b.day);let P=0,G=0,X=0;
-  const rows=js.map(j=>{const pl=emp?[]:pieceLines(j).filter(x=>x.k),pj=pl.reduce((s,x)=>s+x.pay,0),g=mileTier(j.miles),ex=j.labor.filter(x=>x.status==="approved"),xj=ex.reduce((s,x)=>s+(x.amt||0),0);P+=pj;G+=g;X+=xj;
+  const rows=js.map(j=>{const pl=emp?[]:pieceLines(j).filter(x=>x.k),pj=pl.reduce((s,x)=>s+x.pay,0),g=jobGas(j),ex=j.labor.filter(x=>x.status==="approved"),xj=ex.reduce((s,x)=>s+(x.amt||0),0);P+=pj;G+=g;X+=xj;
     return`<tr><td>${DAYS_EN[j.day]}</td><td><b>${esc(j.addr)}</b><br>${esc(j.cust)}${emp?"":"<br>"+pl.map(x=>esc(PIECE[x.k].label)+": "+(x.flat?x.qty+" × "+money(x.each):x.qty.toLocaleString()+" "+PIECE[x.k].unit+" × "+money(PIECE[x.k].rate))+" = "+money(x.pay)).join("<br>")}${ex.map(x=>"<br><i>Extra "+money(x.amt)+" — "+esc(x.en)+(x.office?" (added by "+esc(x.by||"office")+")":" (crew request, approved)")+"</i>").join("")}</td>
       ${emp?"":`<td class="r">${money(pj)}</td>`}<td class="r">${j.miles} mi<br>${money(g)}</td><td class="r">${money(xj)}</td></tr>`;}).join("");
   const tot=emp?G+X:P+G+X;
@@ -384,7 +482,7 @@ function payrollTicket(c,rep,mode){const emp=CREWS[c].type==="emp",js=S.jobs.fil
    <p style="font-size:14pt;margin:10px 0 0"><b>${emp?"Add-ons this week (plus hourly pay from timesheet): "+money(G+X):"TOTAL DUE THIS WEEK: "+money(P+G+X)}</b></p>
    <p style="font-size:9.5pt;margin:4px 0 0">Gas from 33 Apex Dr, Jefferson GA: under 40 mi $0 · 40–60 mi $25 · 60+ mi $50.${emp?"":" Sub rates: fiberglass & poly 8¢/SF · rockwool 15¢/SF · baffles & poly vents 30¢ ea · prehangs & air seal $75 default (by size) · removal 25¢/SF."}</p>
    </div>`;}
-function crewWeek(c){const emp=CREWS[c].type==="emp";let P=0,G=0,X=0;S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6).forEach(j=>{if(!emp)P+=pieceLines(j).reduce((s,x)=>s+x.pay,0);G+=mileTier(j.miles);X+=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);});return{P,G,X,T:emp?G+X:P+G+X,emp};}
+function crewWeek(c){const emp=CREWS[c].type==="emp";let P=0,G=0,X=0;S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6).forEach(j=>{if(!emp)P+=pieceLines(j).reduce((s,x)=>s+x.pay,0);G+=jobGas(j);X+=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);});return{P,G,X,T:emp?G+X:P+G+X,emp};}
 const payBoth=()=>S.payOK&&S.payOK.asher&&S.payOK.lance;
 const payWaiting=()=>["asher","lance"].filter(r=>!(S.payOK||{})[r]).map(r=>REPS[r]).join(" & ");
 // Detailed report: Asher's crews section + subtotal, Lance's crews section + subtotal, combined week total
@@ -406,11 +504,11 @@ function oPayroll(rep,mine){
   const LOCK=`<span class="mut">🔒 waiting on ${payWaiting()}</span>`;
   mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6);let gm=0,lb=0;
     const emp=CREWS[c].type==="emp";let pr=0;
-    const rows=js.map(j=>{const g=mileTier(j.miles),l=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);gm+=g;lb+=l;
+    const rows=js.map(j=>{const g=jobGas(j),l=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);gm+=g;lb+=l;
       const pl=emp?[]:pieceLines(j),pj=pl.reduce((s,x)=>s+x.pay,0);pr+=pj;
       const det=emp?"":`<details><summary class="small" style="min-height:36px">Piece rate ${money(pj)} — details</summary><table class="small">${pl.map(x=>x.k?`<tr><td>${esc(PIECE[x.k].label)}<br><span class="mut">${esc(tr(x.l[0]))}</span></td><td>${x.flat?`${x.qty} × <input class="fl" data-j="${j.id}" data-i="${x.i}" value="${x.each}" inputmode="decimal" style="width:70px;padding:6px">`:`${x.qty.toLocaleString()} ${PIECE[x.k].unit} × ${money(PIECE[x.k].rate)}`}</td><td style="text-align:right">${money(x.pay)}</td></tr>`:`<tr><td colspan="2" class="mut">${esc(tr(x.l[0]))} — ${esc(tr(x.l[1]))} (not on sub rate sheet)</td><td></td></tr>`).join("")}</table></details>`;
       const ex=j.labor.filter(x=>x.status==="approved").map(x=>`<div class="small mut">+ ${money(x.amt)} ${x.office?"added by "+esc(x.by||"office"):"crew request"} — ${esc(x.en)}</div>`).join("");
-      return`<tr><td>${DAYS_EN[j.day].split(" ")[0]}</td><td>${esc(j.addr.split(",")[0])}<br><span class="mut small">${j.miles} mi</span>${det}${ex}<button class="link ox" data-j="${j.id}">＋ Add extra labor</button></td>${emp?"":`<td>${money(pj)}</td>`}<td>$${g}</td><td>$${l}</td></tr>`;}).join("");
+      return`<tr><td>${DAYS_EN[j.day].split(" ")[0]}</td><td>${esc(j.addr.split(",")[0])}<br><span class="mut small">${j.miles} mi</span>${det}${ex}${j.touchup?`<div class="small"><b>🔧 Touch-up</b> — ${j.touchup.paid?"paid return (office fault): add touch-up pay here":"crew fault: no pay for this return"}</div>`:""}${j.touchup&&!j.touchup.paid?"":`<button class="link ox" data-j="${j.id}">＋ Add extra labor</button>`}</td>${emp?"":`<td>${money(pj)}</td>`}<td>$${g}</td><td>$${l}</td></tr>`;}).join("");
     h(`<div class="card"><h2>${esc(CREWS[c].name)} ${typeTag(c)}</h2>
      <p class="small mut" style="margin:0 0 6px">${emp?"Employee (hourly / salary, in training) — not piece rate. Gas + extra labor shown for reference; base pay comes from timesheet.":"Sub crew — paid piece rate per job + gas + approved extra labor."}</p>
      <table><tr><th>Day</th><th>Job</th>${emp?"":"<th>Piece</th>"}<th>Gas</th><th>Extra</th></tr>${rows}${both?`<tr><th></th><th>Total</th>${emp?"":`<th>${money(pr)}</th>`}<th>$${gm}</th><th>$${lb}</th></tr>`:""}</table>
