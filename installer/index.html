@@ -69,6 +69,7 @@ const CREWS={};
 ["asher","lance"].forEach(r=>[["jorge","Jorge","sub"],["santos","Santos","sub"],["sammy","Sammy","emp"]].forEach(([k,n,t])=>CREWS[r+"_"+k]={name:n,rep:r,type:t}));
 // Guest reps who send tickets to Asher/Lance; whoever drops it on a crew owns confirm + payroll
 const GUEST_REPS=["Sky (KPI)","Darius (KPI)","Peter (KPI)","Wes (KPI)","Chad (KPI)","Blake (Choice Insulation & Fireplaces)"];
+const isChoice=j=>/Choice/.test(j.soldBy||"");
 const crewLabel=c=>CREWS[c].name+" ("+REPS[CREWS[c].rep]+")";
 const typeTag=c=>CREWS[c].type==="emp"?'<span class="tag emp">Employee · training · shared</span>':'<span class="tag">Sub · piece rate</span>';
 // Work days Mon–Sat. Day index = week*6 + (0 Mon … 5 Sat); week 0 starts Mon 11/2/2026. Weeks -4 … +12 available.
@@ -540,7 +541,7 @@ function officeExtra(j,rep){let amt=null;
      j.labor.push({office:true,amt:a,en:r,es:r,status:"approved",crew:j.crew,photo:ph,by:REPS[rep]});m.remove();toast("Extra labor added for "+CREWS[j.crew].name);go();};});}
 // Print-friendly payroll ticket per crew (front office) — same numbers as the Payroll screen
 const KP_BRAND=`<div style="display:flex;align-items:center;gap:10px;border-bottom:3px solid #b5121b;padding-bottom:6px;margin-bottom:10px"><div style="background:#b5121b;color:#fff;font:900 22pt/1 Arial,sans-serif;padding:6px 10px;border-radius:4px;letter-spacing:-1px">KP</div><div><div style="font:800 15pt/1.1 Arial,sans-serif">KP Insulation</div><div style="font-size:9.5pt;letter-spacing:.04em">KEITH PORTER INSULATION &amp; FIREPLACES</div></div></div>`;
-function payrollTicket(c,rep,mode){const emp=CREWS[c].type==="emp",js=S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6).sort((a,b)=>a.day-b.day);let P=0,G=0,X=0;
+function payrollTicket(c,rep,mode){const emp=CREWS[c].type==="emp",js=S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6&&!isChoice(j)).sort((a,b)=>a.day-b.day);let P=0,G=0,X=0;
   const rows=js.map(j=>{const pl=emp?[]:pieceLines(j).filter(x=>x.k),pj=pl.reduce((s,x)=>s+x.pay,0),g=jobGas(j),ex=j.labor.filter(x=>x.status==="approved"),xj=ex.reduce((s,x)=>s+(x.amt||0),0);P+=pj;G+=g;X+=xj;
     return`<tr><td>${DAYS_EN[j.day]}</td><td><b>${esc(j.addr)}</b><br>${esc(j.cust)}${emp?"":"<br>"+pl.map(x=>esc(PIECE[x.k].label)+": "+(x.flat?x.qty+" × "+money(x.each):x.qty.toLocaleString()+" "+PIECE[x.k].unit+" × "+money(PIECE[x.k].rate))+" = "+money(x.pay)).join("<br>")}${ex.map(x=>"<br><i>Extra "+money(x.amt)+" — "+esc(x.en)+(x.office?" (added by "+esc(x.by||"office")+")":" (crew request, approved)")+"</i>").join("")}</td>
       ${emp?"":`<td class="r">${money(pj)}</td>`}<td class="r">${j.miles} mi<br>${money(g)}</td><td class="r">${money(xj)}</td></tr>`;}).join("");
@@ -561,7 +562,18 @@ function payrollTicket(c,rep,mode){const emp=CREWS[c].type==="emp",js=S.jobs.fil
    <p style="font-size:14pt;margin:10px 0 0"><b>${emp?"Add-ons this week (plus hourly pay from timesheet): "+money(G+X):"TOTAL DUE THIS WEEK: "+money(P+G+X)}</b></p>
    <p style="font-size:9.5pt;margin:4px 0 0">Gas from 33 Apex Dr, Jefferson GA: under 40 mi $0 · 40–60 mi $25 · 60+ mi $50.${emp?"":" Sub rates: fiberglass & poly 8¢/SF · rockwool 15¢/SF · baffles & poly vents 30¢ ea · prehangs & air seal $75 default (by size) · removal 25¢/SF."}</p>
    </div>`;}
-function crewWeek(c){const emp=CREWS[c].type==="emp";let P=0,G=0,X=0;S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6).forEach(j=>{if(!emp)P+=pieceLines(j).reduce((s,x)=>s+x.pay,0);G+=jobGas(j);X+=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);});return{P,G,X,T:emp?G+X:P+G+X,emp};}
+// Choice Insulation & Fireplaces (Blake) jobs: separate per-job payroll ticket, never in KPI weekly totals
+function choiceJobPay(j){const emp=CREWS[j.crew].type==="emp",p=emp?0:pieceLines(j).reduce((s,x)=>s+x.pay,0),g=jobGas(j),x=j.labor.filter(l=>l.status==="approved").reduce((s,l)=>s+(l.amt||0),0);return{p,g,x,t:p+g+x,emp};}
+function choiceTicket(j){const P=choiceJobPay(j),bill=j.choiceBill==="blake"?"Blake / Choice pays payroll":"Bill out under KPI";
+  return`<div class="tk"><div style="display:flex;align-items:center;gap:10px;border-bottom:3px solid #1d4f91;padding-bottom:6px;margin-bottom:10px"><div style="background:#1d4f91;color:#fff;font:900 18pt/1 Arial,sans-serif;padding:6px 10px;border-radius:4px">CHOICE</div><div><div style="font:800 14pt/1.1 Arial,sans-serif">Choice Insulation &amp; Fireplaces</div><div style="font-size:9.5pt">Job payroll ticket — labor provided by KPI crew</div></div></div>
+   <div style="display:flex;justify-content:space-between;font-size:11pt;margin-bottom:12px"><div>${DAYS_EN[j.day]}, 2026 · ${esc(j.addr)}</div><div>Sent by: Blake · Dropped by: ${REPS[CREWS[j.crew].rep]}</div></div>
+   <table style="font-size:16pt"><tr><th style="width:22%">Name</th><td colspan="2" style="font-size:22pt;font-weight:bold;height:16mm;vertical-align:middle">${esc(CREWS[j.crew].name)}</td></tr>
+   <tr><th>Description</th><th></th><th class="r" style="width:30%">Total</th></tr>
+   <tr><td colspan="2" style="height:14mm;vertical-align:middle;font-size:18pt">Provided Labor — ${esc(j.cust)}${P.emp?'<br><span style="font-size:10pt">Employee in training — gas + extra only</span>':""}</td><td class="r" style="vertical-align:middle;font-size:22pt;font-weight:bold">${money(P.t)}</td></tr></table>
+   <p style="font-size:11pt">Breakdown: piece ${money(P.p)} · gas ${money(P.g)} · extra ${money(P.x)}</p>
+   <p style="font-size:14pt;border:2px solid #000;padding:6px"><b>Billing:</b> ${bill}</p>
+   <div class="sig" style="margin-top:40px"><div>Approved (${REPS[CREWS[j.crew].rep]})</div><div>Blake / Choice office</div><div>Date</div></div></div>`;}
+function crewWeek(c){const emp=CREWS[c].type==="emp";let P=0,G=0,X=0;S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6&&!isChoice(j)).forEach(j=>{if(!emp)P+=pieceLines(j).reduce((s,x)=>s+x.pay,0);G+=jobGas(j);X+=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);});return{P,G,X,T:emp?G+X:P+G+X,emp};}
 const payBoth=()=>S.payOK&&S.payOK.asher&&S.payOK.lance;
 const payWaiting=()=>["asher","lance"].filter(r=>!(S.payOK||{})[r]).map(r=>REPS[r]).join(" & ");
 // Detailed report: Asher's crews section + subtotal, Lance's crews section + subtotal, combined week total
@@ -581,7 +593,7 @@ function oPayroll(rep,mine){
    <p class="mut small" style="margin:6px 0 0">${both?"Week totals and printing are unlocked.":"Week totals and printing unlock after both Asher and Lance confirm their own crews (waiting on "+payWaiting()+"). Each of you confirms independently."}</p></div>`);
   const pc=gc.querySelector(".pc");if(pc)pc.onclick=()=>{S.payOK[rep]=true;if(!S.payOK[other]){ping(other,"payroll",`💵 ${REPS[rep]} confirmed his end of payroll (week of Nov 2) — confirm your crews' payroll to unlock totals and printing`);S.inbox[0].pushed=true;toast(REPS[rep]+"'s payroll confirmed — "+REPS[other]+" notified to confirm his end");}else{ping(other,"payroll",`💵 ${REPS[rep]} confirmed his end — payroll is fully confirmed and printing is unlocked`);toast(REPS[rep]+"'s payroll confirmed — both done, printing unlocked");}go();};const pu=gc.querySelector(".pu");if(pu)pu.onclick=()=>{S.payOK[rep]=false;go();};
   const LOCK=`<span class="mut">🔒 waiting on ${payWaiting()}</span>`;
-  mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6);let gm=0,lb=0;
+  mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6&&!isChoice(j));let gm=0,lb=0;
     const emp=CREWS[c].type==="emp";let pr=0;
     const rows=js.map(j=>{const g=jobGas(j),l=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);gm+=g;lb+=l;
       const pl=emp?[]:pieceLines(j),pj=pl.reduce((s,x)=>s+x.pay,0);pr+=pj;
@@ -596,6 +608,13 @@ function oPayroll(rep,mine){
   document.querySelectorAll(".fa").forEach(b=>b.onclick=()=>{const j=S.jobs.find(x=>x.id===+b.dataset.j);j.flat=j.flat||{};const cur=pieceLines(j).find(x=>x.i===+b.dataset.i).each;j.flat[b.dataset.i]=cur+Number(b.dataset.v);toast("Now "+money(j.flat[b.dataset.i])+" each");go();});
   document.querySelectorAll(".fl").forEach(i=>i.onchange=()=>{const j=S.jobs.find(x=>x.id===+i.dataset.j);j.flat=j.flat||{};j.flat[i.dataset.i]=Number(i.value)||0;go();});
   document.querySelectorAll(".pp").forEach(b=>b.onclick=()=>printPayroll([b.dataset.c],rep,b.dataset.m));
+  const ch=S.jobs.filter(j=>isChoice(j)&&mine.includes(j.crew)&&j.day>=0&&j.day<6);
+  if(ch.length){const cc=h(`<div class="card" style="border:2px solid #1d4f91"><h2>🔵 Choice Insulation &amp; Fireplaces — separate tickets</h2><p class="mut small">Blake's jobs are NOT in KPI weekly totals. Print one ticket per job; crew can take it to Choice's office.</p>
+    ${ch.map(j=>`<div style="border-top:1px solid #ccc;padding:8px 0"><b>${esc(CREWS[j.crew].name)}</b> · ${DAYS_EN[j.day]} · ${esc(j.addr.split(",")[0])} — <b>${money(choiceJobPay(j).t)}</b>
+      <div style="display:flex;gap:6px;margin:6px 0">${[["kpi","Bill via KPI"],["blake","Blake pays payroll"]].map(([v,l])=>`<button class="cbm" data-j="${j.id}" data-v="${v}" style="flex:1;min-height:40px;${(j.choiceBill||"kpi")===v?"background:var(--ink);color:var(--bg)":""}">${l}</button>`).join("")}</div>
+      <button class="ok cpt" data-j="${j.id}" style="width:100%">🧾 Generate Choice job ticket</button></div>`).join("")}</div>`);
+    cc.querySelectorAll(".cbm").forEach(b=>b.onclick=()=>{S.jobs.find(x=>x.id===+b.dataset.j).choiceBill=b.dataset.v;go();});
+    cc.querySelectorAll(".cpt").forEach(b=>b.onclick=()=>{$("#print").innerHTML=choiceTicket(S.jobs.find(x=>x.id===+b.dataset.j));window.print();});}
   const pa=h(`<div class="card"><h2>🖨 Print</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="pa" style="flex:1" ${both?"":"disabled"}>🧾 Generate Payroll Tickets (my ${mine.length} crews)</button><button class="pd" style="flex:1" ${both?"":"disabled"}>📋 Generate Detailed Summary (all crews, Asher vs Lance)</button></div>
    <p class="mut small">${both?"":"🔒 Unlocks after Asher and Lance both confirm (waiting on "+payWaiting()+"). "}Payroll Ticket = week summary per crew: Name + Provided Labor + one total. Detailed Summary = per crew next to each ticket button; this all-crews version shows every job's payout, Asher's crews subtotal, Lance's crews subtotal, combined week total.</p></div>`);
   pa.querySelector(".pa").onclick=()=>printPayroll(mine,rep,"sum");pa.querySelector(".pd").onclick=()=>printDetailedAll();
