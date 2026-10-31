@@ -8293,7 +8293,7 @@ if (document.readyState === "loading") document.addEventListener("DOMContentLoad
 const OFFICE={label:"Office · 33 Apex Dr, Jefferson, GA",q:"33 Apex Dr, Jefferson, GA 30549"};
 const DOWS=["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
 const K=()=>window.KPAPP;
-const LSK="kpDayPlan",DOCK="kpDayDoc",MEASURE_MIN=45;
+const LSK="kpDayPlan",DOCK="kpDayDoc",DOC_DEFAULT="https://docs.google.com/document/d/1bwqKv9CnxkY7vAsFDjPsBXmrG2boxuo07o-kaZHkGtk/edit",MEASURE_MIN=45;
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const iso=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 const nextDow=i=>{const d=new Date();d.setHours(12,0,0,0);let k=(i-d.getDay()+7)%7;d.setDate(d.getDate()+k);return d;};
@@ -8333,10 +8333,10 @@ function sheet(html){const m=document.createElement("div");m.className="dp-modal
   m.onclick=e=>{if(e.target===m)m.remove();};document.body.appendChild(m);m.querySelector(".dp-x").onclick=()=>m.remove();return m;}
 const css=document.createElement("style");css.textContent=`.dp-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center}.dp-sheet{background:var(--bg,#fff);color:inherit;width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px}
 .dp-row{border:1px solid #ddd;border-radius:12px;padding:10px;margin:8px 0}.dp-row input,.dp-row select{width:100%;margin:3px 0;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:16px}.dp-days{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.dp-days button{flex:1;min-width:64px}.dp-on{background:#c8102e!important;color:#fff!important}.dp-m{color:#777;font-size:13px}.dp-n{display:inline-block;background:#c8102e;color:#fff;border-radius:50%;width:24px;height:24px;text-align:center;line-height:24px;font-weight:800;margin-right:6px}`;document.head.appendChild(css);
-async function pullDoc(){const id=(localStorage.getItem(DOCK)||"").match(/[-\w]{25,}/);if(!id)throw new Error("Add the Google Doc link first");
+async function pullDoc(){const id=(localStorage.getItem(DOCK)||DOC_DEFAULT).match(/[-\w]{25,}/);if(!id)throw new Error("Add the Google Doc link first");
   const r=await fetch("https://kpi-ops.pages.dev/api/skyday?id="+id[0],{cache:"no-store"});const d=await r.json();if(!d.text)throw new Error(d.error||"Doc not readable");return d.text;}
 function importSheet(){const m=sheet(`<h2 style="margin:0">📋 Import measure list</h2><p class="dp-m">From the shared measure list Google Doc (everyone's jobs to measure). Pull it, or paste the day's list.</p>
-  <input class="dp-link" placeholder="Google Doc link (shared measure list)" value="${esc(localStorage.getItem(DOCK)||"")}" style="width:100%;padding:8px;font-size:16px;border-radius:8px;border:1px solid #ccc">
+  <input class="dp-link" placeholder="Google Doc link (shared measure list)" value="${esc(localStorage.getItem(DOCK)||DOC_DEFAULT)}" style="width:100%;padding:8px;font-size:16px;border-radius:8px;border:1px solid #ccc">
   <button type="button" class="btn btn-primary dp-pull" style="width:100%;margin-top:6px">⬇️ Pull from Google Doc</button>
   <details style="margin-top:8px"><summary>…or paste the list</summary><textarea class="dp-txt" rows="8" style="width:100%;font-size:15px" placeholder="Wednesday&#10;Paul Pringle - 580 Tallassee Rd Athens, GA — Retro foam&#10;Don Sipsy - 1050 Golf Course Ln Athens, GA — meet builder 10AM"></textarea><button type="button" class="btn btn-secondary dp-parse" style="width:100%">Read pasted list</button></details>
   <div class="dp-out"></div>`);
@@ -8382,7 +8382,7 @@ function showPlan(){const p=JSON.parse(localStorage.getItem(LSK)||"null");if(!p)
   m.querySelectorAll(".dp-ms").forEach(b=>b.onclick=()=>{m.remove();K().openArchiveJob(b.dataset.id);});m.querySelector(".dp-new").onclick=()=>{m.remove();importSheet();};}
 window.kpDayPlan={importSheet,showPlan,parseDoc,parseLine,plan};
 function mount(){const sec=document.getElementById("tab-archive");if(!sec||document.getElementById("dpCard"))return;const d=document.createElement("div");d.className="section";d.id="dpCard";
-  d.innerHTML='<h2>Measure list</h2><p class="cap">Pull the day\'s jobs to measure from the shared Google Doc → draft jobs + best route from the office (meet times respected).</p><div class="grid2"><button type="button" class="btn btn-primary" id="dpImport">📋 Import measure list</button><button type="button" class="btn btn-secondary" id="dpRoute">🗺️ Today\'s measure route</button></div>';
+  d.innerHTML='<h2>Measure list</h2><p class="cap">Pull the day\'s jobs to measure from the shared Google Doc → draft jobs + best route from the office (meet times respected).</p><div class="grid2"><button type="button" class="btn btn-primary" id="dpImport">📋 Import measure list</button><button type="button" class="btn btn-secondary" id="dpRoute">🗺️ Today\'s measure list</button></div>';
   sec.insertBefore(d,sec.firstChild);d.querySelector("#dpImport").onclick=importSheet;d.querySelector("#dpRoute").onclick=showPlan;}
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",mount);else mount();
 })();
