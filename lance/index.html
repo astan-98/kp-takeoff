@@ -180,6 +180,9 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .archive-card .meta { font-size: .78rem; color: var(--text2); margin-bottom: 4px; }
 .archive-card .title { font-weight: 700; margin-bottom: 8px; }
 .archive-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.archive-sent { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.btn-sent { background: var(--ok-bg, #e5f4ea); color: var(--ok-ink, #1d6b35); border: 1px solid var(--ok-ink, #1d6b35); }
+.archive-skyday { margin: 8px 0; }
 .archive-quick { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 2px 0 6px; }
 .archive-selbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
 .archive-selbar.floating { position: fixed; left: 12px; right: 12px; bottom: calc(var(--nav-h) + var(--safe-b) + 8px); z-index: 45; margin: 0;
@@ -717,6 +720,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
         <span class="sel-badge hidden" id="archSelCount">0 selected</span>
         <button type="button" class="btn btn-primary btn-sm hidden" id="archSendSel" disabled>Send 0 to Sky</button>
       </div>
+      <div class="archive-skyday" id="archSkyDay"><button type="button" class="btn btn-primary btn-block" id="archSkyBatch">Send Sky today's jobs → FieldGroove</button><p class="cap" id="archSkyNote"></p></div>
       <div id="archiveList"></div>
     </div>
   </section>
@@ -2002,6 +2006,40 @@ function fgXlsx(rows) {
 function fgFileName(foamChoice) {
   const sfx = !foamCompareOn() ? "" : foamChoice === "both" ? " - Open vs Closed Cell" : foamChoice === "cc" ? " - Closed Cell" : " - Open Cell";
   return ((S.address || "").trim() || (S.builder || "").trim() || "Job").replace(/[\\/:*?"<>|]+/g, "-") + sfx + " - FieldGroove import.xlsx"; }
+// 30an: share sheet (phone) or download; resolves true when handed off / downloaded, false when cancelled
+function fgMarkOpen() { S.fgSentAt = new Date().toISOString(); if (S.jobId && (S._fullJobs || []).some(j => j.id === S.jobId)) markJobsSent([S.jobId], "fg"); schedule && schedule(); }
+function fgDeliver(bytes, name, title) {
+  const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  let file = null; try { file = new File([bytes], name, { type: XT }); } catch (e) {}
+  const dl = () => { const url = URL.createObjectURL(new Blob([bytes], { type: XT }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); return true; };
+  if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] }))
+    return navigator.share({ files: [file], title: title || name }).then(() => true, err => (err && err.name === "AbortError") ? false : dl());
+  return Promise.resolve(dl());
+}
+// 30an: FieldGroove rows for a saved Library job (compare jobs export both options in one file)
+function fgRowsForJob(job) {
+  return withJobState(job, () => { let r = fgBuildRows(); if (r.needChoice) r = fgBuildRows("both"); return { rows: r.rows || [], name: fgFileName(foamCompareOn() ? "both" : undefined) }; });
+}
+const SENT_KEYS = { fg: "fgSentAt", sky: "skySentAt" };
+function markJobsSent(ids, kind) {
+  const k = SENT_KEYS[kind], at = new Date().toISOString(), jobs = (S._fullJobs || []).filter(j => ids.indexOf(j.id) >= 0);
+  if (S.jobId && ids.indexOf(S.jobId) >= 0) S[k] = at;
+  return Promise.all(jobs.map(j => { j[k] = at; if (j.draft) j.draft[k] = at; return idbPut(j).then(() => { try { cloudQueueJob(j, cloudJobSf(j)); } catch (e) {} }); })).then(() => refreshArchive());
+}
+function sentLabel(at) { if (!at) return ""; const d = new Date(at); return (d.getMonth() + 1) + "/" + d.getDate() + " " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
+function archSendFg(ids, kind) { // kind "fg" = export for FieldGroove import; "sky" = FieldGroove export sent to Sky
+  const jobs = ids.map(id => (S._fullJobs || []).find(j => j.id === id)).filter(Boolean); if (!jobs.length) return Promise.resolve(false);
+  let rows = [], name = ""; jobs.forEach(j => { const r = fgRowsForJob(j); rows = rows.concat(r.rows); name = r.name; });
+  if (!rows.length) { setStatus("Nothing to export — no mapped FieldGroove lines."); return Promise.resolve(false); }
+  if (jobs.length > 1) name = "Sky - " + (jobs[0].dateMeasured || isoDaysAgo(0)) + " - " + jobs.length + " jobs - FieldGroove import.xlsx";
+  return fgDeliver(fgXlsx(rows), name, kind === "sky" ? "FieldGroove export for Sky" : name).then(ok => {
+    if (!ok) { setStatus("Share cancelled — not marked sent."); return false; }
+    return markJobsSent(jobs.map(j => j.id), kind).then(() => { setStatus((kind === "sky" ? "Sent to Sky" : "Sent to FieldGroove") + ": " + jobs.length + " job" + (jobs.length > 1 ? "s" : "") + " · " + rows.length + " lines."); return true; });
+  });
+}
+function skyJobsOn(day) { return (S._fullJobs || []).filter(j => j.owner === "sky" && j.dateMeasured === day); }
 function exportFieldGroove(foamChoice) {
   const st = $("fgStatus");
   const res = fgBuildRows(foamChoice);
@@ -2018,9 +2056,9 @@ function exportFieldGroove(foamChoice) {
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); if (st) st.textContent = "Downloaded " + name + " — " + msg; };
   if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
     return navigator.share({ files: [file], title: name }).then(() => { if (st) st.textContent = "Shared " + name + " — " + msg; },
-      err => { if (err && err.name === "AbortError") { if (st) st.textContent = "Share cancelled."; } else dl(); });
+      err => { if (err && err.name === "AbortError") { if (st) st.textContent = "Share cancelled."; } else { dl(); fgMarkOpen(); } }).then(r => { if (st && /^Shared/.test(st.textContent)) fgMarkOpen(); return r; });
   }
-  dl(); return Promise.resolve();
+  dl(); fgMarkOpen(); return Promise.resolve();
 }
 function renderFgMap() {
   const box = $("fgMapList"); if (!box) return;
@@ -4176,7 +4214,15 @@ function renderArchive() {
       cb.onclick = ev => { ev.stopPropagation(); toggle(cb.checked); };
       card.onclick = ev => { if (ev.target.closest("button,a,input,label")) return; toggle(!ARCH_SEL.has(j.id)); };
     }
-    actions.appendChild(open); actions.appendChild(send); actions.appendChild(del); card.appendChild(actions); list.appendChild(card);
+    actions.appendChild(open); actions.appendChild(send); actions.appendChild(del); card.appendChild(actions);
+    // 30an: Sent to FieldGroove (every job) + Sent to Sky (Sky's jobs only) — tap to send the FieldGroove export, status shows when done
+    const sent = el("div", "archive-sent");
+    const sb = (cls, label, at, kind) => { const b = el("button", "btn btn-sm " + (at ? "btn-sent" : "btn-secondary") + " " + cls); b.type = "button";
+      b.textContent = at ? "✓ " + label + " · " + sentLabel(at) : (kind === "sky" ? "Send FG export to Sky" : "Send to FieldGroove"); b.title = at ? "Sent " + sentLabel(at) + " — tap to send again" : "";
+      b.onclick = ev => { ev.stopPropagation(); archSendFg([j.id], kind); }; return b; };
+    sent.appendChild(sb("arch-fg", "Sent to FieldGroove", j.fgSentAt, "fg"));
+    if (j.owner === "sky") sent.appendChild(sb("arch-sky", "Sent to Sky", j.skySentAt, "sky"));
+    card.appendChild(sent); list.appendChild(card);
   });
 }
 
@@ -4202,6 +4248,8 @@ function renderArchSelBar() {
   b.textContent = ARCH_SELECT ? "Done" : "Select";
   $("archSelBar").classList.toggle("floating", ARCH_SELECT); const L = $("archiveList"); if (L) L.classList.toggle("sel-pad", ARCH_SELECT);
   ["archSelAll", "archSelCount", "archSendSel"].forEach(id => $(id).classList.toggle("hidden", !ARCH_SELECT));
+  { const day = S.filterFrom && S.filterFrom === S.filterTo ? S.filterFrom : isoDaysAgo(0), k = skyJobsOn(day).length, b = $("archSkyBatch"); // 30an
+    if (b) { b.textContent = "Send Sky's " + k + " job" + (k === 1 ? "" : "s") + " from " + (day === isoDaysAgo(0) ? "today" : day) + " → FieldGroove (one file)"; b.disabled = !k; } }
   const allOn = ARCH_SHOWN.length && ARCH_SHOWN.every(id => ARCH_SEL.has(id));
   $("archSelAll").textContent = allOn ? "Clear shown" : "Select all shown";
   $("archSelCount").textContent = n + " selected" + (hidden > 0 ? " (+" + hidden + " hidden by filters, not sent)" : "");
@@ -4210,6 +4258,9 @@ function renderArchSelBar() {
 function wireArchiveBatch() {
   const on = (id, fn) => { const e = $(id); if (e) e.onclick = fn; };
   on("archToday", () => archSetDay(isoDaysAgo(0)));
+  on("archSkyBatch", () => { const day = S.filterFrom && S.filterFrom === S.filterTo ? S.filterFrom : isoDaysAgo(0), js = skyJobsOn(day); // 30an
+    if (!js.length) { $("archSkyNote").textContent = "No Sky jobs measured " + day + "."; return; }
+    archSendFg(js.map(j => j.id), "sky").then(ok => { $("archSkyNote").textContent = ok ? "Sent " + js.length + " Sky job(s) from " + day + " in one FieldGroove file." : "Not sent."; }); });
   on("archYesterday", () => archSetDay(isoDaysAgo(1)));
   on("archAnyDate", () => archSetDay(""));
   on("archSelect", () => { ARCH_SELECT = !ARCH_SELECT; if (!ARCH_SELECT) ARCH_SEL.clear(); renderArchive(); });
@@ -4890,7 +4941,8 @@ function refreshArchive() {
       id: j.id, dateMeasured: j.dateMeasured, owner: j.owner, builder: j.builder,
       city: j.city, address: j.address, packageLabel: j.packageLabel, keywords: j.keywords || "",
       miscText: j.miscText || "", photoCount: ((j.draft && j.draft.photos) || []).length,
-      chaseBlocked: !!j.chaseBlocked, chaseNote: j.chaseNote || "", siteCoords: (j.draft && j.draft.siteCoords) || "" // 30ah
+      chaseBlocked: !!j.chaseBlocked, chaseNote: j.chaseNote || "", siteCoords: (j.draft && j.draft.siteCoords) || "", // 30ah
+      fgSentAt: j.fgSentAt || (j.draft && j.draft.fgSentAt) || "", skySentAt: j.skySentAt || (j.draft && j.draft.skySentAt) || "" // 30an
     }));
     S._fullJobs = jobs;
     renderArchive();
@@ -5438,7 +5490,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30am";
+const APP_BUILD = "2026-10-30an";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
