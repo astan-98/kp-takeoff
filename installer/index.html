@@ -73,9 +73,9 @@ let JID=100;
 function mkJob(crew,day,addr,cust,miles,nc,lines,load,file,coords){return{id:++JID,crew,day,addr,cust,miles,nc,lines,load,coords:coords||"",file:file||null,
   checkedIn:false,checkinMiles:null,photos:[],wallPhotos:0,crawlPhoto:false,notes:[],labor:[],short:[],done:false};}
 const fresh=()=>{const J=[
-  mkJob("asher_jorge",0,"2009 Massey Ln, Winder, GA","Brookstone Homes",21,true,[["Paredes 2x4","R-13 sin papel 15\"","1,840 SF"],["Ático","Soplado R-38","2,150 SF"],["Crawl (piso)","R-19 16\"","1,600 SF"]],[["R-13 15\"",23,"bultos"],["Soplado R-38",31,"bolsas"],["R-19 16\"",14,"bultos"]],"WO - 2009 Massey Ln.pdf","34.0012, -83.7201"),
-  mkJob("asher_jorge",0,"145 Lakeview Dr, Commerce, GA","Daniel & Rosa Pike",47,false,[["Ático retro","Soplado R-38 encima","1,300 SF"]],[["Soplado R-38",19,"bolsas"]],"WO - 145 Lakeview.pdf"),
-  mkJob("asher_santos",0,"88 Pine Ridge Ct, Hoschton, GA","Rockhaven Builders",18,true,[["Paredes 2x6","R-19 sin papel 15\"","2,210 SF"],["Crawl (piso)","R-19 16\"","1,450 SF"]],[["R-19 15\"",30,"bultos"],["R-19 16\"",13,"bultos"]],"WO - 88 Pine Ridge.pdf"),
+  mkJob("asher_jorge",0,"2009 Massey Ln, Winder, GA","Brookstone Homes",21,true,[["Paredes 2x4","R-13 sin papel 15\"","1,840 SF"],["Ático","Soplado R-38","2,150 SF"],["Crawl (piso)","R-19 16\"","1,600 SF"],["Deflectores (baffles)","Baffles 22\"","24 ea"],["Sellado de aire","Masilla y espuma","1 casa"],["Tinas","Pre-colgado (prehang)","2 ea"]],[["R-13 15\"",23,"bultos"],["Soplado R-38",31,"bolsas"],["R-19 16\"",14,"bultos"]],"WO - 2009 Massey Ln.pdf","34.0012, -83.7201"),
+  mkJob("asher_jorge",0,"145 Lakeview Dr, Commerce, GA","Daniel & Rosa Pike",47,false,[["Retiro de insulación vieja","Remoción","1,300 SF"],["Ático retro","Soplado R-38 encima","1,300 SF"]],[["Soplado R-38",19,"bolsas"]],"WO - 145 Lakeview.pdf"),
+  mkJob("asher_santos",0,"88 Pine Ridge Ct, Hoschton, GA","Rockhaven Builders",18,true,[["Paredes 2x6","R-19 sin papel 15\"","2,210 SF"],["Crawl (piso)","R-19 16\"","1,450 SF"],["Crawl","Poly 6 mil","1,450 SF"],["Crawl","Ventilas poly","6 ea"],["Paredes de sonido","Lana de roca (Rockwool)","400 SF"]],[["R-19 15\"",30,"bultos"],["R-19 16\"",13,"bultos"]],"WO - 88 Pine Ridge.pdf"),
   mkJob("asher_sammy",0,"17 Oak St, Jefferson, GA","Mary Collins",4,false,[["Ático","Soplado R-38","900 SF"]],[["Soplado R-38",13,"bolsas"]],"WO - 17 Oak St.jpg"),
   mkJob("asher_jorge",1,"301 Hwy 124, Braselton, GA","Brookstone Homes",26,true,[["Paredes 2x4","R-13","1,700 SF"]],[["R-13 15\"",21,"bultos"]],"WO - 301 Hwy 124.pdf"),
   mkJob("lance_jorge",0,"512 Old Federal Rd, Dahlonega, GA","Mountain Crest LLC",63,true,[["Paredes 2x4","R-13 sin papel 15\"","1,500 SF"],["Ático","Soplado R-38","1,900 SF"]],[["R-13 15\"",19,"bultos"],["Soplado R-38",27,"bolsas"]],"WO - 512 Old Federal.pdf","34.5321, -83.9851"),
@@ -94,7 +94,7 @@ function sheet(html,wire){const m=document.createElement("div");m.className="mod
 // Spanish → English for office (stand-in for real translation on ingest)
 const DICT=[["tuvimos que","we had to"],["no estaba","wasn't there"],["todo bien","all good"],["falta material","short on material"],["material equivocado","wrong material"],["faltan","missing"],["falta","missing"],["bultos","bundles"],["bolsas","bags"],["paredes","walls"],["pared","wall"],["ático","attic"],["mucha","a lot of"],["basura","trash"],["limpiar","clean up"],["sacar","remove"],["vieja","old"],["viejo","old"],["insulación","insulation"],["aislamiento","insulation"],["casa","house"],["cliente","customer"],["llegamos","we arrived"],["terminamos","we finished"],["mañana","tomorrow"],["hoy","today"],["necesitamos","we need"],["sobró","left over"],["más","more"],["y","and"],["la","the"],["el","the"],["de","of"],["en","in"],["con","with"]];
 const LAB_EN_CREW={s:"A little more",m:"Quite a bit more",l:"A lot more",x:"Way more"};
-DICT.unshift(["espuma celda abierta","open cell foam"],["sin papel","unfaced"],["soplado","blown"],["encima","on top"],["línea de techo","roofline"],["ático retro","attic retro"],["crawl (piso)","crawl (floor)"],["piso","floor"],["ver archivo","see file"]);
+DICT.unshift(["deflectores","baffles"],["sellado de aire","air seal"],["masilla y espuma","caulk and foam"],["pre-colgado","prehang"],["tinas","tubs"],["retiro de insulación vieja","old insulation removal"],["remoción","removal"],["ventilas poly","poly vents"],["lana de roca","rockwool"],["paredes de sonido","sound walls"],["casa","house"],["espuma celda abierta","open cell foam"],["sin papel","unfaced"],["soplado","blown"],["encima","on top"],["línea de techo","roofline"],["ático retro","attic retro"],["crawl (piso)","crawl (floor)"],["piso","floor"],["ver archivo","see file"]);
 const tr=x=>LANG==="es"?x:toEN(String(x));
 function toEN(es){let t=" "+es.toLowerCase()+" ";DICT.forEach(([a,b])=>{t=t.replace(new RegExp("([\\s,.;:!?])"+a+"(?=[\\s,.;:!?])","g"),"$1"+b);});t=t.trim();return t.charAt(0).toUpperCase()+t.slice(1);}
 function ping(rep,kind,text){S.inbox.unshift({rep,kind,text,t:now(),pushed:!!S.notifPrefs[rep][kind]});}
@@ -145,8 +145,8 @@ function crewJob(c,j){
   if(j.nc){ph.querySelector(".wb").onclick=()=>{j.wallPhotos++;add("Paredes");};ph.querySelector(".cb").onclick=()=>{j.crawlPhoto=true;add("Crawl");};}
   ph.querySelectorAll(".thumb").forEach(t=>t.onclick=()=>sheet(`<h1>${L("\u270e Marcar foto","\u270e Mark up photo")}</h1><div class="thumb" style="width:100%;height:200px;font-size:1rem">${j.photos[t.dataset.i].t}</div><p class="mut">${L("Dibuja flechas o escribe sobre la foto.","Draw arrows or write on the photo.")}</p><button class="p big">${L("Guardar","Save")}</button>`,m=>m.querySelector(".p").onclick=()=>{j.photos[t.dataset.i].mk=true;m.remove();render();}));
   const ac=h(`<div class="card"><div class="step">${L("Más trabajo, material o nota","Extra work, material or a note")}</div>
-   <button class="act lab lb">${L("\ud83d\udcaa M\u00e1s trabajo pagado","\ud83d\udcaa More paid work")}</button><button class="act mat sb">${L("\ud83d\udce6 Problema de material","\ud83d\udce6 Material problem")}</button><button class="act nb">${L("\ud83d\uddd2 Escribir una nota","\ud83d\uddd2 Write a note")} ${j.notes.length?"("+j.notes.length+")":""}</button>
-   <div class="mut small" style="margin-top:8px">${j.labor.map(l=>`• ${L("Pedido extra:","Extra request:")} ${L(LAB_ES[l.lvl],LAB_EN_CREW[l.lvl])} — ${l.status==="pending"?L("esperando a la oficina","waiting on the office"):l.status==="approved"?L("aprobado \u2705","approved \u2705"):L("no aprobado","not approved")}`).concat(j.short.map(()=>`• ${L("Aviso de material enviado a","Material alert sent to")} ${REPS[rep]} ✅`),j.notes.map(n=>"• "+esc(L(n.es,n.en)))).join("<br>")}</div></div>`);
+   <button class="act lab lb">${L("\ud83d\udcaa M\u00e1s trabajo pagado","\ud83d\udcaa More paid work")}</button><button class="act mat sb">${L("\ud83d\udce6 Material equivocado / falta material","\ud83d\udce6 Wrong / short on material")}</button><button class="act nb">${L("\ud83d\uddd2 Escribir una nota","\ud83d\uddd2 Write a note")} ${j.notes.length?"("+j.notes.length+")":""}</button>
+   <div class="mut small" style="margin-top:8px">${j.labor.map(l=>l.office?`• ${L("La oficina agregó pago extra para este trabajo ✅","The office added extra pay for this job ✅")}`:`• ${L("Pedido extra:","Extra request:")} ${L(LAB_ES[l.lvl],LAB_EN_CREW[l.lvl])} — ${l.status==="pending"?L("esperando a la oficina","waiting on the office"):l.status==="approved"?L("aprobado \u2705","approved \u2705"):L("no aprobado","not approved")}`).concat(j.short.map(()=>`• ${L("Aviso de material enviado a","Material alert sent to")} ${REPS[rep]} ✅`),j.notes.map(n=>"• "+esc(L(n.es,n.en)))).join("<br>")}</div></div>`);
   ac.querySelector(".lb").onclick=()=>labor(c,j);ac.querySelector(".sb").onclick=()=>short(c,j);
   ac.querySelector(".nb").onclick=()=>sheet(`<h1>${L("\ud83d\uddd2 Escribir una nota","\ud83d\uddd2 Write a note")}</h1><textarea placeholder="${L("Escribe aqu\u00ed\u2026","Type here\u2026")}"></textarea><button class="p big">${L("Guardar nota","Save note")}</button>`,m=>m.querySelector(".p").onclick=()=>{const v=m.querySelector("textarea").value.trim();if(v){j.notes.push({es:v,en:toEN(v)});if(S.offline)S.queue++;}m.remove();render();});
   const block=j.nc&&!(j.wallPhotos&&j.crawlPhoto);
@@ -166,7 +166,7 @@ function labor(c,j){let lvl=null,n=0;
       j.labor.push({lvl,amt:LAB_USD[lvl],es:r,en:toEN(r),status:"pending",crew:c});if(S.offline)S.queue++;
       ping(CREWS[c].rep,"labor",`${crewLabel(c)} asks for extra labor at ${j.addr}`);m.remove();toast(L("Enviado a la oficina","Sent to the office"));render();};});}
 function short(c,j){const rep=CREWS[c].rep;let k="Falta material",n=0;
-  sheet(`<h1>${L("\ud83d\udce6 Problema de material","\ud83d\udce6 Material problem")}</h1><div style="display:flex;gap:8px"><button class="kk" data-v="Falta material" style="flex:1;background:var(--ink);color:var(--bg)">${L("Falta","Short")}</button><button class="kk" data-v="Material equivocado" style="flex:1">${L("Equivocado","Wrong")}</button></div>
+  sheet(`<h1>${L("\ud83d\udce6 Material equivocado / falta material","\ud83d\udce6 Wrong / short on material")}</h1><div style="display:flex;gap:8px"><button class="kk" data-v="Falta material" style="flex:1;background:var(--ink);color:var(--bg)">${L("Falta","Short")}</button><button class="kk" data-v="Material equivocado" style="flex:1">${L("Equivocado","Wrong")}</button></div>
    <label>${L("\u00bfQu\u00e9 pas\u00f3? (opcional)","What happened? (optional)")}</label><textarea class="rs" placeholder="${L("Ej. faltan 6 bultos de R-13","E.g. short 6 bundles of R-13")}"></textarea>
    <button class="act need ph">${L("\ud83d\udcf7 Foto \u2014 obligatoria","\ud83d\udcf7 Photo \u2014 required")}</button><button class="p big go">${L("\ud83d\udea8 Avisar a","\ud83d\udea8 Alert")} ${REPS[rep]}${L(" ya</button>"," now</button>")}`,m=>{
     const pb=m.querySelector(".ph");pb.onclick=()=>{n++;pb.textContent="✅ Foto lista";pb.className="act done ph";};
@@ -238,8 +238,8 @@ function oConfirm(rep,mine){
 function oInbox(rep){
   h('<h1>Alerts</h1>');
   const labs=S.jobs.flatMap(j=>j.labor.map(l=>({j,l}))).filter(x=>CREWS[x.l.crew].rep===rep);
-  labs.forEach(({j,l})=>{const d=h(`<div class="card" style="border-left:5px solid var(--blue)"><div style="display:flex;justify-content:space-between"><b>💪 Extra labor · ${esc(CREWS[l.crew].name)}</b><span class="pill ${l.status==="approved"?"ok":l.status==="denied"?"bad":"warn"}">${l.status}</span></div>
-   <div>${esc(j.addr)}</div><div>Crew picked: <b>${LAB_EN[l.lvl]}</b> → ${l.amt?"<b>$"+l.amt+"</b>":"you set the amount"}</div>
+  labs.forEach(({j,l})=>{const d=h(`<div class="card" style="border-left:5px solid var(--blue)"><div style="display:flex;justify-content:space-between"><b>💪 ${l.office?"Extra labor added by "+esc(l.by||"office"):"Extra labor"} · ${esc(CREWS[l.crew].name)}</b><span class="pill ${l.status==="approved"?"ok":l.status==="denied"?"bad":"warn"}">${l.status}</span></div>
+   <div>${esc(j.addr)}</div><div>${l.office?"Amount: <b>$"+l.amt+"</b> (approved)":"Crew picked: <b>"+LAB_EN[l.lvl]+"</b> → "+(l.amt?"<b>$"+l.amt+"</b>":"you set the amount")}</div>
    <div><i>“${esc(l.en)}”</i> <span class="mut small">(orig: ${esc(l.es)})</span></div><div class="thumbs"><div class="thumb">photo</div></div>
    ${l.status==="pending"?`${l.amt?"":'<label>Amount (over $100)</label><input class="ca" inputmode="decimal" placeholder="150">'}<div style="display:flex;gap:8px;margin-top:10px"><button class="ok ap" style="flex:2">Approve${l.amt?" $"+l.amt:""}</button><button class="dn" style="flex:1">Deny</button></div>`:""}</div>`);
    const a=d.querySelector(".ap");if(a){a.onclick=()=>{if(!l.amt){const v=Number(d.querySelector(".ca").value);if(!(v>100))return toast("Enter an amount over $100");l.amt=v;}l.status="approved";go();};d.querySelector(".dn").onclick=()=>{l.status="denied";go();};}});
@@ -248,15 +248,45 @@ function oInbox(rep){
   S.inbox.filter(x=>x.rep===rep).forEach(x=>x.seen=true);
   if(!labs.length&&!it.length)h('<div class="card mut">Nothing yet. Switch to one of your crews (menu at top) and try check-in, extra labor, material problem or complete.</div>');
 }
+// Sub (piece-rate) pay sheet — Asher 10/30. Sammy = employee, not piece rate.
+const PIECE={fiberglass:{label:"Fiberglass",rate:0.08,unit:"SF"},poly:{label:"Poly",rate:0.08,unit:"SF"},rockwool:{label:"Rockwool",rate:0.15,unit:"SF"},
+  baffle:{label:"Baffles",rate:0.30,unit:"ea"},polyvent:{label:"Poly vents",rate:0.30,unit:"ea"},prehang:{label:"Prehangs",flat:75,unit:"ea"},
+  airseal:{label:"Caulk & foam air seal",flat:75,unit:"job"},removal:{label:"Removal labor",rate:0.25,unit:"SF"}};
+function pieceCat(l){const t=(l[0]+" "+l[1]).toLowerCase();
+  if(/espuma|foam roof|celda/.test(t)&&!/masilla/.test(t))return null;
+  if(/ventila|poly vent/.test(t))return"polyvent";if(/poly/.test(t))return"poly";if(/rockwool|lana de roca/.test(t))return"rockwool";
+  if(/baffle|deflector/.test(t))return"baffle";if(/prehang|pre-colg/.test(t))return"prehang";if(/sellado|masilla|air seal/.test(t))return"airseal";
+  if(/retiro|remoci|removal/.test(t))return"removal";if(/r-\d|soplado|batt|fibra/.test(t))return"fiberglass";return null;}
+function pieceLines(j){j.flat=j.flat||{};return j.lines.map((l,i)=>{const k=pieceCat(l);if(!k)return{i,l,k:null,qty:0,pay:0};const P=PIECE[k],q=Number(String(l[2]).replace(/[^\d.]/g,""))||1;
+  if(P.flat){const each=j.flat[i]!=null?j.flat[i]:P.flat,n=k==="airseal"?1:q;return{i,l,k,qty:n,each,pay:each*n,flat:true};}return{i,l,k,qty:q,pay:Math.round(q*P.rate*100)/100};});}
+const money=x=>"$"+(Math.round(x*100)/100).toLocaleString(undefined,{minimumFractionDigits:x%1?2:0,maximumFractionDigits:2});
+function officeExtra(j,rep){let amt=null;
+  sheet(`<h1>Add extra labor</h1><p class="mut">${esc(CREWS[j.crew].name)} · ${esc(j.addr)}<br>Goes straight onto payroll as approved. The crew sees a notice, never the amount.</p>
+   <div style="display:flex;gap:8px;flex-wrap:wrap">${[25,50,100].map(v=>`<button class="am" data-v="${v}" style="flex:1">$${v}</button>`).join("")}<button class="am" data-v="c" style="flex:1">Custom</button></div>
+   <div class="cu" hidden><label>Amount</label><input class="ca" inputmode="decimal" placeholder="150"></div>
+   <label>Short reason</label><input class="rs" placeholder="e.g. tight attic, extra prep">
+   <button class="act ph">📷 Photo (optional)</button><button class="ok big go">Add to payroll</button>`,m=>{let ph=false;
+   m.querySelectorAll(".am").forEach(b=>b.onclick=()=>{amt=b.dataset.v;m.querySelectorAll(".am").forEach(x=>{x.style.background=x===b?"var(--ink)":"";x.style.color=x===b?"var(--bg)":"";});m.querySelector(".cu").hidden=amt!=="c";});
+   m.querySelector(".ph").onclick=e=>{ph=true;e.target.textContent="✅ Photo added";};
+   m.querySelector(".go").onclick=()=>{const a=amt==="c"?Number(m.querySelector(".ca").value):Number(amt),r=m.querySelector(".rs").value.trim();
+     if(!(a>0))return toast("Pick an amount");if(!r)return toast("Add a short reason");
+     j.labor.push({office:true,amt:a,en:r,es:r,status:"approved",crew:j.crew,photo:ph,by:REPS[rep]});m.remove();toast("Extra labor added for "+CREWS[j.crew].name);go();};});}
 function oPayroll(rep,mine){
-  h(`<h1>Weekly payroll</h1><p class="mut small">Week of Nov 2 · gas from ${OFFICE_LABEL}: under 40 mi $0 · 40–60 mi $25 · 60+ mi $50. Crews never see dollars.</p>`);
+  h(`<h1>Weekly payroll</h1><p class="mut small">Week of Nov 2 · Subs: piece rate from the work order + gas + extra labor. Gas from ${OFFICE_LABEL}: under 40 mi $0 · 40–60 mi $25 · 60+ mi $50. Crews never see dollars.</p>`);
   mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6);let gm=0,lb=0;
-    const rows=js.map(j=>{const g=mileTier(j.miles),l=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);gm+=g;lb+=l;return`<tr><td>${DAYS_EN[j.day].split(" ")[0]}</td><td>${esc(j.addr.split(",")[0])}<br><span class="mut small">${j.miles} mi</span></td><td>$${g}</td><td>$${l}</td></tr>`;}).join("");
-    const emp=CREWS[c].type==="emp";
+    const emp=CREWS[c].type==="emp";let pr=0;
+    const rows=js.map(j=>{const g=mileTier(j.miles),l=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);gm+=g;lb+=l;
+      const pl=emp?[]:pieceLines(j),pj=pl.reduce((s,x)=>s+x.pay,0);pr+=pj;
+      const det=emp?"":`<details><summary class="small" style="min-height:36px">Piece rate ${money(pj)} — details</summary><table class="small">${pl.map(x=>x.k?`<tr><td>${esc(PIECE[x.k].label)}<br><span class="mut">${esc(tr(x.l[0]))}</span></td><td>${x.flat?`${x.qty} × <input class="fl" data-j="${j.id}" data-i="${x.i}" value="${x.each}" inputmode="decimal" style="width:70px;padding:6px">`:`${x.qty.toLocaleString()} ${PIECE[x.k].unit} × ${money(PIECE[x.k].rate)}`}</td><td style="text-align:right">${money(x.pay)}</td></tr>`:`<tr><td colspan="2" class="mut">${esc(tr(x.l[0]))} — ${esc(tr(x.l[1]))} (not on sub rate sheet)</td><td></td></tr>`).join("")}</table></details>`;
+      const ex=j.labor.filter(x=>x.status==="approved").map(x=>`<div class="small mut">+ ${money(x.amt)} ${x.office?"added by "+esc(x.by||"office"):"crew request"} — ${esc(x.en)}</div>`).join("");
+      return`<tr><td>${DAYS_EN[j.day].split(" ")[0]}</td><td>${esc(j.addr.split(",")[0])}<br><span class="mut small">${j.miles} mi</span>${det}${ex}<button class="link ox" data-j="${j.id}">＋ Add extra labor</button></td>${emp?"":`<td>${money(pj)}</td>`}<td>$${g}</td><td>$${l}</td></tr>`;}).join("");
     h(`<div class="card"><h2>${esc(CREWS[c].name)} ${typeTag(c)}</h2>
      <p class="small mut" style="margin:0 0 6px">${emp?"Employee (hourly / salary, in training) — not piece rate. Gas + extra labor shown for reference; base pay comes from timesheet.":"Sub crew — paid piece rate per job + gas + approved extra labor."}</p>
-     <table><tr><th>Day</th><th>Job</th><th>Gas</th><th>Extra</th></tr>${rows}<tr><th></th><th>Total</th><th>$${gm}</th><th>$${lb}</th></tr></table>
-     <p style="font-size:1.1rem;margin:10px 0 0"><b>${emp?"Add-ons":"Extras"} this week: $${gm+lb}</b>${emp?' <span class="mut small">+ hourly pay</span>':' <span class="mut small">+ piece rate</span>'}</p></div>`);});
+     <table><tr><th>Day</th><th>Job</th>${emp?"":"<th>Piece</th>"}<th>Gas</th><th>Extra</th></tr>${rows}<tr><th></th><th>Total</th>${emp?"":`<th>${money(pr)}</th>`}<th>$${gm}</th><th>$${lb}</th></tr></table>
+     <p style="font-size:1.15rem;margin:10px 0 0"><b>${emp?"Add-ons this week: "+money(gm+lb):"Total this week: "+money(pr+gm+lb)}</b>${emp?' <span class="mut small">+ hourly pay from timesheet</span>':""}</p></div>`);});
+  document.querySelectorAll(".ox").forEach(b=>b.onclick=()=>officeExtra(S.jobs.find(x=>x.id===+b.dataset.j),rep));
+  document.querySelectorAll(".fl").forEach(i=>i.onchange=()=>{const j=S.jobs.find(x=>x.id===+i.dataset.j);j.flat=j.flat||{};j.flat[i.dataset.i]=Number(i.value)||0;go();});
+  h(`<details class="card"><summary>Sub piece rates (Jorge, Santos)</summary><table class="small">${Object.values(PIECE).map(P=>`<tr><td>${P.label}</td><td>${P.flat?"$"+P.flat+" default per "+(P.unit==="job"?"house":"each")+" — edit per job by size":money(P.rate)+" / "+P.unit}</td></tr>`).join("")}</table><p class="mut small">Sammy is an employee in training — not piece rate.</p></details>`);
 }
 function oMore(rep){
   const P=S.notifPrefs[rep],L={ready:"Crew notified when I confirm",labor:"Extra labor requested",short:"Material problem (immediate)",photo:"Job completed with no photos",complete:"Job completed / day recap"};
