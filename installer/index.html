@@ -43,7 +43,8 @@ details summary{font-weight:800;min-height:48px;display:flex;align-items:center;
 .cal td{border:2px dashed var(--line);border-radius:12px;min-width:104px;height:96px;padding:6px;background:var(--card);font-size:.78rem;cursor:pointer}
 .cal td.tm{border-color:var(--acc)}.cal td.over{background:var(--chip);border-style:solid;border-color:var(--blue)}
 .cal td.crew{border:0;background:none;cursor:default;font-size:.9rem;min-width:84px}
-.cal .f{background:var(--chip);border-radius:8px;padding:3px 5px;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal .f.sel{outline:3px solid var(--blue);background:var(--blue);color:#fff}
+.cal .f{cursor:grab;touch-action:manipulation;min-height:28px;line-height:22px;background:var(--chip);border-radius:8px;padding:3px 5px;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cal .plus{color:var(--mut);text-align:center;margin-top:4px}
 .tag{font-size:.7rem;font-weight:800;padding:1px 6px;border-radius:6px;background:var(--chip);margin-left:4px}
 .tag.emp{background:var(--blue);color:#fff}
@@ -182,19 +183,33 @@ function office(rep){
   bar.querySelectorAll("button").forEach(b=>b.onclick=()=>{S.tab[rep]=b.dataset.t;go();});document.body.appendChild(bar);
   ({cal:oCal,confirm:oConfirm,inbox:oInbox,payroll:oPayroll,more:oMore})[S.tab[rep]](rep,mine);
 }
-let DROP=null;
+let DROP=null,MOVE=null; // MOVE = job id picked up by tap (phone) — next tapped cell receives it
 function oCal(rep,mine){
-  h(`<h1>Schedule</h1><p class="mut">Drag work order files (PDF / photo / Excel) onto a crew's day — or tap a day to add. This fills that crew's jobs until FieldGroove sync is ready.</p>`);
+  h(`<h1>Schedule</h1><p class="mut">Drag work order files (PDF / photo / Excel) onto a crew's day — or tap a day to add. To move a job: drag it to another box, or tap it, then tap where it goes. This fills that crew's jobs until FieldGroove sync is ready.</p>`);
   const d=h(`<div class="cal"><table><tr><th></th>${DAYS_EN.map((x,i)=>`<th class="${i===TOM?"tm":""}">${x}${i===TOM?"<br>tomorrow":""}</th>`).join("")}</tr>
    ${mine.map(c=>`<tr><td class="crew"><b>${esc(CREWS[c].name)}</b><br>${typeTag(c).replace(" · training","").replace(" · piece rate","")}</td>${DAYS_EN.map((_,i)=>{const js=S.jobs.filter(j=>j.crew===c&&j.day===i);
-     return `<td class="${i===TOM?"tm":""}" data-c="${c}" data-d="${i}">${js.map(j=>`<div class="f" title="${esc(j.addr)}">📄 ${esc(j.addr.split(",")[0])}</div>`).join("")}<div class="plus">${js.length?"＋":"Drop file / tap"}</div></td>`;}).join("")}</tr>`).join("")}</table></div>`);
+     return `<td class="${i===TOM?"tm":""}" data-c="${c}" data-d="${i}">${js.map(j=>`<div class="f${MOVE===j.id?" sel":""}" draggable="true" data-j="${j.id}" title="${esc(j.addr)}">📄 ${esc(j.addr.split(",")[0])}</div>`).join("")}<div class="plus">${MOVE?"⬇ Move here":js.length?"＋":"Drop file / tap"}</div></td>`;}).join("")}</tr>`).join("")}</table></div>`);
   d.querySelectorAll("td[data-c]").forEach(td=>{
     td.ondragover=e=>{e.preventDefault();td.classList.add("over");};td.ondragleave=()=>td.classList.remove("over");
-    td.ondrop=e=>{e.preventDefault();td.classList.remove("over");addFiles(td.dataset.c,+td.dataset.d,[...e.dataTransfer.files]);};
-    td.onclick=()=>{DROP=[td.dataset.c,+td.dataset.d];const f=$("#fpick");f.value="";f.click();};});
+    td.ondrop=e=>{e.preventDefault();td.classList.remove("over");const id=e.dataTransfer.getData("text/kp-job");
+      if(id)moveJob(+id,td.dataset.c,+td.dataset.d);else addFiles(td.dataset.c,+td.dataset.d,[...e.dataTransfer.files]);};
+    td.onclick=()=>{if(MOVE){moveJob(MOVE,td.dataset.c,+td.dataset.d);return;}DROP=[td.dataset.c,+td.dataset.d];const f=$("#fpick");f.value="";f.click();};});
+  d.querySelectorAll(".f[data-j]").forEach(f=>{
+    f.ondragstart=e=>{e.dataTransfer.setData("text/kp-job",f.dataset.j);e.dataTransfer.effectAllowed="move";};
+    f.onclick=e=>{e.stopPropagation();const id=+f.dataset.j;MOVE=MOVE===id?null:id;go();};});
+  if(MOVE){const j=S.jobs.find(x=>x.id===MOVE);const b=h(`<div class="card" style="position:sticky;bottom:76px;border:2px solid var(--blue)"><b>Moving: ${esc(j?j.addr.split(",")[0]:"")}</b><div class="mut small">Tap the crew + day box to move it there.</div><button class="link mc">Cancel</button></div>`);b.querySelector(".mc").onclick=()=>{MOVE=null;go();};}
   h(`<p class="mut small">Tip: file name like “WO - 123 Main St, Winder.pdf” fills the address. Tomorrow's column feeds the crews after you Confirm.</p>`);
 }
 $("#fpick").onchange=e=>{if(DROP)addFiles(DROP[0],DROP[1],[...e.target.files]);};
+function moveJob(id,c,day){const j=S.jobs.find(x=>x.id===id);MOVE=null;if(!j){go();return;}
+  if(j.crew===c&&j.day===day){go();return;}
+  const from=j.crew,fromDay=j.day;
+  // the crew's own rep only: never move into the other rep's crews
+  if(CREWS[c].rep!==CREWS[from].rep){toast("That crew belongs to "+REPS[CREWS[c].rep]+".");go();return;}
+  j.crew=c;j.day=day;const re=[];
+  if(fromDay===TOM&&S.confirmed[from]){S.confirmed[from]=false;S.crewNotifs[from]=null;re.push(CREWS[from].name);}
+  if(day===TOM&&S.confirmed[c]&&c!==from){S.confirmed[c]=false;S.crewNotifs[c]=null;re.push(CREWS[c].name);}
+  toast("Moved to "+CREWS[c].name+" · "+DAYS_EN[day]+(re.length?" — re-confirm "+re.join(" & "):""));go();}
 function addFiles(c,day,files){if(!files.length)return;
   files.forEach(f=>{const base=f.name.replace(/\.[^.]+$/,"").replace(/^\s*(WO|Work ?Order)\s*[-–:]\s*/i,"").trim()||"New job";
     const j=mkJob(c,day,base+(/GA\b/.test(base)?"":", GA"),"(from file — edit)",Math.round(10+Math.random()*55),false,[["Ver archivo",f.name,"—"]],[],f.name);j.fileObj=f;S.jobs.push(j);
