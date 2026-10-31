@@ -121,7 +121,7 @@ function seedAlerts(st){const J=a=>st.jobs.find(j=>j.addr.startsWith(a)),ib=(rep
     H(T(3,10,41),"Asher","added","145 Lakeview Dr, Commerce, GA","asher_jorge",{day:0}),
     H(T(5,8,30),"Asher","added","17 Oak St, Jefferson, GA","asher_sammy",{day:0}),
     H(T(9,14,0),"Asher","removed","77 Old Rd, Winder, GA","asher_santos",{day:0})];
-  m.pri="high";pr.pri="today";
+  m.pri="high";pr.pri="high";
   // Demo: Jorge's Monday is already confirmed by Asher + Lance and the route is locked, so "Jorge (crew)" can walk the full day.
   [m,lk,df].forEach(j=>{j.done=false;j.checkedIn=false;});
   st.confirmed.asher_jorge=true;st.confirmed.lance_jorge=true;st.crewNotifs.asher_jorge=st.crewNotifs.lance_jorge="4:12 PM";
@@ -272,7 +272,7 @@ function oCal(rep,mine){
   nav.querySelector(".wp").onclick=()=>{S.week=wk-1;go();};nav.querySelector(".wn").onclick=()=>{S.week=wk+1;go();};const wt=nav.querySelector(".wt");if(wt)wt.onclick=()=>{S.week=0;go();};
   const d=h(`<div class="cal"><table><tr><th></th>${cols.map(i=>`<th class="${i===TOM?"tm":""}">${DAYS_EN[i]}${i===TOM?"<br>tomorrow":""}</th>`).join("")}</tr>
    ${mine.map(c=>`<tr><td class="crew"><b>${esc(CREWS[c].name)}</b><br>${typeTag(c).replace(" · training","").replace(" · piece rate","")}</td>${cols.map(i=>{const js=dayJobs(c,i);
-     return `<td class="${i===TOM?"tm":""}" data-c="${c}" data-d="${i}">${js.map(j=>`<div class="f${MOVE===j.id?" sel":""}" draggable="true" data-j="${j.id}" title="${esc(j.addr)}">${j.touchup?"🔧":j.pri==="today"?"🔴":j.pri==="high"?"🟠":"📄"} ${esc(j.addr.split(",")[0])}</div>`).join("")}<div class="plus">${MOVE?"⬇ Move here":js.length?"＋":"Drop file / tap"}</div></td>`;}).join("")}</tr>`).join("")}</table></div>`);
+     return `<td class="${i===TOM?"tm":""}" data-c="${c}" data-d="${i}">${js.map(j=>`<div class="f${MOVE===j.id?" sel":""}" draggable="true" data-j="${j.id}" title="${esc(j.addr)}">${j.touchup?"🔧":j.pri==="high"?"🟠":"📄"} ${esc(j.addr.split(",")[0])}</div>`).join("")}<div class="plus">${MOVE?"⬇ Move here":js.length?"＋":"Drop file / tap"}</div></td>`;}).join("")}</tr>`).join("")}</table></div>`);
   d.querySelectorAll("td[data-c]").forEach(td=>{
     td.ondragover=e=>{e.preventDefault();td.classList.add("over");};td.ondragleave=()=>td.classList.remove("over");
     td.ondrop=e=>{e.preventDefault();td.classList.remove("over");const id=e.dataTransfer.getData("text/kp-job");
@@ -281,7 +281,7 @@ function oCal(rep,mine){
   d.querySelectorAll(".f[data-j]").forEach(f=>{
     f.ondragstart=e=>{e.dataTransfer.setData("text/kp-job",f.dataset.j);e.dataTransfer.effectAllowed="move";};
     f.onclick=e=>{e.stopPropagation();const id=+f.dataset.j;if(MOVE===id){MOVE=null;go();return;}jobSummary(S.jobs.find(x=>x.id===id),rep);};});
-  if(MOVE){const j=S.jobs.find(x=>x.id===MOVE);const b=h(`<div class="card" style="position:sticky;bottom:76px;border:2px solid var(--blue)"><b>Selected: ${esc(j?j.addr.split(",")[0]:"")}</b><div class="mut small">Tap a crew + day box to move it, or set its priority:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">${[["","Normal"],["high","High priority"],["today","Must get completed today"]].map(([v,l])=>`<button class="pr" data-p="${v}" style="flex:1;min-height:44px;font-size:.85rem;${(j.pri||"")===v?"background:var(--ink);color:var(--bg)":""}">${l}</button>`).join("")}</div><button class="link mc">Cancel</button> <button class="link mr" style="color:var(--bad)">Remove this job</button></div>`);
+  if(MOVE){const j=S.jobs.find(x=>x.id===MOVE);const b=h(`<div class="card" style="position:sticky;bottom:76px;border:2px solid var(--blue)"><b>Selected: ${esc(j?j.addr.split(",")[0]:"")}</b><div class="mut small">Tap a crew + day box to move it, or set its priority:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">${[["","Normal"],["high","High priority"]].map(([v,l])=>`<button class="pr" data-p="${v}" style="flex:1;min-height:44px;font-size:.85rem;${(j.pri||"")===v?"background:var(--ink);color:var(--bg)":""}">${l}</button>`).join("")}</div><button class="link mc">Cancel</button> <button class="link mr" style="color:var(--bad)">Remove this job</button></div>`);
     b.querySelectorAll(".pr").forEach(x=>x.onclick=()=>{j.pri=x.dataset.p;logH("priority",j,{day:j.day,pri:x.dataset.p?PRI[x.dataset.p].en:"normal"});toast("Priority: "+(x.dataset.p?PRI[x.dataset.p].en:"Normal"));go();});b.querySelector(".mc").onclick=()=>{MOVE=null;go();};
     b.querySelector(".mr").onclick=()=>{if(!confirm("Remove "+j.addr+" from "+CREWS[j.crew].name+"?"))return;logH("removed",j,{day:j.day});S.jobs=S.jobs.filter(x=>x!==j);if(j.day===TOM&&S.confirmed[j.crew]){S.confirmed[j.crew]=false;S.crewNotifs[j.crew]=null;}MOVE=null;toast("Removed");go();};}
   { const hd=h(`<details class="card" ${S.histOpen?"open":""}><summary>🕘 Schedule history (last ${HIST_DAYS} days)</summary><div style="display:flex;gap:8px;margin:6px 0"><button class="hm" style="flex:1;min-height:40px">My crews</button><button class="ha" style="flex:1;min-height:40px">Everyone</button></div><div class="hl">${histHtml(rep,S.histAll)}</div><p class="mut small">Office only — crews never see this. Older than 7 days is greyed. "Night before" = changed after 5 PM for tomorrow.</p></details>`);
@@ -310,8 +310,8 @@ const PHYS=["Jorge","Santos","Sammy"];const phys=c=>CREWS[c].name;
 const repKey=(rep,name)=>rep+"_"+name.toLowerCase();
 const physJobs=(name,day)=>S.jobs.filter(j=>phys(j.crew)===name&&j.day===day);
 const repsWithJobs=(name,day)=>["asher","lance"].filter(r=>physJobs(name,day).some(j=>CREWS[j.crew].rep===r));
-// Priority tag: "" normal · "high" HIGH PRIORITY · "today" MUST GET COMPLETED TODAY
-const PRI={high:{en:"HIGH PRIORITY",es:"ALTA PRIORIDAD",bg:"#e8890c"},today:{en:"MUST GET COMPLETED TODAY",es:"SE DEBE TERMINAR HOY",bg:"#c8102e"}};
+// Priority tag: "" normal · "high" HIGH PRIORITY
+const PRI={high:{en:"HIGH PRIORITY",es:"ALTA PRIORIDAD",bg:"#e8890c"}};
 const tuTag=(j,lang)=>j.touchup?`<span class="pill" style="background:#6b3fa0;color:#fff">🔧 ${lang==="crew"?L("RETOQUE","TOUCH-UP"):"TOUCH-UP"}${j.touchup.paid?"":lang==="crew"?"":" · no pay"}</span> `:"";
 const priTag=(j,lang)=>tuTag(j,lang)+(j.pri&&PRI[j.pri]?`<span class="pill" style="background:${PRI[j.pri].bg};color:#fff">${lang==="crew"?L(PRI[j.pri].es,PRI[j.pri].en):PRI[j.pri].en}</span>`:"");
 // Route state per physical crew + day
@@ -441,7 +441,7 @@ function jobSummary(j,rep){if(!j)return;const C=CREWS[j.crew],mine=C.rep===rep,l
     ${j.file?`<tr><th>WO</th><td>📄 ${esc(j.file.name||j.file)}</td></tr>`:""}
     ${j.touchup?`<tr><th>Touch-up</th><td>${esc(j.touchup.issue)} · ${j.touchup.paid?"paid return":"crew fault, no pay"}</td></tr>`:""}
    </table>
-   ${mine?`<div class="step" style="margin-top:10px">Priority</div><div style="display:flex;gap:6px;flex-wrap:wrap">${[["","Normal"],["high","High priority"],["today","Must get completed today"]].map(([v,l])=>`<button class="spr" data-p="${v}" style="flex:1;min-height:44px;font-size:.85rem;${(j.pri||"")===v?"background:var(--ink);color:var(--bg)":""}">${l}</button>`).join("")}</div>
+   ${mine?`<div class="step" style="margin-top:10px">Priority</div><div style="display:flex;gap:6px;flex-wrap:wrap">${[["","Normal"],["high","High priority"]].map(([v,l])=>`<button class="spr" data-p="${v}" style="flex:1;min-height:44px;font-size:.85rem;${(j.pri||"")===v?"background:var(--ink);color:var(--bg)":""}">${l}</button>`).join("")}</div>
    <button class="big smv" style="margin-top:10px">↔️ Move / remove</button>
    ${j.done&&!j.touchup?'<button class="big stu" style="margin-top:8px">🔧 Start touch-up ticket from this job</button>':`<p class="mut small">🔧 Touch-up: ${j.touchup?"this is already a touch-up job.":"available once this job is completed — tap it on its original date."}</p>`}`
    :`<p class="mut small">🔒 ${REPS[C.rep]}'s job — view only.</p>`}
