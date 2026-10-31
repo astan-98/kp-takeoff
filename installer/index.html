@@ -63,7 +63,12 @@ const CREWS={};
 ["asher","lance"].forEach(r=>[["jorge","Jorge","sub"],["santos","Santos","sub"],["sammy","Sammy","emp"]].forEach(([k,n,t])=>CREWS[r+"_"+k]={name:n,rep:r,type:t}));
 const crewLabel=c=>CREWS[c].name+" ("+REPS[CREWS[c].rep]+")";
 const typeTag=c=>CREWS[c].type==="emp"?'<span class="tag emp">Employee · training</span>':'<span class="tag">Sub · piece rate</span>';
-const DAYS=["Lun 2","Mar 3","Mié 4","Jue 5","Vie 6","Sáb 7"],DAYS_EN=["Mon 11/2","Tue 11/3","Wed 11/4","Thu 11/5","Fri 11/6","Sat 11/7"],TOM=0; // tomorrow = Mon 11/2
+// Work days Mon–Sat. Day index = week*6 + (0 Mon … 5 Sat); week 0 starts Mon 11/2/2026. Weeks -4 … +12 available.
+const WK0=new Date(2026,10,2),DOW_ES=["Lun","Mar","Mié","Jue","Vie","Sáb"],DOW_EN=["Mon","Tue","Wed","Thu","Fri","Sat"];
+const dayDate=i=>{const w=Math.floor(i/6),d=((i%6)+6)%6;return new Date(WK0.getFullYear(),WK0.getMonth(),WK0.getDate()+w*7+d);};
+const DAYS=new Proxy({},{get:(_,i)=>{const t=dayDate(+i);return DOW_ES[((+i%6)+6)%6]+" "+t.getDate();}});
+const DAYS_EN=new Proxy({},{get:(_,i)=>{const t=dayDate(+i);return DOW_EN[((+i%6)+6)%6]+" "+(t.getMonth()+1)+"/"+t.getDate();}});
+const TOM=0; // tomorrow = Mon 11/2
 let JID=100;
 function mkJob(crew,day,addr,cust,miles,nc,lines,load,file,coords){return{id:++JID,crew,day,addr,cust,miles,nc,lines,load,coords:coords||"",file:file||null,
   checkedIn:false,checkinMiles:null,photos:[],wallPhotos:0,crawlPhoto:false,notes:[],labor:[],short:[],done:false};}
@@ -186,8 +191,11 @@ function office(rep){
 let DROP=null,MOVE=null; // MOVE = job id picked up by tap (phone) — next tapped cell receives it
 function oCal(rep,mine){
   h(`<h1>Schedule</h1><p class="mut">Drag work order files (PDF / photo / Excel) onto a crew's day — or tap a day to add. To move a job: drag it to another box, or tap it, then tap where it goes. This fills that crew's jobs until FieldGroove sync is ready.</p>`);
-  const d=h(`<div class="cal"><table><tr><th></th>${DAYS_EN.map((x,i)=>`<th class="${i===TOM?"tm":""}">${x}${i===TOM?"<br>tomorrow":""}</th>`).join("")}</tr>
-   ${mine.map(c=>`<tr><td class="crew"><b>${esc(CREWS[c].name)}</b><br>${typeTag(c).replace(" · training","").replace(" · piece rate","")}</td>${DAYS_EN.map((_,i)=>{const js=S.jobs.filter(j=>j.crew===c&&j.day===i);
+  const wk=S.week||0,cols=[0,1,2,3,4,5].map(k=>wk*6+k);
+  const nav=h(`<div style="display:flex;gap:8px;align-items:center"><button class="wp" style="flex:1">◀ Prev week</button><div style="flex:2;text-align:center;font-weight:800">${wk===0?"This week":wk===1?"Next week":wk<0?Math.abs(wk)+" wk ago":"In "+wk+" weeks"}<br><span class="mut small">${DAYS_EN[cols[0]]} – ${DAYS_EN[cols[5]]}</span></div><button class="wn" style="flex:1">Next week ▶</button></div>${wk?'<div style="text-align:center"><button class="link wt">Back to this week</button></div>':""}`);
+  nav.querySelector(".wp").onclick=()=>{S.week=wk-1;go();};nav.querySelector(".wn").onclick=()=>{S.week=wk+1;go();};const wt=nav.querySelector(".wt");if(wt)wt.onclick=()=>{S.week=0;go();};
+  const d=h(`<div class="cal"><table><tr><th></th>${cols.map(i=>`<th class="${i===TOM?"tm":""}">${DAYS_EN[i]}${i===TOM?"<br>tomorrow":""}</th>`).join("")}</tr>
+   ${mine.map(c=>`<tr><td class="crew"><b>${esc(CREWS[c].name)}</b><br>${typeTag(c).replace(" · training","").replace(" · piece rate","")}</td>${cols.map(i=>{const js=S.jobs.filter(j=>j.crew===c&&j.day===i);
      return `<td class="${i===TOM?"tm":""}" data-c="${c}" data-d="${i}">${js.map(j=>`<div class="f${MOVE===j.id?" sel":""}" draggable="true" data-j="${j.id}" title="${esc(j.addr)}">📄 ${esc(j.addr.split(",")[0])}</div>`).join("")}<div class="plus">${MOVE?"⬇ Move here":js.length?"＋":"Drop file / tap"}</div></td>`;}).join("")}</tr>`).join("")}</table></div>`);
   d.querySelectorAll("td[data-c]").forEach(td=>{
     td.ondragover=e=>{e.preventDefault();td.classList.add("over");};td.ondragleave=()=>td.classList.remove("over");
@@ -220,7 +228,7 @@ function oConfirm(rep,mine){
   mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day===TOM);
     const d=h(`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">${esc(CREWS[c].name)} ${typeTag(c)}</h2>${S.confirmed[c]?'<span class="pill ok">Confirmed</span>':""}</div>
      ${js.length?`<table>${js.map(j=>`<tr><td>${esc(j.addr)}<br><span class="mut small">${esc(j.cust)}${j.file?" · 📄 "+esc(j.file):""}</span></td><td class="small" style="text-align:right">${j.miles} mi</td></tr>`).join("")}</table>`:'<p class="mut">No jobs tomorrow — drop files in Calendar.</p>'}
-     ${S.confirmed[c]?'<button class="link un">Undo confirm</button>':`<button class="ok big go" ${js.length?"":"disabled"}>✔ Confirm ${esc(CREWS[c].name)}</button>`}
+     ${S.confirmed[c]?'<button class="link un">Undo confirm</button>':`<button class="ok big go" ${js.length?"":"disabled"}>✔ Confirm ${esc(CREWS[c].name)}'s jobs</button>`}
      ${S.recapDone[c]?'<p class="mut small">Today’s recap is in — confirming opens the next day.</p>':""}</div>`);
     const g=d.querySelector(".go");if(g)g.onclick=()=>{S.confirmed[c]=true;S.recapDone[c]=false;S.crewNotifs[c]=now();if(S.notifPrefs[rep].ready)toast("📲 "+CREWS[c].name+" notified");go();};
     const u=d.querySelector(".un");if(u)u.onclick=()=>{S.confirmed[c]=false;S.crewNotifs[c]=null;go();};});
@@ -242,7 +250,7 @@ function oInbox(rep){
 }
 function oPayroll(rep,mine){
   h(`<h1>Weekly payroll</h1><p class="mut small">Week of Nov 2 · gas from ${OFFICE_LABEL}: under 40 mi $0 · 40–60 mi $25 · 60+ mi $50. Crews never see dollars.</p>`);
-  mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c);let gm=0,lb=0;
+  mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day>=0&&j.day<6);let gm=0,lb=0;
     const rows=js.map(j=>{const g=mileTier(j.miles),l=j.labor.filter(x=>x.status==="approved").reduce((s,x)=>s+(x.amt||0),0);gm+=g;lb+=l;return`<tr><td>${DAYS_EN[j.day].split(" ")[0]}</td><td>${esc(j.addr.split(",")[0])}<br><span class="mut small">${j.miles} mi</span></td><td>$${g}</td><td>$${l}</td></tr>`;}).join("");
     const emp=CREWS[c].type==="emp";
     h(`<div class="card"><h2>${esc(CREWS[c].name)} ${typeTag(c)}</h2>
