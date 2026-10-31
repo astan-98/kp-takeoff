@@ -280,7 +280,7 @@ function oCal(rep,mine){
     td.onclick=()=>{if(MOVE){moveJob(MOVE,td.dataset.c,+td.dataset.d);return;}DROP=[td.dataset.c,+td.dataset.d];const f=$("#fpick");f.value="";f.click();};});
   d.querySelectorAll(".f[data-j]").forEach(f=>{
     f.ondragstart=e=>{e.dataTransfer.setData("text/kp-job",f.dataset.j);e.dataTransfer.effectAllowed="move";};
-    f.onclick=e=>{e.stopPropagation();const id=+f.dataset.j;MOVE=MOVE===id?null:id;go();};});
+    f.onclick=e=>{e.stopPropagation();const id=+f.dataset.j;if(MOVE===id){MOVE=null;go();return;}jobSummary(S.jobs.find(x=>x.id===id),rep);};});
   if(MOVE){const j=S.jobs.find(x=>x.id===MOVE);const b=h(`<div class="card" style="position:sticky;bottom:76px;border:2px solid var(--blue)"><b>Selected: ${esc(j?j.addr.split(",")[0]:"")}</b><div class="mut small">Tap a crew + day box to move it, or set its priority:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">${[["","Normal"],["high","High priority"],["today","Must get completed today"]].map(([v,l])=>`<button class="pr" data-p="${v}" style="flex:1;min-height:44px;font-size:.85rem;${(j.pri||"")===v?"background:var(--ink);color:var(--bg)":""}">${l}</button>`).join("")}</div><button class="link mc">Cancel</button> <button class="link mr" style="color:var(--bad)">Remove this job</button></div>`);
     b.querySelectorAll(".pr").forEach(x=>x.onclick=()=>{j.pri=x.dataset.p;logH("priority",j,{day:j.day,pri:x.dataset.p?PRI[x.dataset.p].en:"normal"});toast("Priority: "+(x.dataset.p?PRI[x.dataset.p].en:"Normal"));go();});b.querySelector(".mc").onclick=()=>{MOVE=null;go();};
     b.querySelector(".mr").onclick=()=>{if(!confirm("Remove "+j.addr+" from "+CREWS[j.crew].name+"?"))return;logH("removed",j,{day:j.day});S.jobs=S.jobs.filter(x=>x!==j);if(j.day===TOM&&S.confirmed[j.crew]){S.confirmed[j.crew]=false;S.crewNotifs[j.crew]=null;}MOVE=null;toast("Removed");go();};}
@@ -288,7 +288,6 @@ function oCal(rep,mine){
     const dd=hd.querySelector("details");dd.ontoggle=()=>{S.histOpen=dd.open;};// filter swaps only the list — no re-render, no jump to top
     const paint=()=>{hd.querySelector(".hl").innerHTML=histHtml(rep,S.histAll);[[".hm",!S.histAll],[".ha",S.histAll]].forEach(([q,on])=>{const b=hd.querySelector(q);b.style.background=on?"var(--ink)":"";b.style.color=on?"var(--bg)":"";});};
     hd.querySelector(".hm").onclick=()=>{S.histAll=false;paint();};hd.querySelector(".ha").onclick=()=>{S.histAll=true;paint();};paint(); }
-  h(`<button class="big tu" style="background:var(--card)">🔧 Touch-up ticket from a completed job</button>`).querySelector(".tu").onclick=()=>touchUp(rep);
   h(`<p class="mut small">Edit rights: you can only add, move, reorder or remove your own crews' jobs; confirm stays per rep. Tip: file name like “WO - 123 Main St, Winder.pdf” fills the address. Tomorrow's column feeds the crews after you Confirm.</p>`);
 }
 $("#fpick").onchange=e=>{if(DROP)addFiles(DROP[0],DROP[1],[...e.target.files]);};
@@ -400,7 +399,39 @@ function routeSheet(name,day,rep){
     on(".os",()=>{r.locked=true;r.req=null;r.counter=null;RMODE=null;logH("route override",{addr:"",crew:repKey(rep,name)},{day});ping(other,"ready",`Asher set ${name}'s full route (override)`);re();});
     m.querySelector(".x").onclick=()=>{RMODE=null;m.remove();go();};
   });}
-function touchUp(rep){const done=S.jobs.filter(j=>j.done&&!j.touchup&&CREWS[j.crew].rep===rep);let pick=null,paid=null,day=TOM;
+// Calendar job tap → summary sheet (office)
+const driveMin=mi=>Math.round(mi/40*60)+5; // preview estimate: ~40 mph avg + 5 min
+function loadCount(j){let bags=0,bundles=0;const other=[];(j.load||[]).forEach(([m,q,u])=>{const n=Number(String(q).replace(/[^\d.]/g,""))||0,uu=String(u).toLowerCase();if(/bolsa|bag/.test(uu))bags+=n;else if(/bulto|bundle/.test(uu))bundles+=n;else other.push(n.toLocaleString()+" "+toEN(u)+" "+toEN(m));});return{bags,bundles,other};}
+function jobSummary(j,rep){if(!j)return;const C=CREWS[j.crew],mine=C.rep===rep,lc=loadCount(j);
+  const pkg=[...new Set(j.lines.map(l=>toEN(l[0])))].join(" · ");
+  const stop=routeOrder(C.name,j.day).findIndex(x=>x.id===j.id);
+  const status=j.done?"✅ Completed":j.checkedIn?"▶️ In progress":"Not started";
+  sheet(`<h1 style="margin-bottom:4px">${esc(j.addr)}</h1><div>${priTag(j,"office")||'<span class="pill">Normal priority</span>'}</div>
+   <div class="card" style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center">
+    <div><div style="font-size:1.8rem;font-weight:800">${lc.bags+lc.bundles}</div><div class="small">${lc.bags} bags · ${lc.bundles} bundles</div></div>
+    <div><div style="font-size:1.8rem;font-weight:800">≈${driveMin(j.miles)} min</div><div class="small">drive from office · ${j.miles} mi</div></div></div>
+   ${lc.other.length?`<div class="small">Also on load: ${esc(lc.other.join(", "))}</div>`:""}
+   <table class="small" style="margin-top:8px">
+    <tr><th>Crew</th><td>${esc(crewLabel(j.crew))} ${typeTag(j.crew)}</td></tr>
+    <tr><th>Day</th><td>${DAYS_EN[j.day]}${stop>=0?" · Stop "+(stop+1):""}</td></tr>
+    <tr><th>Customer</th><td>${esc(j.cust)}</td></tr>
+    <tr><th>Address</th><td>${esc(j.addr)}${j.coords?`<br><a href="https://maps.google.com/?q=${encodeURIComponent(String(j.coords).replace(/\s/g,""))}" target="_blank">📍 ${esc(j.coords)}</a>`:""}</td></tr>
+    <tr><th>Type</th><td>${j.nc?"New construction — walls + crawl photos required":"Retro / existing home"}</td></tr>
+    <tr><th>Work</th><td>${esc(pkg)}<br><span class="mut">${j.lines.map(l=>esc(toEN(l[1]))+" — "+esc(l[2])).join("<br>")}</span></td></tr>
+    <tr><th>Status</th><td>${status}${j.labor.length?" · "+j.labor.length+" extra labor":""}${j.short.length?" · "+j.short.length+" material alert":""}</td></tr>
+    ${j.file?`<tr><th>WO</th><td>📄 ${esc(j.file.name||j.file)}</td></tr>`:""}
+    ${j.touchup?`<tr><th>Touch-up</th><td>${esc(j.touchup.issue)} · ${j.touchup.paid?"paid return":"crew fault, no pay"}</td></tr>`:""}
+   </table>
+   ${mine?`<div class="step" style="margin-top:10px">Priority</div><div style="display:flex;gap:6px;flex-wrap:wrap">${[["","Normal"],["high","High priority"],["today","Must get completed today"]].map(([v,l])=>`<button class="spr" data-p="${v}" style="flex:1;min-height:44px;font-size:.85rem;${(j.pri||"")===v?"background:var(--ink);color:var(--bg)":""}">${l}</button>`).join("")}</div>
+   <button class="big smv" style="margin-top:10px">↔️ Move / remove</button>
+   ${j.done&&!j.touchup?'<button class="big stu" style="margin-top:8px">🔧 Start touch-up ticket from this job</button>':`<p class="mut small">🔧 Touch-up: ${j.touchup?"this is already a touch-up job.":"available once this job is completed — tap it on its original date."}</p>`}`
+   :`<p class="mut small">🔒 ${REPS[C.rep]}'s job — view only.</p>`}
+   <button class="big sx" style="margin-top:8px;background:var(--card)">Close</button>`,m=>{
+   m.querySelector(".sx").onclick=()=>m.remove();
+   m.querySelectorAll(".spr").forEach(x=>x.onclick=()=>{j.pri=x.dataset.p;logH("priority",j,{day:j.day,pri:x.dataset.p?PRI[x.dataset.p].en:"normal"});toast("Priority: "+(x.dataset.p?PRI[x.dataset.p].en:"Normal"));m.remove();go();jobSummary(j,rep);});
+   const mv=m.querySelector(".smv");if(mv)mv.onclick=()=>{m.remove();MOVE=j.id;go();};
+   const tu=m.querySelector(".stu");if(tu)tu.onclick=()=>{m.remove();touchUp(rep,j.id);};});}
+function touchUp(rep,pre){const done=S.jobs.filter(j=>j.done&&!j.touchup&&CREWS[j.crew].rep===rep&&(!pre||j.id===pre));let pick=pre||null,paid=null,day=TOM;
   const draw=m=>{m.querySelector(".tb").innerHTML=`
     <div class="step">1 · Completed job</div>${done.length?done.map(j=>`<button class="act tj" data-j="${j.id}" style="${pick===j.id?"background:var(--ink);color:var(--bg)":""}">${esc(j.addr)}<br><span class="small">${esc(j.cust)} · ${esc(crewLabel(j.crew))} · ${DAYS_EN[j.day]}</span></button>`).join(""):'<p class="mut">No completed jobs yet for your crews.</p>'}
     <div class="step" style="margin-top:12px">2 · What's the issue?</div><textarea class="ti" placeholder="e.g. caulk/foam failed inspection · crawl insulation sagging"></textarea>
