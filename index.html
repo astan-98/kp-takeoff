@@ -8354,6 +8354,7 @@ const FNDS=[["","— Foundation —"],["slab","Slab"],["crawl","Crawl space"],["
 const pkgHint=t=>{t=(t||"").toLowerCase();return /total\s*foam/.test(t)?"total_foam":/total\s*bat/.test(t)?"total_bat":/encap/.test(t)?"crawl_encap":/spider/.test(t)?"foam_spider":/cellulose/.test(t)?"foam_cellulose":/foam/.test(t)?"hybrid_foam_batts":"standard";};
 const fndHint=t=>{t=(t||"").toLowerCase();return /slab/.test(t)?"slab":/crawl/.test(t)?"crawl":/finished basement/.test(t)?"finished":/basement/.test(t)?"unfinished":"";};
 const ovKey=j=>(j.raw&&j.raw[0]||"").trim().slice(0,120);
+const wk=d=>d.getDay()>0&&d.getDay()<6; // Asher measures Mon–Fri only
 const hhmm=t=>t!=null?String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0"):"";
 async function importSheet(selDay){await loadStore();const m=sheet(`<h2 style="margin:0">${IS_OPS?"📏 Asher · Measure":"📋 Import measure list"}</h2><p class="dp-m">Sky's jobs come from the shared Google Doc (shown exactly as written). Add your own jobs with ➕ on any day ahead — saved in KPI Ops, so Ops and Takeoffs see the same list.${STORE.local?' <b style="color:#c8102e">Not connected to KPI Ops — your jobs stay on this phone. Open Takeoffs from KPI Ops ▸ Measure list once to connect.</b>':''}</p>
   <details><summary class="dp-m">Doc link / paste instead</summary><input class="dp-link" placeholder="Google Doc link (shared measure list)" value="${esc(localStorage.getItem(DOCK)||DOC_DEFAULT)}" style="width:100%;padding:8px;font-size:16px;border-radius:8px;border:1px solid #ccc">
@@ -8361,13 +8362,13 @@ async function importSheet(selDay){await loadStore();const m=sheet(`<h2 style="m
   <button type="button" class="btn btn-primary dp-pull" style="width:100%;margin-top:6px">⬇️ Pull Google Doc</button><div class="dp-st dp-m" style="margin-top:4px"></div>
   <div class="dp-out"></div>`);
   const out=m.querySelector(".dp-out"),st=m.querySelector(".dp-st");let doc=STORE.doc&&STORE.doc.text?parseDoc(STORE.doc.text):{days:{},pre:[]},sel=selDay||null,picked=selDay?1:0;
-  const render=()=>{const order=[...Array(7).keys()].map(k=>{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+k);return d;});
-    Object.keys(doc.days).map(Number).forEach(k=>{if(!order.some(d=>d.getDay()===k))order.push(nextDow(k));});
-    Object.keys(myAll()).concat(sel?[sel]:[]).forEach(k=>{if(k>=iso(new Date())&&!order.some(d=>iso(d)===k))order.push(new Date(k+"T12:00"));});order.sort((a,b)=>a-b);
-    if(sel==null){const f=order.find(d=>(doc.days[d.getDay()]||{jobs:[]}).jobs.length||myGet(iso(d)).length);sel=iso(f||order[1]);}
+  const render=()=>{const order=[...Array(9).keys()].map(k=>{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+k);return d;}).filter(wk).slice(0,5);
+    Object.keys(doc.days).map(Number).filter(k=>k>0&&k<6).forEach(k=>{if(!order.some(d=>d.getDay()===k))order.push(nextDow(k));});
+    Object.keys(myAll()).concat(sel?[sel]:[]).forEach(k=>{if(k>=iso(new Date())&&wk(new Date(k+"T12:00"))&&!order.some(d=>iso(d)===k))order.push(new Date(k+"T12:00"));});order.sort((a,b)=>a-b);
+    if(sel&&!wk(new Date(sel+"T12:00")))sel=null;if(sel==null){const f=order.find(d=>(doc.days[d.getDay()]||{jobs:[]}).jobs.length||myGet(iso(d)).length);sel=iso(f||order[1]);}
     out.innerHTML=(doc.pre.length?`<div class="dp-row"><div class="dp-m"><b>📄 Doc notes (top of doc)</b></div><pre style="white-space:pre-wrap;margin:4px 0 0;font:14px/1.35 inherit">${esc(doc.pre.join("\n"))}</pre></div>`:"")+
      '<div class="dp-days">'+order.map(d=>{const D=doc.days[d.getDay()],n=D?D.jobs.length:0,my=myGet(iso(d)).length;return `<button type="button" class="btn btn-secondary dp-d ${iso(d)===sel?"dp-on":""}" data-d="${iso(d)}">${DOWS[d.getDay()].slice(0,3).toUpperCase()} ${d.getMonth()+1}/${d.getDate()}<br><small>${D?"📄"+n:"—"}${my?" ✍️"+my:""}</small></button>`;}).join("")+'</div><label class="dp-m" style="display:flex;align-items:center;gap:6px;margin:4px 0 8px">📅 Any other day: <input type="date" class="dp-any" min="'+iso(new Date())+'" value="'+sel+'" style="flex:1;padding:6px;font-size:16px"></label><div class="dp-list"></div>';
-    out.querySelector(".dp-any").onchange=e=>{if(e.target.value){sel=e.target.value;picked=1;render();}};
+    out.querySelector(".dp-any").onchange=e=>{if(e.target.value&&!wk(new Date(e.target.value+"T12:00"))){alert("Measure days are Monday–Friday.");e.target.value=sel;return;}if(e.target.value){sel=e.target.value;picked=1;render();}};
     out.querySelectorAll(".dp-d").forEach(b=>b.onclick=()=>{sel=b.dataset.d;picked=1;render();});
     const date=new Date(sel+"T12:00");editList(out.querySelector(".dp-list"),doc.days[date.getDay()],date,m,render);};
   const pull=async()=>{st.textContent="Pulling the doc…";try{if(!STORE.local){await loadStore(true);if(!STORE.doc||!STORE.doc.text)throw new Error((STORE.doc&&STORE.doc.err)||"Doc not readable");doc=parseDoc(STORE.doc.text);}else doc=parseDoc(await pullDoc());if(!picked)sel=null;st.textContent="✅ Doc pulled "+new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});}catch(e){st.textContent="⚠️ "+e.message+". Check the doc is shared “Anyone with the link → Viewer”, or paste the text above. Your own jobs still work.";}render();};
