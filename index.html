@@ -6617,7 +6617,7 @@ function init() {
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
 else init();
-
+window.KPAPP={S,newJob,draftPayload,idbPut,refreshArchive,openArchiveJob,placesKey:()=>PLACES_KEY};
 })();
 </script>
 <script>
@@ -8284,6 +8284,107 @@ function init() {
   };
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
+})();
+
+</script>
+<script>
+/* 31a: Sky's day → draft Library jobs + day route (Asher's copy only). Source: Sky+Asher shared Google Doc (via kpi-ops proxy) or pasted text. */
+(function(){
+const OFFICE={label:"Office · 33 Apex Dr, Jefferson, GA",q:"33 Apex Dr, Jefferson, GA 30549"};
+const DOWS=["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+const K=()=>window.KPAPP;
+const LSK="kpDayPlan",DOCK="kpDayDoc",MEASURE_MIN=45;
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const iso=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const nextDow=i=>{const d=new Date();d.setHours(12,0,0,0);let k=(i-d.getDay()+7)%7;d.setDate(d.getDate()+k);return d;};
+const fmtT=m=>{if(m==null)return"";let h=Math.floor(m/60),mm=Math.round(m%60);const ap=h>=12?"PM":"AM";h=h%12||12;return h+":"+String(mm).padStart(2,"0")+" "+ap;};
+function parseTime(t){const m=t.match(/\b(?:at|@|by|meet[^0-9]{0,20})?\s*(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b/i)||t.match(/\b(\d{1,2}):(\d{2})\b/);
+  if(!m)return null;let h=+m[1],mi=+(m[2]||0);const ap=(m[3]||"").toLowerCase();if(ap.startsWith("p")&&h<12)h+=12;if(ap.startsWith("a")&&h===12)h=0;if(!ap&&h<7)h+=12;return h*60+mi;}
+function hint(t){const s=t.toLowerCase();return /retro/.test(s)?"retro":/metal/.test(s)?"metal":"new";}
+// "Name - address — notes" | "address — notes"
+function parseLine(raw){let t=raw.replace(/^\s*(?:[•*\-]|\d{1,2}[.)])\s+/,"").trim();if(!t)return null;
+  const time=parseTime(t);const addrRe=/(\d{2,6}\s+[^,–—-]+?(?:\s(?:rd|road|st|street|ln|lane|dr|drive|ct|court|cir|circle|way|hwy|highway|pkwy|parkway|blvd|ave|avenue|trl|trail|pl|place|church rd|run|ter|loop)\b\.?)[^,–—]*?,?\s*[A-Za-z .]+?,?\s*(?:GA|Ga|ga|Georgia)\b\.?(?:\s*\d{5})?)/i;
+  const m=t.match(addrRe);let cust="",addr="",note="";
+  if(m){addr=m[1].trim();const pre=t.slice(0,m.index).replace(/[\s\-–—:,]+$/,"").trim();const post=t.slice(m.index+m[1].length).replace(/^[\s\-–—:,]+/,"").trim();cust=pre;note=post;}
+  else{const parts=t.split(/\s[-–—]\s/);if(parts.length>=2){cust=parts[0];addr=parts[1];note=parts.slice(2).join(" - ");}else return {cust:"",addr:"",note:t,time,mode:hint(t),bad:1};}
+  const cityM=addr.match(/,\s*([A-Za-z .]+?),?\s*(?:GA|Ga|ga|Georgia)\b/)||addr.match(/\s([A-Z][a-z]+(?:\s[A-Z][a-z]+)?),?\s*(?:GA|Ga)\b/);
+  return {cust,addr,city:cityM?cityM[1].trim():"",note,time,mode:hint(t+" "+note)};}
+function parseDoc(text){const days={};let cur=null;
+  text.split(/\r?\n/).forEach(l=>{const s=l.trim();if(!s)return;
+    const h=s.toLowerCase().match(/^[#*\s]*(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)[a-z]*\b[\s,.:\-–—]*(\d{1,2}\/\d{1,2})?[\s:\-–—]*$/);
+    if(h){cur=DOWS.findIndex(d=>d.startsWith(h[1].slice(0,3)));days[cur]=days[cur]||[];return;}
+    if(cur==null)return;const j=parseLine(s);if(j)days[cur].push(j);});
+  return days;}
+// geocode: Places (New) searchText with the app's key, then free Nominatim
+async function geo(q){try{if(K().placesKey()){const r=await fetch("https://places.googleapis.com/v1/places:searchText",{method:"POST",headers:{"Content-Type":"application/json","X-Goog-Api-Key":K().placesKey(),"X-Goog-FieldMask":"places.location,places.formattedAddress"},body:JSON.stringify({textQuery:q})});
+    const d=await r.json();const p=d.places&&d.places[0];if(p&&p.location)return {lat:p.location.latitude,lng:p.location.longitude,fa:p.formattedAddress};}}catch(e){}
+  try{const r=await fetch("https://kpi-ops.pages.dev/api/geo?q="+encodeURIComponent(q));if(r.ok){const d=await r.json();if(d.lat)return d;}}catch(e){}
+  try{const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q="+encodeURIComponent(q));const d=await r.json();if(d[0])return {lat:+d[0].lat,lng:+d[0].lon};}catch(e){}return null;}
+async function matrix(pts){try{const r=await fetch("https://router.project-osrm.org/table/v1/driving/"+pts.map(p=>p.lng+","+p.lat).join(";")+"?annotations=duration");const d=await r.json();if(d.durations)return d.durations.map(r=>r.map(x=>x/60));}catch(e){}
+  const hv=(a,b)=>{const R=3959,t=x=>x*Math.PI/180,dl=t(b.lat-a.lat),dg=t(b.lng-a.lng),x=Math.sin(dl/2)**2+Math.cos(t(a.lat))*Math.cos(t(b.lat))*Math.sin(dg/2)**2;return 2*R*Math.asin(Math.sqrt(x));};
+  return pts.map(a=>pts.map(b=>hv(a,b)*1.3/45*60));}
+// best order: try every order (≤8 stops), respect "meet at" times (arrive by, wait if early); score = lateness*10 + total drive
+function plan(stops,M,startMin){const n=stops.length,idx=[...Array(n).keys()];let best=null;
+  const perm=(a,l)=>{if(l===a.length){let t=startMin,at=0,late=0,drive=0,etas=[];for(const i of a){const d=M[at][i+1];drive+=d;t+=d;const w=stops[i].time;if(w!=null){if(t>w)late+=t-w;else t=w;}etas.push(t);t+=MEASURE_MIN;at=i+1;}
+      const sc=late*10+drive;if(!best||sc<best.sc)best={sc,order:a.slice(),etas,late,drive};return;}
+    for(let i=l;i<a.length;i++){[a[l],a[i]]=[a[i],a[l]];perm(a,l+1);[a[l],a[i]]=[a[i],a[l]];}};
+  if(n<=8)perm(idx,0);else{const o=idx.slice().sort((x,y)=>(stops[x].time??1e9)-(stops[y].time??1e9));perm(o,o.length);}return best;}
+function sheet(html){const m=document.createElement("div");m.className="dp-modal";m.innerHTML='<div class="dp-sheet">'+html+'<button type="button" class="btn btn-secondary dp-x" style="width:100%;margin-top:10px">Close</button></div>';
+  m.onclick=e=>{if(e.target===m)m.remove();};document.body.appendChild(m);m.querySelector(".dp-x").onclick=()=>m.remove();return m;}
+const css=document.createElement("style");css.textContent=`.dp-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center}.dp-sheet{background:var(--bg,#fff);color:inherit;width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px}
+.dp-row{border:1px solid #ddd;border-radius:12px;padding:10px;margin:8px 0}.dp-row input,.dp-row select{width:100%;margin:3px 0;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:16px}.dp-days{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.dp-days button{flex:1;min-width:64px}.dp-on{background:#c8102e!important;color:#fff!important}.dp-m{color:#777;font-size:13px}.dp-n{display:inline-block;background:#c8102e;color:#fff;border-radius:50%;width:24px;height:24px;text-align:center;line-height:24px;font-weight:800;margin-right:6px}`;document.head.appendChild(css);
+async function pullDoc(){const id=(localStorage.getItem(DOCK)||"").match(/[-\w]{25,}/);if(!id)throw new Error("Add the Google Doc link first");
+  const r=await fetch("https://kpi-ops.pages.dev/api/skyday?id="+id[0],{cache:"no-store"});const d=await r.json();if(!d.text)throw new Error(d.error||"Doc not readable");return d.text;}
+function importSheet(){const m=sheet(`<h2 style="margin:0">📋 Import Sky's day</h2><p class="dp-m">From the Sky + Asher daily jobs Google Doc. Pull it, or paste the day's list.</p>
+  <input class="dp-link" placeholder="Google Doc link (Sky + Asher daily jobs)" value="${esc(localStorage.getItem(DOCK)||"")}" style="width:100%;padding:8px;font-size:16px;border-radius:8px;border:1px solid #ccc">
+  <button type="button" class="btn btn-primary dp-pull" style="width:100%;margin-top:6px">⬇️ Pull from Google Doc</button>
+  <details style="margin-top:8px"><summary>…or paste the list</summary><textarea class="dp-txt" rows="8" style="width:100%;font-size:15px" placeholder="Wednesday&#10;Paul Pringle - 580 Tallassee Rd Athens, GA — Retro foam&#10;Don Sipsy - 1050 Golf Course Ln Athens, GA — meet builder 10AM"></textarea><button type="button" class="btn btn-secondary dp-parse" style="width:100%">Read pasted list</button></details>
+  <div class="dp-out"></div>`);
+  const out=m.querySelector(".dp-out");
+  const show=text=>{const days=parseDoc(text),keys=Object.keys(days).map(Number);if(!keys.length){out.innerHTML='<p class="dp-m">No day headings found (e.g. “Wednesday”).</p>';return;}
+    const order=[...Array(7).keys()].map(k=>(new Date().getDay()+1+k)%7).filter(k=>keys.includes(k));
+    out.innerHTML='<div class="dp-days">'+order.map(k=>`<button type="button" class="btn btn-secondary dp-d" data-d="${k}">${DOWS[k].slice(0,3).toUpperCase()} · ${days[k].length}</button>`).join("")+'</div><div class="dp-list"></div>';
+    const pick=k=>{out.querySelectorAll(".dp-d").forEach(b=>b.classList.toggle("dp-on",+b.dataset.d===k));editList(out.querySelector(".dp-list"),days[k],nextDow(k),m);};
+    out.querySelectorAll(".dp-d").forEach(b=>b.onclick=()=>pick(+b.dataset.d));pick(order[0]);};
+  m.querySelector(".dp-link").onchange=e=>localStorage.setItem(DOCK,e.target.value.trim());
+  m.querySelector(".dp-pull").onclick=async()=>{localStorage.setItem(DOCK,m.querySelector(".dp-link").value.trim());out.innerHTML='<p class="dp-m">Pulling…</p>';try{show(await pullDoc());}catch(e){out.innerHTML='<p class="dp-m">⚠️ '+esc(e.message)+'. Make sure the doc is shared “Anyone with the link → Viewer”, or paste the list below.</p>';}};
+  m.querySelector(".dp-parse").onclick=()=>show(m.querySelector(".dp-txt").value);}
+function editList(box,jobs,date,m){if(!jobs.length){box.innerHTML='<p class="dp-m">No jobs listed for this day.</p>';return;}
+  box.innerHTML=`<p class="dp-m">${date.toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})} · check each job, set any meet time, then build the route.</p>`+jobs.map((j,i)=>`<div class="dp-row" data-i="${i}">
+   <input class="c" placeholder="Customer / builder" value="${esc(j.cust)}"><input class="a" placeholder="Address" value="${esc(j.addr)}">
+   <input class="n" placeholder="Notes (job type, what to check)" value="${esc(j.note)}">
+   <div style="display:flex;gap:6px"><input class="t" type="time" value="${j.time!=null?String(Math.floor(j.time/60)).padStart(2,"0")+":"+String(j.time%60).padStart(2,"0"):""}" title="Meet / arrive-by time (optional)"><select class="md"><option value="new">New construction</option><option value="retro">Retro</option><option value="metal">Metal building</option></select></div>
+   ${j.bad?'<div class="dp-m" style="color:#c8102e">No address found in this line — type it in.</div>':""}</div>`).join("")+
+   `<label class="dp-m"><input type="time" class="st" value="08:00"> leave office at</label><button type="button" class="btn btn-primary dp-go" style="width:100%;margin-top:8px">🗺️ Build route + create draft jobs</button>`;
+  box.querySelectorAll(".dp-row").forEach(r=>{r.querySelector(".md").value=jobs[+r.dataset.i].mode;});
+  box.querySelector(".dp-go").onclick=async()=>{const b=box.querySelector(".dp-go");b.disabled=true;b.textContent="Finding addresses…";
+    const stops=[...box.querySelectorAll(".dp-row")].map(r=>{const t=r.querySelector(".t").value;return {cust:r.querySelector(".c").value.trim(),addr:r.querySelector(".a").value.trim(),note:r.querySelector(".n").value.trim(),mode:r.querySelector(".md").value,time:t?(+t.slice(0,2))*60+(+t.slice(3)):null};}).filter(s=>s.addr);
+    const pts=[await geo(OFFICE.q)];for(const s of stops){s.ll=await geo(s.addr);if(!s.ll){const cm=s.addr.match(/([A-Za-z]+(?:\s[A-Za-z]+)?)\s*,?\s*(?:GA|Georgia)\b/i);if(cm){s.ll=await geo(cm[1]+", GA");if(s.ll){s.ll.approx=1;s.note=(s.note?s.note+" · ":"")+"⚠️ map pin approx (town center)";}}}pts.push(s.ll);await new Promise(r=>setTimeout(r,250));}
+    const miss=stops.filter(s=>!s.ll);if(miss.length||!pts[0]){b.disabled=false;b.textContent="🗺️ Build route + create draft jobs";alert("Couldn't find: "+(pts[0]?"":"office, ")+miss.map(s=>s.addr).join("; ")+"\nFix the address and try again.");return;}
+    b.textContent="Routing…";const M=await matrix(pts),st=box.querySelector(".st").value||"08:00",best=plan(stops,M,(+st.slice(0,2))*60+(+st.slice(3)));
+    b.textContent="Creating draft jobs…";const day=iso(date),out=[];
+    for(let k=0;k<best.order.length;k++){const s=stops[best.order[k]];const id=await makeJob(s,day,k+1,best.etas[k]);out.push({id,cust:s.cust,addr:s.addr,note:s.note,time:s.time,eta:best.etas[k],ll:s.ll});}
+    localStorage.setItem(LSK,JSON.stringify({day,start:st,drive:Math.round(best.drive),late:Math.round(best.late),stops:out}));
+    K().refreshArchive();m.remove();showPlan();};}
+async function makeJob(s,day,stop,eta){const {S,newJob,draftPayload,idbPut}=K();newJob();S.dateMeasured=day;S.builder=s.cust;S.address=s.addr;const cm=s.addr.match(/\s([A-Z][a-z]+(?:\s[A-Z][a-z]+)?),?\s*(?:GA|Ga)\b/);S.city=cm?cm[1]:"";
+  S.jobMode=s.mode;S.keywords=["Sky day",s.note,s.time!=null?"meet "+fmtT(s.time):""].filter(Boolean).join(" · ");S.woNotes=s.note;if(s.ll)S.siteCoords=s.ll.lat.toFixed(6)+","+s.ll.lng.toFixed(6);
+  const snap={id:S.jobId,savedAt:new Date().toISOString(),dateMeasured:day,owner:S.owner,builder:S.builder,city:S.city,address:S.address,packageLabel:"Draft · needs measure (stop "+stop+")",packageType:S.pkg,jobMode:S.jobMode,gasType:S.gasType,keywords:S.keywords,airSealed:false,excelRows:[],fgRows:[],
+    dayPlan:{stop,eta,time:s.time},draft:draftPayload()};await idbPut(snap);return snap.id;}
+function mapsUrl(p){return "https://www.google.com/maps/dir/"+[OFFICE.q].concat(p.stops.map(s=>s.addr)).map(encodeURIComponent).join("/");}
+function showPlan(){const p=JSON.parse(localStorage.getItem(LSK)||"null");if(!p){importSheet();return;}
+  const m=sheet(`<h2 style="margin:0">🗺️ Route · ${new Date(p.day+"T12:00").toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})}</h2>
+   <p class="dp-m">Start ${esc(OFFICE.label)} at ${fmtT((+p.start.slice(0,2))*60+(+p.start.slice(3)))} · ~${p.drive} min driving · ${MEASURE_MIN} min per measure${p.late?` · ⚠️ ${p.late} min late for a meet time`:""}</p>
+   ${p.stops.map((s,i)=>`<div class="dp-row"><div><span class="dp-n">${i+1}</span><b>${esc(s.cust||s.addr)}</b> <span style="float:right;font-weight:800;${s.time!=null&&s.eta>s.time?"color:#c8102e":""}">${fmtT(s.eta)}</span></div>
+     <div class="dp-m">${esc(s.addr)}${s.note?" · "+esc(s.note):""}${s.time!=null?` · <b style="color:#c8102e">meet ${fmtT(s.time)}</b>`:""}</div>
+     <div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="btn btn-primary dp-ms" data-id="${s.id}" style="flex:2">📐 Measure</button><a class="btn btn-secondary" style="flex:1;text-align:center" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.addr)}">Go</a></div></div>`).join("")}
+   <a class="btn btn-secondary" style="display:block;text-align:center;margin-top:6px" target="_blank" href="${mapsUrl(p)}">Open whole route in Google Maps</a>
+   <button type="button" class="btn btn-secondary dp-new" style="width:100%;margin-top:6px">📋 Import another day</button>`);
+  m.querySelectorAll(".dp-ms").forEach(b=>b.onclick=()=>{m.remove();K().openArchiveJob(b.dataset.id);});m.querySelector(".dp-new").onclick=()=>{m.remove();importSheet();};}
+window.kpDayPlan={importSheet,showPlan,parseDoc,parseLine,plan};
+function mount(){const sec=document.getElementById("tab-archive");if(!sec||document.getElementById("dpCard"))return;const d=document.createElement("div");d.className="section";d.id="dpCard";
+  d.innerHTML='<h2>Sky\'s day</h2><p class="cap">Pull the day\'s jobs from the Sky + Asher Google Doc → draft jobs + best route from the office (meet times respected).</p><div class="grid2"><button type="button" class="btn btn-primary" id="dpImport">📋 Import Sky\'s day</button><button type="button" class="btn btn-secondary" id="dpRoute">🗺️ Today\'s route</button></div>';
+  sec.insertBefore(d,sec.firstChild);d.querySelector("#dpImport").onclick=importSheet;d.querySelector("#dpRoute").onclick=showPlan;}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",mount);else mount();
 })();
 
 </script>
