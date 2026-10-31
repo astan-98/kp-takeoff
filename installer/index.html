@@ -90,7 +90,25 @@ const fresh=()=>{const J=[
 return{jobs:J,confirmed:Object.assign({},C),recapDone:Object.assign({},C),recap:{},crewNotifs:{},inbox:[],offline:false,queue:0,
   notifPrefs:{asher:{ready:true,labor:true,short:true,photo:true,complete:false},lance:{ready:true,labor:true,short:true,photo:false,complete:true}},
   tab:{asher:"cal",lance:"cal"},openJob:null};};
-let S=fresh();
+// Sample alerts so the Alerts tab has something to browse (preview only)
+function seedAlerts(st){const J=a=>st.jobs.find(j=>j.addr.startsWith(a)),ib=(rep,kind,text,t)=>st.inbox.push({rep,kind,text,t,pushed:true});
+  const m=J("2009 Massey"),lk=J("145 Lakeview"),pr=J("88 Pine Ridge"),ok=J("17 Oak"),df=J("512 Old Federal"),ck=J("9 Creekside"),mn=J("240 Main");
+  m.labor.push({lvl:"m",amt:50,es:"tuvimos que sacar insulación vieja del ático",en:"We had to remove old insulation from the attic",status:"pending",crew:m.crew});
+  lk.labor.push({lvl:"x",amt:null,es:"mucha basura en el ático, tuvimos que limpiar 2 horas",en:"A lot of trash in the attic, we had to clean up 2 hours",status:"pending",crew:lk.crew});
+  m.short.push({es:'Material equivocado — centros: R-13 15" → necesita 24"',en:'Wrong material — wrong centers: R-13 15" → needs 24" on center',wrongCenters:{material:'R-13 15"',needs:"24"}});
+  ib("asher","short",`🚨 Jorge (Asher) at ${m.addr}: Wrong material — wrong centers: R-13 15" → needs 24" on center (photo attached)`,"2:14 PM");
+  pr.short.push({es:'Falta material: 6 bultos R-19 15", 3 bultos R-19 16"',en:'Material shortage: need 6 more bundles of R-19 15", 3 more bundles of R-19 16"'});
+  ib("asher","short",`🚨 Santos (Asher) at ${pr.addr}: Material shortage: need 6 more bundles of R-19 15", 3 more bundles of R-19 16" (photo attached)`,"1:02 PM");
+  pr.short.push({es:"Material equivocado: llegó con papel, la orden dice sin papel",en:"Wrong material: came kraft faced, the order says unfaced"});
+  ib("asher","short",`🚨 Santos (Asher) at ${pr.addr}: Wrong material — came kraft faced, the order says unfaced (photo attached)`,"11:40 AM");
+  pr.labor.push({office:true,amt:50,en:"Tight crawl space",es:"Tight crawl space",status:"approved",crew:pr.crew,photo:false,by:"Asher"});
+  ok.done=true;ok.checkedIn=true;ok.checkinMiles=0.1;ib("asher","photo",`Sammy (Asher) completed ${ok.addr} with NO photos`,"3:31 PM");
+  df.labor.push({lvl:"l",amt:100,es:"paredes muy altas, necesitamos andamio",en:"Very tall walls, we needed scaffolding",status:"pending",crew:df.crew});
+  ck.short.push({es:"Falta material: 4 bolsas Soplado R-38",en:"Material shortage: need 4 more bags of Blown R-38"});
+  ib("lance","short",`🚨 Santos (Lance) at ${ck.addr}: Material shortage: need 4 more bags of Blown R-38 (photo attached)`,"12:25 PM");
+  mn.done=true;mn.checkedIn=true;mn.checkinMiles=0.2;ib("lance","photo",`Sammy (Lance) completed ${mn.addr} with NO photos`,"2:48 PM");
+  return st;}
+let S=seedAlerts(fresh());
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const now=()=>new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
 function toast(t){const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2600);}
@@ -313,13 +331,22 @@ function payrollTicket(c,rep){const emp=CREWS[c].type==="emp",js=S.jobs.filter(j
   const rows=js.map(j=>{const pl=emp?[]:pieceLines(j).filter(x=>x.k),pj=pl.reduce((s,x)=>s+x.pay,0),g=mileTier(j.miles),ex=j.labor.filter(x=>x.status==="approved"),xj=ex.reduce((s,x)=>s+(x.amt||0),0);P+=pj;G+=g;X+=xj;
     return`<tr><td>${DAYS_EN[j.day]}</td><td><b>${esc(j.addr)}</b><br>${esc(j.cust)}${emp?"":"<br>"+pl.map(x=>esc(PIECE[x.k].label)+": "+(x.flat?x.qty+" × "+money(x.each):x.qty.toLocaleString()+" "+PIECE[x.k].unit+" × "+money(PIECE[x.k].rate))+" = "+money(x.pay)).join("<br>")}${ex.map(x=>"<br><i>Extra "+money(x.amt)+" — "+esc(x.en)+(x.office?" (added by "+esc(x.by||"office")+")":" (crew request, approved)")+"</i>").join("")}</td>
       ${emp?"":`<td class="r">${money(pj)}</td>`}<td class="r">${j.miles} mi<br>${money(g)}</td><td class="r">${money(xj)}</td></tr>`;}).join("");
-  return`<div class="tk"><div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px"><div><h1>KP Insulation — Payroll ticket</h1><div>Week of ${DAYS_EN[0]} – ${DAYS_EN[5]}, 2026</div></div><div style="text-align:right">Rep: <b>${REPS[rep]}</b><br>Printed ${new Date().toLocaleDateString()}</div></div>
+  const tot=emp?G+X:P+G+X;
+  const frontHtml=`<div class="tk"><div style="display:flex;justify-content:space-between;margin-bottom:14px"><div style="font-size:11pt">KP Insulation · Week of ${DAYS_EN[0]} – ${DAYS_EN[5]}, 2026</div><div style="font-size:11pt">Rep: ${REPS[rep]}</div></div>
+   <table style="font-size:16pt"><tr><th style="width:22%">Name</th><td colspan="2" style="font-size:22pt;font-weight:bold;height:16mm;vertical-align:middle">${esc(CREWS[c].name)}</td></tr>
+   <tr><th>Description</th><th></th><th class="r" style="width:30%">Total</th></tr>
+   <tr><td colspan="2" style="height:14mm;vertical-align:middle;font-size:18pt">Provided Labor${emp?'<br><span style="font-size:10pt">Employee in training — gas + extra only; base pay from timesheet</span>':""}</td><td class="r" style="vertical-align:middle;font-size:22pt;font-weight:bold">${money(tot)}</td></tr>
+   <tr><td colspan="2" style="height:10mm"></td><td></td></tr><tr><td colspan="2" style="height:10mm"></td><td></td></tr>
+   <tr><th colspan="2" class="r">TOTAL</th><th class="r" style="font-size:20pt">${money(tot)}</th></tr></table>
+   <div class="sig" style="margin-top:40px"><div>Approved by (${REPS[rep]})</div><div>Date</div><div>Front office</div></div>
+   <p style="font-size:9pt;margin-top:16px">Itemized detail on the next page.</p></div>`;
+  return frontHtml+`<div class="tk"><div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:8px"><div><h1>${esc(CREWS[c].name)} — detail</h1><div>Week of ${DAYS_EN[0]} – ${DAYS_EN[5]}, 2026</div></div><div style="text-align:right">Rep: <b>${REPS[rep]}</b><br>Printed ${new Date().toLocaleDateString()}</div></div>
    <div style="font-size:14pt;margin-bottom:6px">Crew: <b>${esc(CREWS[c].name)}</b> — ${emp?"Employee (in training) — NOT piece rate; base pay from timesheet":"Sub crew — piece rate"}</div>
    <table><tr><th style="width:12%">Day</th><th>Job / work</th>${emp?"":'<th class="r" style="width:12%">Piece</th>'}<th class="r" style="width:12%">Gas</th><th class="r" style="width:12%">Extra labor</th></tr>${rows||`<tr><td colspan="5">No jobs this week</td></tr>`}
    <tr><th></th><th class="r">Totals</th>${emp?"":`<th class="r">${money(P)}</th>`}<th class="r">${money(G)}</th><th class="r">${money(X)}</th></tr></table>
    <p style="font-size:14pt;margin:10px 0 0"><b>${emp?"Add-ons this week (plus hourly pay from timesheet): "+money(G+X):"TOTAL DUE THIS WEEK: "+money(P+G+X)}</b></p>
    <p style="font-size:9.5pt;margin:4px 0 0">Gas from 33 Apex Dr, Jefferson GA: under 40 mi $0 · 40–60 mi $25 · 60+ mi $50.${emp?"":" Sub rates: fiberglass & poly 8¢/SF · rockwool 15¢/SF · baffles & poly vents 30¢ ea · prehangs & air seal $75 default (by size) · removal 25¢/SF."}</p>
-   <div class="sig"><div>Approved by (${REPS[rep]})</div><div>Date</div><div>Front office</div></div></div>`;}
+   </div>`;}
 function printPayroll(cs,rep){$("#print").innerHTML=cs.map(c=>payrollTicket(c,rep)).join("");window.print();}
 function oPayroll(rep,mine){
   h(`<h1>Weekly payroll</h1><p class="mut small">Week of Nov 2 · Subs: piece rate from the work order + gas + extra labor. Gas from ${OFFICE_LABEL}: under 40 mi $0 · 40–60 mi $25 · 60+ mi $50. Crews never see dollars.</p>`);
@@ -349,7 +376,7 @@ function oMore(rep){
   d.querySelectorAll("[data-k]").forEach(i=>i.onchange=()=>{P[i.dataset.k]=i.checked;});
   const rt=d.querySelector(".rt"),lbl=()=>{const[hh,mm]=(rt.value||"17:00").split(":").map(Number);d.querySelector(".rtl").textContent=((hh+11)%12+1)+":"+String(mm).padStart(2,"0")+(hh<12?" AM":" PM");};lbl();
   rt.onchange=rt.oninput=()=>{S.remind=S.remind||{};S.remind[rep]=rt.value;lbl();};
-  d.querySelector(".rs").onclick=()=>{S=fresh();toast("Preview reset");go();};
+  d.querySelector(".rs").onclick=()=>{S=seedAlerts(fresh());toast("Preview reset");go();};
 }
 fillWho();
 const langBtn=$("#lang");const setLangLbl=()=>{langBtn.textContent=LANG==="es"?"Crew: Español → EN":"Crew: English → ES";};setLangLbl();
