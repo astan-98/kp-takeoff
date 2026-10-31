@@ -323,11 +323,12 @@ function oPayroll(rep,mine){
 function oMore(rep){
   const P=S.notifPrefs[rep],L={ready:"Crew notified when I confirm",labor:"Extra labor requested",short:"Material problem (immediate)",photo:"Job completed with no photos",complete:"Job completed / day recap"};
   const d=h(`<h1>Settings</h1><div class="card"><h2>📲 Push me for…</h2>${Object.keys(L).map(k=>`<label style="display:flex;gap:12px;align-items:center;font-weight:600;min-height:48px;margin:0"><input type="checkbox" data-k="${k}" ${P[k]?"checked":""} style="width:26px;height:26px"> ${L[k]}</label>`).join("")}
-   <label>Afternoon reminder</label><div style="display:flex;gap:8px"><button class="rm" style="flex:1;background:var(--ink);color:var(--bg)">5:00 PM</button><button class="rm" style="flex:1">6:00 PM</button></div></div>
+   <label>Afternoon reminder (confirm tomorrow)</label><input type="time" class="rt" step="300" value="${(S.remind||{})[rep]||"17:00"}" style="font-size:1.4rem;font-weight:800;text-align:center;min-height:60px"><div class="mut small">Tap to scroll hours and minutes. Reminds you at <b class="rtl"></b> every work day.</div></div>
    <div class="card"><h2>Crews</h2>${Object.keys(CREWS).filter(k=>CREWS[k].rep===rep).map(c=>`<div style="min-height:40px">${esc(CREWS[c].name)} ${typeTag(c)}</div>`).join("")}</div>
    <button class="link rs">Reset preview data</button>`);
   d.querySelectorAll("[data-k]").forEach(i=>i.onchange=()=>{P[i.dataset.k]=i.checked;});
-  d.querySelectorAll(".rm").forEach(b=>b.onclick=()=>d.querySelectorAll(".rm").forEach(x=>{x.style.background=x===b?"var(--ink)":"";x.style.color=x===b?"var(--bg)":"";}));
+  const rt=d.querySelector(".rt"),lbl=()=>{const[hh,mm]=(rt.value||"17:00").split(":").map(Number);d.querySelector(".rtl").textContent=((hh+11)%12+1)+":"+String(mm).padStart(2,"0")+(hh<12?" AM":" PM");};lbl();
+  rt.onchange=rt.oninput=()=>{S.remind=S.remind||{};S.remind[rep]=rt.value;lbl();};
   d.querySelector(".rs").onclick=()=>{S=fresh();toast("Preview reset");go();};
 }
 fillWho();
