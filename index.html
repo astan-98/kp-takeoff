@@ -5034,8 +5034,51 @@ function savePermanent() {
   };
   const prev = (S._fullJobs || []).find(j => j.id === S.jobId), prevPh = ((prev && prev.draft && prev.draft.photos) || []).map(x => x && x.id).filter(Boolean);
   const totalSf = round2(allLines().filter(L => L.unit === "SF").reduce((a, L) => a + (n(L.footage) || 0), 0)); // 29bb: cloud backup summary column
-  idbPut(snap).then(() => { setStatus("Saved permanently to Library."); refreshArchive(); if (prevPh.length) photoForget(prevPh, S.jobId); cloudQueueJob(snap, totalSf); })
-    .catch(() => { S.idbOk = false; setStatus("Library save failed (IndexedDB blocked). Draft still autosaved."); });
+  return idbPut(snap).then(() => { setStatus("Saved permanently to Library."); markLibSaved(); if (Array.isArray(S._fullJobs)) { S._fullJobs = S._fullJobs.filter(j => j.id !== snap.id); S._fullJobs.push(snap); } refreshArchive(); if (prevPh.length) photoForget(prevPh, S.jobId); cloudQueueJob(snap, totalSf); })
+    .catch(() => { S.idbOk = false; setStatus("Library save failed (IndexedDB blocked). Draft still autosaved."); return false; });
+}
+/* 31a (Asher): New job asks to save an unsaved takeoff first */
+const LIBSIG_KEY = "kp_libsig_v1";
+function jobSig() {
+  try {
+    const keys = ["builder","city","address","keywords","woRep","woNotes","siteZip","siteCounty","siteCoords","subdivision","custFirst","custLast","custCompany","custPhone","custEmail","billAddress","billCity","billZip","accessScaffoldNote","accessDrivewayNote","accessGateCode","extraLaborNote","fpAccessNotes","fpChaseNote"];
+    const h = keys.map(k => String(S[k] == null ? "" : S[k]).trim());
+    const ls = allLines().map(L => [L.product, L.description, L.footage, L.unit, L.bags, L.notes].join("|"));
+    return JSON.stringify([h, ls, (S.photos || []).map(x => x && x.id), S.includeFp ? [S.fpMode, S.fpModelId, S.fpPipeFt] : 0]);
+  } catch (e) { return "err"; }
+}
+function libSigs() { try { return JSON.parse(lsGet(LIBSIG_KEY) || "{}") || {}; } catch (e) { return {}; } }
+function libSigPut(field) { try { const o = libSigs(); o[field] = { id: S.jobId, sig: jobSig() }; lsSet(LIBSIG_KEY, JSON.stringify(o)); } catch (e) {} }
+function markLibSaved() { libSigPut("saved"); }
+function jobNeedsSave() {
+  const o = libSigs(), sig = jobSig();
+  if (o.blank && o.blank.id === S.jobId && o.blank.sig === sig) return false;
+  if (o.saved && o.saved.id === S.jobId) return o.saved.sig !== sig;
+  const inLib = (S._fullJobs || []).some(j => j.id === S.jobId);
+  if (inLib) return false; // opened from Library before this build: no baseline, don't nag
+  const h = ["builder","city","address","custFirst","custLast","custCompany","custPhone"].some(k => String(S[k] || "").trim());
+  let ln = 0; try { ln = allLines().filter(L => n(L.footage) > 0).length; } catch (e) {}
+  return h || ln > 0 || (S.photos || []).length > 0;
+}
+function newJobGuarded(go) {
+  if (!jobNeedsSave()) { go(); return; }
+  const old = document.getElementById("kpSavePrompt"); if (old) old.remove();
+  const ov = document.createElement("div"); ov.id = "kpSavePrompt";
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+  const who = [S.builder, S.address].map(x => String(x || "").trim()).filter(Boolean).join(" · ");
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:360px;width:100%;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.3)">' +
+    '<h3 style="margin:0 0 8px">Save this takeoff first?</h3>' +
+    '<p style="margin:0 0 14px">' + (who ? "<b>" + escHtml(who) + "</b> " : "This takeoff ") + 'hasn\'t been saved to the Library. Starting a new job will clear it.</p>' +
+    '<button type="button" class="btn btn-primary btn-block" data-a="save">Save to Library</button>' +
+    '<button type="button" class="btn btn-block" data-a="discard" style="margin-top:8px;color:#b00020">Discard &amp; start new</button>' +
+    '<button type="button" class="btn btn-secondary btn-block" data-a="cancel" style="margin-top:8px">Cancel</button></div>';
+  ov.onclick = e => {
+    const a = e.target && e.target.dataset && e.target.dataset.a;
+    if (e.target === ov || a === "cancel") { ov.remove(); return; }
+    if (a === "discard") { ov.remove(); go(); return; }
+    if (a === "save") { ov.remove(); checkThen(() => fpVerifyThen(() => { const p = savePermanent(); Promise.resolve(p).then(ok => { if (ok !== false) go(); }); })); }
+  };
+  document.body.appendChild(ov);
 }
 
 function openArchiveJob(id) {
@@ -5084,6 +5127,7 @@ function applySnapshot(job) {
   document.querySelectorAll(".tabs-panel").forEach(p => p.classList.toggle("active", p.id === "tab-wizard")); syncSaveDock();
   setStatus("Opened " + (job.address || job.builder) + " (" + job.dateMeasured + ")");
   render();
+  libSigPut("saved"); // 31a: just opened from Library = saved
 }
 
 function newJob() {
@@ -5261,7 +5305,7 @@ function wireInputs() {
   trainPlaceLauncher();
   ["input", "change"].forEach(ev => $("woDate").addEventListener(ev, () => { S.woDateManual = true; })); // 29av: Asher's edit sticks
   // 29au: same handler as the Customer/builder New job (one code path), then show the Wizard if another tab was open
-  $("btnNewJobTop").onclick = () => { newJob(); /* 30ak: Customer-bubble New job / Save buttons removed; header New job + bottom Save to Library stay */ const w = document.querySelector('.nav-btn[data-tab="wizard"]'); if (w && !w.classList.contains("active")) w.click(); window.scrollTo(0, 0); };
+  $("btnNewJobTop").onclick = () => newJobGuarded(() => { newJob(); libSigPut("blank"); /* 30ak: Customer-bubble New job / Save buttons removed; header New job + bottom Save to Library stay */ const w = document.querySelector('.nav-btn[data-tab="wizard"]'); if (w && !w.classList.contains("active")) w.click(); window.scrollTo(0, 0); });
   $("btnPreviewWo").onclick = () => { if (!(twoLines().length > 0 || twoFpDetails().length > 0)) { setStatus("No lines on this takeoff yet."); return; } twoPreview(undefined, true); }; // 30o
   $("btnCopyCsv").onclick = () => {
     const text = buildExcelCsv();
@@ -5579,7 +5623,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-10-30ao";
+const APP_BUILD = "2026-10-31a";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
