@@ -427,9 +427,9 @@ function jobSummary(j,rep){if(!j)return;const C=CREWS[j.crew],mine=C.rep===rep,l
   const status=j.done?"✅ Completed":j.checkedIn?"▶️ In progress":"Not started";
   sheet(`<h1 style="margin-bottom:4px">${esc(j.addr)}</h1><div>${priTag(j,"office")||'<span class="pill">Normal priority</span>'}</div>
    <div class="card" style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center">
-    <div><div style="font-size:1.8rem;font-weight:800">${lc.bags+lc.bundles}</div><div class="small">${lc.bags} bags · ${lc.bundles} bundles</div></div>
+    <div><div style="font-size:1.8rem;font-weight:800">${lc.bags}</div><div class="small">bags (from work order)</div></div>
     <div><div style="font-size:1.8rem;font-weight:800">≈${driveMin(j.miles)} min</div><div class="small">drive from office · ${j.miles} mi</div></div></div>
-   ${lc.other.length?`<div class="small">Also on load: ${esc(lc.other.join(", "))}</div>`:""}
+   
    <table class="small" style="margin-top:8px">
     <tr><th>Crew</th><td>${esc(crewLabel(j.crew))} ${typeTag(j.crew)}</td></tr>
     <tr><th>Day</th><td>${DAYS_EN[j.day]}${stop>=0?" · Stop "+(stop+1):""}</td></tr>
