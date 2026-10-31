@@ -170,13 +170,18 @@ function short(c,j,kind){const rep=CREWS[c].rep;let k=kind||"Falta material",n=0
   sheet(`<h1>${k==="Material equivocado"?L("❌ Material equivocado","❌ Wrong material"):L("📦 Falta material","📦 Material shortage")}</h1>
    ${wrong?`<div class="card" style="border:2px solid var(--warn)"><div class="step">${L("Centros equivocados","Wrong centers")}</div>
      <label>${L("¿Qué material está mal?","Which material is wrong?")}</label>${mats.map((x,i)=>`<button class="act wm" data-i="${i}">${esc(tr(x))}</button>`).join("")}<button class="act wm" data-i="other">${L("Otro (escribir abajo)","Other (type below)")}</button>
-     <label>${L("¿Qué ancho / centros se necesita?","What width / on-center is needed?")}</label><div style="display:flex;gap:8px">${["16","19","24"].map(w=>`<button class="ww" data-w="${w}" style="flex:1;font-size:1.2rem;font-weight:800">${w}"</button>`).join("")}</div></div>`:""}
+     <label>${L("¿Qué ancho / centros se necesita?","What width / on-center is needed?")}</label><div class="wwrow" style="display:flex;gap:8px"></div><div class="mut small wwnote"></div></div>`:""}
    <label>${L("\u00bfQu\u00e9 pas\u00f3? (opcional)","What happened? (optional)")}</label><textarea class="rs" placeholder="${k==="Material equivocado"?L("Ej. llegó R-13, la orden dice R-19","E.g. R-13 came, the order says R-19"):L("Ej. faltan 6 bultos de R-13","E.g. short 6 bundles of R-13")}"></textarea>
    <button class="act need ph">${L("\ud83d\udcf7 Foto \u2014 obligatoria","\ud83d\udcf7 Photo \u2014 required")}</button><button class="p big go">${L("\ud83d\udea8 Avisar a","\ud83d\udea8 Alert")} ${REPS[rep]}${L(" ya</button>"," now</button>")}`,m=>{
     const pb=m.querySelector(".ph");pb.onclick=()=>{n++;pb.textContent="✅ Foto lista";pb.className="act done ph";};
     m.querySelectorAll(".kk").forEach(b=>b.onclick=()=>{k=b.dataset.v;m.querySelectorAll(".kk").forEach(x=>{x.style.background=x===b?"var(--ink)":"";x.style.color=x===b?"var(--bg)":"";});});
     const pick=(sel,cb)=>m.querySelectorAll(sel).forEach(b=>b.onclick=()=>{cb(b);m.querySelectorAll(sel).forEach(x=>{x.style.background=x===b?"var(--ink)":"";x.style.color=x===b?"var(--bg)":"";});});
-    pick(".wm",b=>{wm=b.dataset.i==="other"?"other":mats[+b.dataset.i];});pick(".ww",b=>{ww=b.dataset.w;});
+    // 16/19/24 options leave out the spacing the wrong material already is (15-16" → 16 OC, 18-19" → 19 OC, 23-24" → 24 OC)
+    const ocOf=x=>{const mm=String(x||"").match(/(\d+)"/);if(!mm)return null;const i=+mm[1];return i<=16?"16":i<=19?"19":"24";};
+    const drawW=()=>{const row=m.querySelector(".wwrow");if(!row)return;const cur=wm&&wm!=="other"?ocOf(wm):null;ww=null;
+      row.innerHTML=["16","19","24"].filter(w=>w!==cur).map(w=>`<button class="ww" data-w="${w}" style="flex:1;font-size:1.2rem;font-weight:800">${w}"</button>`).join("");
+      m.querySelector(".wwnote").textContent=cur?L("Ahora está a "+cur+'" — elige el correcto.',"It's "+cur+'" now — pick the correct one.'):"";pick(".ww",b=>{ww=b.dataset.w;});};
+    pick(".wm",b=>{wm=b.dataset.i==="other"?"other":mats[+b.dataset.i];drawW();});drawW();
     m.querySelector(".go").onclick=()=>{const d=m.querySelector(".rs").value.trim();
       if(wrong&&!wm)return toast(L("Elige qué material está mal","Pick which material is wrong"));if(wrong&&!ww)return toast(L("Elige 16, 19 o 24","Pick 16, 19 or 24"));
       if(wrong&&wm==="other"&&!d)return toast(L("Escribe qué material","Type which material"));
