@@ -52,6 +52,7 @@ details summary{font-weight:800;min-height:48px;display:flex;align-items:center;
 @media print{body>*:not(#print){display:none!important}#print{display:block!important;color:#000;background:#fff;font:12pt/1.35 Arial,sans-serif}
  #print .tk{page-break-after:always;padding:0 4mm}#print .tk:last-child{page-break-after:auto}#print table{width:100%;border-collapse:collapse;font-size:10.5pt}
  #print td,#print th{border:1px solid #000;padding:4px 5px;vertical-align:top;text-align:left}#print .r{text-align:right}#print h1{font-size:17pt;margin:0}#print .sig{display:flex;gap:30px;margin-top:28px}#print .sig div{flex:1;border-top:1px solid #000;padding-top:3px;font-size:10pt}}
+.ow{display:inline-block;background:#245;color:#fff;border-radius:6px;padding:0 4px;font-size:.7rem;font-weight:800;margin-left:2px}
 </style></head><body>
 <header><b id="brand">KPI Installer</b><button id="lang" style="min-height:36px;padding:4px 10px;font-size:.8rem;border-radius:10px;border:0">ES / EN</button><select id="who" aria-label="Who is using the app"></select></header>
 <div class="banner">PREVIEW · sample data · nothing is sent · switch user at top ↑</div>
@@ -66,8 +67,10 @@ const REPS={asher:"Asher",lance:"Lance"};
 // Each rep runs the same pattern: two piece-rate sub crews (Jorge, Santos) + one employee crew in training (Sammy).
 const CREWS={};
 ["asher","lance"].forEach(r=>[["jorge","Jorge","sub"],["santos","Santos","sub"],["sammy","Sammy","emp"]].forEach(([k,n,t])=>CREWS[r+"_"+k]={name:n,rep:r,type:t}));
+// Guest reps who send tickets to Asher/Lance; whoever drops it on a crew owns confirm + payroll
+const GUEST_REPS=["Sky (KPI)","Darius (KPI)","Peter (KPI)","Wes (KPI)","Chad (KPI)","Blake (Choice Insulation & Fireplaces)"];
 const crewLabel=c=>CREWS[c].name+" ("+REPS[CREWS[c].rep]+")";
-const typeTag=c=>CREWS[c].type==="emp"?'<span class="tag emp">Employee · training</span>':'<span class="tag">Sub · piece rate</span>';
+const typeTag=c=>CREWS[c].type==="emp"?'<span class="tag emp">Employee · training · shared</span>':'<span class="tag">Sub · piece rate</span>';
 // Work days Mon–Sat. Day index = week*6 + (0 Mon … 5 Sat); week 0 starts Mon 11/2/2026. Weeks -4 … +12 available.
 const WK0=new Date(2026,10,2),DOW_ES=["Lun","Mar","Mié","Jue","Vie","Sáb"],DOW_EN=["Mon","Tue","Wed","Thu","Fri","Sat"];
 const dayDate=i=>{const w=Math.floor(i/6),d=((i%6)+6)%6;return new Date(WK0.getFullYear(),WK0.getMonth(),WK0.getDate()+w*7+d);};
@@ -125,6 +128,7 @@ function seedAlerts(st){const J=a=>st.jobs.find(j=>j.addr.startsWith(a)),ib=(rep
     H(T(5,8,30),"Asher","added","17 Oak St, Jefferson, GA","asher_sammy",{day:0}),
     H(T(9,14,0),"Asher","removed","77 Old Rd, Winder, GA","asher_santos",{day:0})];
   m.pri="high";pr.pri="high";
+  J("820 Hwy 82").soldBy="Sky (KPI)";J("390 Maple Ave").soldBy="Blake (Choice Insulation & Fireplaces)";J("17 Oak").soldBy="Darius (KPI)";J("88 Pine Ridge").soldBy="Wes (KPI)";
   // Demo: Jorge's Monday = 6 jobs (4 Asher, 2 Lance), both reps confirmed, both marked "Order doesn't matter" — open Route → 🤖 Auto-route → Lock.
   [m,lk,df].forEach(j=>{j.done=false;j.checkedIn=false;});
   st.confirmed.asher_jorge=true;st.confirmed.lance_jorge=true;st.crewNotifs.asher_jorge=st.crewNotifs.lance_jorge="4:12 PM";
@@ -275,12 +279,13 @@ function oCal(rep,mine){
   nav.querySelector(".wp").onclick=()=>{S.week=wk-1;go();};nav.querySelector(".wn").onclick=()=>{S.week=wk+1;go();};const wt=nav.querySelector(".wt");if(wt)wt.onclick=()=>{S.week=0;go();};
   const d=h(`<div class="cal"><table><tr><th></th>${cols.map(i=>`<th class="${i===TOM?"tm":""}">${DAYS_EN[i]}${i===TOM?"<br>tomorrow":""}</th>`).join("")}</tr>
    ${mine.map(c=>`<tr><td class="crew"><b>${esc(CREWS[c].name)}</b><br>${typeTag(c).replace(" · training","").replace(" · piece rate","")}</td>${cols.map(i=>{const js=dayJobs(c,i);
-     return `<td class="${i===TOM?"tm":""}" data-c="${c}" data-d="${i}">${js.map(j=>`<div class="f${MOVE===j.id?" sel":""}" draggable="true" data-j="${j.id}" title="${esc(j.addr)}">${j.touchup?"🔧":j.pri==="high"?"🟠":"📄"} ${esc(j.addr.split(",")[0])}</div>`).join("")}<div class="plus">${MOVE?"⬇ Move here":js.length?"＋":"Drop file / tap"}</div></td>`;}).join("")}</tr>`).join("")}</table></div>`);
+     return `<td class="${i===TOM?"tm":""}" data-c="${c}" data-d="${i}">${js.map(j=>`<div class="f${MOVE===j.id?" sel":""}" draggable="true" data-j="${j.id}" title="${esc(j.addr)}">${j.touchup?"🔧":j.pri==="high"?"🟠":"📄"} ${esc(j.addr.split(",")[0])} <span class="ow">${REPS[CREWS[j.crew].rep][0]}</span>${j.soldBy?`<span class="ow" style="background:#6b3fa0">↪${esc(j.soldBy.split(" (")[0])}${/Choice/.test(j.soldBy)?"·Choice":""}</span>`:""}</div>`).join("")}${S.jobs.filter(o=>phys(o.crew)===phys(c)&&o.crew!==c&&o.day===i).map(o=>`<div class="f fo" data-o="${o.id}" title="${esc(REPS[CREWS[o.crew].rep])}'s job — view only" style="opacity:.55;border-style:dashed">🔒 ${esc(o.addr.split(",")[0])} <span class="ow">${REPS[CREWS[o.crew].rep][0]}</span></div>`).join("")}<div class="plus">${MOVE?"⬇ Move here":js.length?"＋":"Drop file / tap"}</div></td>`;}).join("")}</tr>`).join("")}</table></div>`);
   d.querySelectorAll("td[data-c]").forEach(td=>{
     td.ondragover=e=>{e.preventDefault();td.classList.add("over");};td.ondragleave=()=>td.classList.remove("over");
     td.ondrop=e=>{e.preventDefault();td.classList.remove("over");const id=e.dataTransfer.getData("text/kp-job");
       if(id)moveJob(+id,td.dataset.c,+td.dataset.d);else addFiles(td.dataset.c,+td.dataset.d,[...e.dataTransfer.files]);};
     td.onclick=()=>{if(MOVE){moveJob(MOVE,td.dataset.c,+td.dataset.d);return;}DROP=[td.dataset.c,+td.dataset.d];const f=$("#fpick");f.value="";f.click();};});
+  d.querySelectorAll(".fo").forEach(f=>f.onclick=e=>{e.stopPropagation();jobSummary(S.jobs.find(x=>x.id===+f.dataset.o),rep);});
   d.querySelectorAll(".f[data-j]").forEach(f=>{
     f.ondragstart=e=>{e.dataTransfer.setData("text/kp-job",f.dataset.j);e.dataTransfer.effectAllowed="move";};
     f.onclick=e=>{e.stopPropagation();const id=+f.dataset.j;if(MOVE===id){MOVE=null;go();return;}jobSummary(S.jobs.find(x=>x.id===id),rep);};});
@@ -436,6 +441,7 @@ function jobSummary(j,rep){if(!j)return;const C=CREWS[j.crew],mine=C.rep===rep,l
    <table class="small" style="margin-top:8px">
     <tr><th>Crew</th><td>${esc(crewLabel(j.crew))} ${typeTag(j.crew)}</td></tr>
     <tr><th>Day</th><td>${DAYS_EN[j.day]}${stop>=0?" · Stop "+(stop+1):""}</td></tr>
+    <tr><th>Owner</th><td><b>${REPS[C.rep]}</b> — day-before confirm + payroll${j.soldBy?`<br>Ticket sent by <b>${esc(j.soldBy)}</b> (guest job)`:""}${mine?`<br><label class="small" style="display:block;margin-top:6px">Ticket from (source rep)</label><select class="sby" style="padding:6px">${[["","— my own sale —"],...GUEST_REPS.map(g=>[g,g])].map(([v,l])=>`<option value="${esc(v)}" ${(j.soldBy||"")===v?"selected":""}>${esc(l)}</option>`).join("")}</select>`:""}</td></tr>
     <tr><th>Customer</th><td>${esc(j.cust)}</td></tr>
     <tr><th>Address</th><td>${esc(j.addr)}${j.coords?`<br><a href="https://maps.google.com/?q=${encodeURIComponent(String(j.coords).replace(/\s/g,""))}" target="_blank">📍 ${esc(j.coords)}</a>`:""}</td></tr>
     <tr><th>Type</th><td>${j.nc?"New construction — walls + crawl photos required":"Retro / existing home"}</td></tr>
@@ -450,6 +456,7 @@ function jobSummary(j,rep){if(!j)return;const C=CREWS[j.crew],mine=C.rep===rep,l
    :`<p class="mut small">🔒 ${REPS[C.rep]}'s job — view only.</p>`}
    <button class="big sx" style="margin-top:8px;background:var(--card)">Close</button>`,m=>{
    m.querySelector(".sx").onclick=()=>m.remove();
+   const sb=m.querySelector(".sby");if(sb)sb.onchange=()=>{j.soldBy=sb.value.trim();toast(j.soldBy?"Tagged: ticket from "+j.soldBy+" — owned by "+REPS[C.rep]:"Guest tag cleared");go();};
    m.querySelectorAll(".spr").forEach(x=>x.onclick=()=>{j.pri=x.dataset.p;logH("priority",j,{day:j.day,pri:x.dataset.p?PRI[x.dataset.p].en:"normal"});toast("Priority: "+(x.dataset.p?PRI[x.dataset.p].en:"Normal"));m.remove();go();jobSummary(j,rep);});
    const mv=m.querySelector(".smv");if(mv)mv.onclick=()=>{m.remove();MOVE=j.id;go();};
    const tu=m.querySelector(".stu");if(tu)tu.onclick=()=>{m.remove();touchUp(rep,j.id);};});}
