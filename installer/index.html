@@ -107,6 +107,18 @@ function seedAlerts(st){const J=a=>st.jobs.find(j=>j.addr.startsWith(a)),ib=(rep
   ck.short.push({es:"Falta material: 4 bolsas Soplado R-38",en:"Material shortage: need 4 more bags of Blown R-38"});
   ib("lance","short",`🚨 Santos (Lance) at ${ck.addr}: Material shortage: need 4 more bags of Blown R-38 (photo attached)`,"12:25 PM");
   mn.done=true;mn.checkedIn=true;mn.checkinMiles=0.2;ib("lance","photo",`Sammy (Lance) completed ${mn.addr} with NO photos`,"2:48 PM");
+  const T=(daysAgo,h,mi)=>{const d=new Date();d.setDate(d.getDate()-daysAgo);d.setHours(h,mi,0,0);return d.getTime();};
+  const H=(t,who,action,addr,crew,extra)=>Object.assign({t,who,action,addr,crew},extra);
+  st.hist=[
+    H(T(0,22,47),"Asher","added","301 Hwy 124, Braselton, GA","asher_jorge",{day:0}),
+    H(T(0,21,15),"Lance","added","9 Creekside Way, Gainesville, GA","lance_santos",{day:0}),
+    H(T(0,18,5),"Asher","confirmed","","asher_santos",{day:0}),
+    H(T(1,16,20),"Asher","moved","88 Pine Ridge Ct, Hoschton, GA","asher_santos",{fromCrew:"asher_jorge",fromDay:1,day:0}),
+    H(T(2,9,12),"Lance","added","512 Old Federal Rd, Dahlonega, GA","lance_jorge",{day:0}),
+    H(T(3,10,40),"Asher","added","2009 Massey Ln, Winder, GA","asher_jorge",{day:0}),
+    H(T(3,10,41),"Asher","added","145 Lakeview Dr, Commerce, GA","asher_jorge",{day:0}),
+    H(T(5,8,30),"Asher","added","17 Oak St, Jefferson, GA","asher_sammy",{day:0}),
+    H(T(9,14,0),"Asher","removed","77 Old Rd, Winder, GA","asher_santos",{day:0})];
   return st;}
 let S=seedAlerts(fresh());
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -260,26 +272,45 @@ function oCal(rep,mine){
   d.querySelectorAll(".f[data-j]").forEach(f=>{
     f.ondragstart=e=>{e.dataTransfer.setData("text/kp-job",f.dataset.j);e.dataTransfer.effectAllowed="move";};
     f.onclick=e=>{e.stopPropagation();const id=+f.dataset.j;MOVE=MOVE===id?null:id;go();};});
-  if(MOVE){const j=S.jobs.find(x=>x.id===MOVE);const b=h(`<div class="card" style="position:sticky;bottom:76px;border:2px solid var(--blue)"><b>Moving: ${esc(j?j.addr.split(",")[0]:"")}</b><div class="mut small">Tap the crew + day box to move it there.</div><button class="link mc">Cancel</button></div>`);b.querySelector(".mc").onclick=()=>{MOVE=null;go();};}
-  h(`<p class="mut small">Tip: file name like “WO - 123 Main St, Winder.pdf” fills the address. Tomorrow's column feeds the crews after you Confirm.</p>`);
+  if(MOVE){const j=S.jobs.find(x=>x.id===MOVE);const b=h(`<div class="card" style="position:sticky;bottom:76px;border:2px solid var(--blue)"><b>Moving: ${esc(j?j.addr.split(",")[0]:"")}</b><div class="mut small">Tap the crew + day box to move it there.</div><button class="link mc">Cancel</button> <button class="link mr" style="color:var(--bad)">Remove this job</button></div>`);b.querySelector(".mc").onclick=()=>{MOVE=null;go();};
+    b.querySelector(".mr").onclick=()=>{if(!confirm("Remove "+j.addr+" from "+CREWS[j.crew].name+"?"))return;logH("removed",j,{day:j.day});S.jobs=S.jobs.filter(x=>x!==j);if(j.day===TOM&&S.confirmed[j.crew]){S.confirmed[j.crew]=false;S.crewNotifs[j.crew]=null;}MOVE=null;toast("Removed");go();};}
+  { const hd=h(`<details class="card" ${S.histOpen?"open":""}><summary>🕘 Schedule history (last ${HIST_DAYS} days)</summary><div style="display:flex;gap:8px;margin:6px 0"><button class="hm" style="flex:1;min-height:40px">My crews</button><button class="ha" style="flex:1;min-height:40px">Everyone</button></div><div class="hl">${histHtml(rep,S.histAll)}</div><p class="mut small">Office only — crews never see this. Older than 7 days is greyed. "Night before" = changed after 5 PM for tomorrow.</p></details>`);
+    const dd=hd.querySelector("details");dd.ontoggle=()=>{S.histOpen=dd.open;};hd.querySelector(".hm").onclick=()=>{S.histAll=false;go();};hd.querySelector(".ha").onclick=()=>{S.histAll=true;go();};
+    hd.querySelector(S.histAll?".ha":".hm").style.cssText+=";background:var(--ink);color:var(--bg)"; }
+  h(`<p class="mut small">Edit rights: you can only add, move, reorder or remove your own crews' jobs; confirm stays per rep. Tip: file name like “WO - 123 Main St, Winder.pdf” fills the address. Tomorrow's column feeds the crews after you Confirm.</p>`);
 }
 $("#fpick").onchange=e=>{if(DROP)addFiles(DROP[0],DROP[1],[...e.target.files]);};
 // Daily stop order per crew: j.ord (lower = earlier). Office sets it on Confirm (▲▼) or by moving on the calendar.
+// Schedule change history (office only, kept 30 days — at least 7): who / what / which crew / from → to / when
+const HIST_DAYS=30;
+function actor(){const v=$("#who").value.split(":");return v[0]==="office"?REPS[v[1]]:"System";}
+function actorRep(){const v=$("#who").value.split(":");return v[0]==="office"?v[1]:null;}
+function logH(action,j,extra){S.hist=S.hist||[];S.hist.unshift(Object.assign({t:Date.now(),who:actor(),action,addr:j.addr,crew:j.crew},extra||{}));
+  const cut=Date.now()-HIST_DAYS*864e5;S.hist=S.hist.filter(x=>x.t>=cut);}
+const crewDay=(c,d)=>crewLabel(c)+" · "+DAYS_EN[d];
+function histHtml(rep,all){const H=(S.hist||[]).filter(x=>all||CREWS[x.crew].rep===rep||(x.fromCrew&&CREWS[x.fromCrew].rep===rep));const since=Date.now()-7*864e5;
+  if(!H.length)return'<p class="mut">No changes yet.</p>';
+  return'<table class="small">'+H.map(x=>{const d=new Date(x.t),when=d.toLocaleDateString([],{weekday:"short",month:"numeric",day:"numeric"})+" "+d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+    const late=x.day===TOM&&d.getHours()>=17&&x.action!=="confirmed";const a=esc((x.addr||"").split(",")[0]);
+    const what=x.action==="added"?`added <b>${a}</b> → ${esc(crewDay(x.crew,x.day))}`:x.action==="moved"?`moved <b>${a}</b> ${esc(crewDay(x.fromCrew,x.fromDay))} → ${esc(crewDay(x.crew,x.day))}`:x.action==="removed"?`removed <b>${a}</b> from ${esc(crewDay(x.crew,x.day))}`:x.action==="reordered"?`changed stop order: <b>${a}</b> now stop ${x.stop} · ${esc(crewDay(x.crew,x.day))}`:x.action==="confirmed"?`confirmed ${esc(crewLabel(x.crew))}'s jobs for ${DAYS_EN[x.day]}`:esc(x.action);
+    return`<tr${x.t<since?' style="opacity:.6"':""}><td style="white-space:nowrap">${when}${late?' <span class="pill warn">night before</span>':""}</td><td><b>${esc(x.who)}</b> ${what}</td></tr>`;}).join("")+"</table>";}
 function dayJobs(c,day){return S.jobs.filter(j=>j.crew===c&&j.day===day).sort((a,b)=>(a.ord||0)-(b.ord||0)||a.id-b.id);}
 function reorder(id,dir){const j=S.jobs.find(x=>x.id===id),js=dayJobs(j.crew,j.day);js.forEach((x,i)=>x.ord=i+1);const i=js.indexOf(j),k=i+dir;if(k<0||k>=js.length)return;
-  [js[i].ord,js[k].ord]=[js[k].ord,js[i].ord];if(j.day===TOM&&S.confirmed[j.crew]){S.confirmed[j.crew]=false;S.crewNotifs[j.crew]=null;toast("Order changed — re-confirm "+CREWS[j.crew].name);}go();}
+  [js[i].ord,js[k].ord]=[js[k].ord,js[i].ord];logH("reordered",j,{day:j.day,stop:j.ord});if(j.day===TOM&&S.confirmed[j.crew]){S.confirmed[j.crew]=false;S.crewNotifs[j.crew]=null;toast("Order changed — re-confirm "+CREWS[j.crew].name);}go();}
 function moveJob(id,c,day){const j=S.jobs.find(x=>x.id===id);MOVE=null;if(!j){go();return;}
   if(j.crew===c&&j.day===day){go();return;}
   const from=j.crew,fromDay=j.day;
   // the crew's own rep only: never move into the other rep's crews
+  const me=actorRep();
+  if(me&&(CREWS[from].rep!==me||CREWS[c].rep!==me)){toast("Locked — only "+REPS[CREWS[from].rep!==me?CREWS[from].rep:CREWS[c].rep]+" can move "+(CREWS[from].rep!==me?"that job":"jobs onto that crew")+".");go();return;}
   if(CREWS[c].rep!==CREWS[from].rep){toast("That crew belongs to "+REPS[CREWS[c].rep]+".");go();return;}
-  j.crew=c;j.day=day;j.ord=dayJobs(c,day).filter(x=>x!==j).reduce((m,x)=>Math.max(m,x.ord||0),0)+1;const re=[];
+  logH("moved",j,{fromCrew:j.crew,fromDay:j.day,day});S.hist[0].crew=c;j.crew=c;j.day=day;j.ord=dayJobs(c,day).filter(x=>x!==j).reduce((m,x)=>Math.max(m,x.ord||0),0)+1;const re=[];
   if(fromDay===TOM&&S.confirmed[from]){S.confirmed[from]=false;S.crewNotifs[from]=null;re.push(CREWS[from].name);}
   if(day===TOM&&S.confirmed[c]&&c!==from){S.confirmed[c]=false;S.crewNotifs[c]=null;re.push(CREWS[c].name);}
   toast("Moved to "+CREWS[c].name+" · "+DAYS_EN[day]+(re.length?" — re-confirm "+re.join(" & "):""));go();}
 function addFiles(c,day,files){if(!files.length)return;
   files.forEach(f=>{const base=f.name.replace(/\.[^.]+$/,"").replace(/^\s*(WO|Work ?Order)\s*[-–:]\s*/i,"").trim()||"New job";
-    const j=mkJob(c,day,base+(/GA\b/.test(base)?"":", GA"),"(from file — edit)",Math.round(10+Math.random()*55),false,[["Ver archivo",f.name,"—"]],[],f.name);j.fileObj=f;S.jobs.push(j);
+    const j=mkJob(c,day,base+(/GA\b/.test(base)?"":", GA"),"(from file — edit)",Math.round(10+Math.random()*55),false,[["Ver archivo",f.name,"—"]],[],f.name);j.fileObj=f;S.jobs.push(j);logH("added",j,{day});
     if(day===TOM&&S.confirmed[c]){S.confirmed[c]=false;}});
   toast(files.length+" file(s) added to "+CREWS[c].name+" · "+DAYS_EN[day]+(day===TOM?" — re-confirm needed":""));go();}
 function oConfirm(rep,mine){
@@ -289,7 +320,7 @@ function oConfirm(rep,mine){
      ${js.length?`<p class="mut small" style="margin:6px 0 0">Stop order — crew does them 1, 2, 3… Use ▲▼ to change.</p><table>${js.map((j,k)=>`<tr><td style="width:44px;font-size:1.3rem;font-weight:800;text-align:center">${k+1}</td><td>${esc(j.addr)}<br><span class="mut small">${esc(j.cust)}${j.file?" · 📄 "+esc(j.file):""}</span></td><td class="small" style="text-align:right;white-space:nowrap">${j.miles} mi<br><button class="ru" data-j="${j.id}" ${k?"":"disabled"} style="min-height:40px;padding:4px 10px">▲</button> <button class="rd" data-j="${j.id}" ${k<js.length-1?"":"disabled"} style="min-height:40px;padding:4px 10px">▼</button></td></tr>`).join("")}</table>`:'<p class="mut">No jobs tomorrow — drop files in Calendar.</p>'}
      ${S.confirmed[c]?'<button class="link un">Undo confirm</button>':`<button class="ok big go" ${js.length?"":"disabled"}>✔ Confirm ${esc(CREWS[c].name)}${/s$/i.test(CREWS[c].name)?"'":"'s"} jobs</button>`}
      ${S.recapDone[c]?'<p class="mut small">Today’s recap is in — confirming opens the next day.</p>':""}</div>`);
-    d.querySelectorAll(".ru").forEach(b=>b.onclick=()=>reorder(+b.dataset.j,-1));d.querySelectorAll(".rd").forEach(b=>b.onclick=()=>reorder(+b.dataset.j,1));const g=d.querySelector(".go");if(g)g.onclick=()=>{S.confirmed[c]=true;S.recapDone[c]=false;S.crewNotifs[c]=now();if(S.notifPrefs[rep].ready)toast("📲 "+CREWS[c].name+" notified");go();};
+    d.querySelectorAll(".ru").forEach(b=>b.onclick=()=>reorder(+b.dataset.j,-1));d.querySelectorAll(".rd").forEach(b=>b.onclick=()=>reorder(+b.dataset.j,1));const g=d.querySelector(".go");if(g)g.onclick=()=>{S.confirmed[c]=true;logH("confirmed",{addr:"",crew:c},{day:TOM});S.recapDone[c]=false;S.crewNotifs[c]=now();if(S.notifPrefs[rep].ready)toast("📲 "+CREWS[c].name+" notified");go();};
     const u=d.querySelector(".un");if(u)u.onclick=()=>{S.confirmed[c]=false;S.crewNotifs[c]=null;go();};});
   const other=rep==="asher"?"lance":"asher";
   h(`<p class="mut small">${REPS[other]} confirms his own crews separately — never holds up yours.</p>`);
