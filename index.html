@@ -8288,7 +8288,7 @@ if (document.readyState === "loading") document.addEventListener("DOMContentLoad
 
 </script>
 <script>
-/* 31a: Sky's day → draft Library jobs + day route (Asher's copy only). Source: Sky+Asher shared Google Doc (via kpi-ops proxy) or pasted text. */
+/* 31a: Shared measure list → draft Library jobs + day route (Asher's copy only). Source: Sky+Asher shared Google Doc (via kpi-ops proxy) or pasted text. */
 (function(){
 const OFFICE={label:"Office · 33 Apex Dr, Jefferson, GA",q:"33 Apex Dr, Jefferson, GA 30549"};
 const DOWS=["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
@@ -8335,8 +8335,8 @@ const css=document.createElement("style");css.textContent=`.dp-modal{position:fi
 .dp-row{border:1px solid #ddd;border-radius:12px;padding:10px;margin:8px 0}.dp-row input,.dp-row select{width:100%;margin:3px 0;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:16px}.dp-days{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.dp-days button{flex:1;min-width:64px}.dp-on{background:#c8102e!important;color:#fff!important}.dp-m{color:#777;font-size:13px}.dp-n{display:inline-block;background:#c8102e;color:#fff;border-radius:50%;width:24px;height:24px;text-align:center;line-height:24px;font-weight:800;margin-right:6px}`;document.head.appendChild(css);
 async function pullDoc(){const id=(localStorage.getItem(DOCK)||"").match(/[-\w]{25,}/);if(!id)throw new Error("Add the Google Doc link first");
   const r=await fetch("https://kpi-ops.pages.dev/api/skyday?id="+id[0],{cache:"no-store"});const d=await r.json();if(!d.text)throw new Error(d.error||"Doc not readable");return d.text;}
-function importSheet(){const m=sheet(`<h2 style="margin:0">📋 Import Sky's day</h2><p class="dp-m">From the Sky + Asher daily jobs Google Doc. Pull it, or paste the day's list.</p>
-  <input class="dp-link" placeholder="Google Doc link (Sky + Asher daily jobs)" value="${esc(localStorage.getItem(DOCK)||"")}" style="width:100%;padding:8px;font-size:16px;border-radius:8px;border:1px solid #ccc">
+function importSheet(){const m=sheet(`<h2 style="margin:0">📋 Import measure list</h2><p class="dp-m">From the shared measure list Google Doc (everyone's jobs to measure). Pull it, or paste the day's list.</p>
+  <input class="dp-link" placeholder="Google Doc link (shared measure list)" value="${esc(localStorage.getItem(DOCK)||"")}" style="width:100%;padding:8px;font-size:16px;border-radius:8px;border:1px solid #ccc">
   <button type="button" class="btn btn-primary dp-pull" style="width:100%;margin-top:6px">⬇️ Pull from Google Doc</button>
   <details style="margin-top:8px"><summary>…or paste the list</summary><textarea class="dp-txt" rows="8" style="width:100%;font-size:15px" placeholder="Wednesday&#10;Paul Pringle - 580 Tallassee Rd Athens, GA — Retro foam&#10;Don Sipsy - 1050 Golf Course Ln Athens, GA — meet builder 10AM"></textarea><button type="button" class="btn btn-secondary dp-parse" style="width:100%">Read pasted list</button></details>
   <div class="dp-out"></div>`);
@@ -8367,22 +8367,22 @@ function editList(box,jobs,date,m){if(!jobs.length){box.innerHTML='<p class="dp-
     localStorage.setItem(LSK,JSON.stringify({day,start:st,drive:Math.round(best.drive),late:Math.round(best.late),stops:out}));
     K().refreshArchive();m.remove();showPlan();};}
 async function makeJob(s,day,stop,eta){const {S,newJob,draftPayload,idbPut}=K();newJob();S.dateMeasured=day;S.builder=s.cust;S.address=s.addr;const cm=s.addr.match(/\s([A-Z][a-z]+(?:\s[A-Z][a-z]+)?),?\s*(?:GA|Ga)\b/);S.city=cm?cm[1]:"";
-  S.jobMode=s.mode;S.keywords=["Sky day",s.note,s.time!=null?"meet "+fmtT(s.time):""].filter(Boolean).join(" · ");S.woNotes=s.note;if(s.ll)S.siteCoords=s.ll.lat.toFixed(6)+","+s.ll.lng.toFixed(6);
-  const snap={id:S.jobId,savedAt:new Date().toISOString(),dateMeasured:day,owner:S.owner,builder:S.builder,city:S.city,address:S.address,packageLabel:"Draft · needs measure (stop "+stop+")",packageType:S.pkg,jobMode:S.jobMode,gasType:S.gasType,keywords:S.keywords,airSealed:false,excelRows:[],fgRows:[],
+  S.jobMode=s.mode;S.keywords=["Measure list",s.note,s.time!=null?"meet "+fmtT(s.time):""].filter(Boolean).join(" · ");S.woNotes=s.note;if(s.ll)S.siteCoords=s.ll.lat.toFixed(6)+","+s.ll.lng.toFixed(6);
+  const snap={id:S.jobId,savedAt:new Date().toISOString(),dateMeasured:day,owner:S.owner,builder:S.builder,city:S.city,address:S.address,packageLabel:"Measure list · needs measure (stop "+stop+")",packageType:S.pkg,jobMode:S.jobMode,gasType:S.gasType,keywords:S.keywords,airSealed:false,excelRows:[],fgRows:[],
     dayPlan:{stop,eta,time:s.time},draft:draftPayload()};await idbPut(snap);return snap.id;}
 function mapsUrl(p){return "https://www.google.com/maps/dir/"+[OFFICE.q].concat(p.stops.map(s=>s.addr)).map(encodeURIComponent).join("/");}
 function showPlan(){const p=JSON.parse(localStorage.getItem(LSK)||"null");if(!p){importSheet();return;}
-  const m=sheet(`<h2 style="margin:0">🗺️ Route · ${new Date(p.day+"T12:00").toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})}</h2>
+  const m=sheet(`<h2 style="margin:0">🗺️ Measure route · ${new Date(p.day+"T12:00").toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})}</h2>
    <p class="dp-m">Start ${esc(OFFICE.label)} at ${fmtT((+p.start.slice(0,2))*60+(+p.start.slice(3)))} · ~${p.drive} min driving · ${MEASURE_MIN} min per measure${p.late?` · ⚠️ ${p.late} min late for a meet time`:""}</p>
    ${p.stops.map((s,i)=>`<div class="dp-row"><div><span class="dp-n">${i+1}</span><b>${esc(s.cust||s.addr)}</b> <span style="float:right;font-weight:800;${s.time!=null&&s.eta>s.time?"color:#c8102e":""}">${fmtT(s.eta)}</span></div>
      <div class="dp-m">${esc(s.addr)}${s.note?" · "+esc(s.note):""}${s.time!=null?` · <b style="color:#c8102e">meet ${fmtT(s.time)}</b>`:""}</div>
      <div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="btn btn-primary dp-ms" data-id="${s.id}" style="flex:2">📐 Measure</button><a class="btn btn-secondary" style="flex:1;text-align:center" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.addr)}">Go</a></div></div>`).join("")}
    <a class="btn btn-secondary" style="display:block;text-align:center;margin-top:6px" target="_blank" href="${mapsUrl(p)}">Open whole route in Google Maps</a>
-   <button type="button" class="btn btn-secondary dp-new" style="width:100%;margin-top:6px">📋 Import another day</button>`);
+   <button type="button" class="btn btn-secondary dp-new" style="width:100%;margin-top:6px">📋 Import another day's list</button>`);
   m.querySelectorAll(".dp-ms").forEach(b=>b.onclick=()=>{m.remove();K().openArchiveJob(b.dataset.id);});m.querySelector(".dp-new").onclick=()=>{m.remove();importSheet();};}
 window.kpDayPlan={importSheet,showPlan,parseDoc,parseLine,plan};
 function mount(){const sec=document.getElementById("tab-archive");if(!sec||document.getElementById("dpCard"))return;const d=document.createElement("div");d.className="section";d.id="dpCard";
-  d.innerHTML='<h2>Sky\'s day</h2><p class="cap">Pull the day\'s jobs from the Sky + Asher Google Doc → draft jobs + best route from the office (meet times respected).</p><div class="grid2"><button type="button" class="btn btn-primary" id="dpImport">📋 Import Sky\'s day</button><button type="button" class="btn btn-secondary" id="dpRoute">🗺️ Today\'s route</button></div>';
+  d.innerHTML='<h2>Measure list</h2><p class="cap">Pull the day\'s jobs to measure from the shared Google Doc → draft jobs + best route from the office (meet times respected).</p><div class="grid2"><button type="button" class="btn btn-primary" id="dpImport">📋 Import measure list</button><button type="button" class="btn btn-secondary" id="dpRoute">🗺️ Today\'s measure route</button></div>';
   sec.insertBefore(d,sec.firstChild);d.querySelector("#dpImport").onclick=importSheet;d.querySelector("#dpRoute").onclick=showPlan;}
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",mount);else mount();
 })();
