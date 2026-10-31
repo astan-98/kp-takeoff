@@ -368,11 +368,17 @@ function jobLL(j){if(j.coords){const m=String(j.coords).match(/(-?\d+\.\d+)\s*,\
 const hav=(a,b)=>{const R=3958.8,r=x=>x*Math.PI/180,dl=r(b[0]-a[0]),dn=r(b[1]-a[1]);const h=Math.sin(dl/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(h))*1.25;}; // ×1.25 road factor
 function routeMiles(seq,name){const pts=[OFFICE_LL,...seq.map(jobLL)];const h=CREW_HOME[name];if(h)pts.push(h.ll);let d=0;for(let i=1;i<pts.length;i++)d+=hav(pts[i-1],pts[i]);return d;}
 function perms(a){if(a.length<=1)return[a];return a.flatMap((x,i)=>perms(a.slice(0,i).concat(a.slice(i+1))).map(p=>[x,...p]));}
-function autoFill(name,day,all){const r=RT(name,day),js=physJobs(name,day);const fixed=all?r.slots.map(()=>null):r.slots.slice();
+// Road-true drive times: free OSRM (OpenStreetMap) table API, $0. Fallback = straight-line × 1.25 only if OSRM is unreachable.
+async function osrmMatrix(pts){const q=pts.map(p=>p[1]+","+p[0]).join(";");
+  const r=await fetch("https://router.project-osrm.org/table/v1/driving/"+q+"?annotations=duration,distance",{cache:"no-store"});const d=await r.json();if(d.code!=="Ok")throw new Error(d.code);return{dur:d.durations,dist:d.distances};}
+async function autoFill(name,day){const r=RT(name,day),js=physJobs(name,day);const fixed=r.slots.slice();
   const free=js.filter(j=>!fixed.includes(j.id)),holes=fixed.map((id,i)=>id?null:i).filter(i=>i!==null);
-  if(js.some(j=>!jobLL(j))){toast("A job has no location — can't auto-route");return null;}let best=null,bd=1e9;
-  perms(free).forEach(p=>{const sl=fixed.slice();holes.forEach((h,k)=>sl[h]=p[k].id);const seq=sl.map(id=>js.find(j=>j.id===id));const d=routeMiles(seq,name);if(d<bd){bd=d;best=sl;}});
-  if(best)r.slots=best;r.auto={mi:Math.round(bd),min:Math.round(bd/40*60)};return bd;}
+  if(js.some(j=>!jobLL(j))){toast("A job has no location — can't auto-route");return null;}
+  const home=CREW_HOME[name],pts=[OFFICE_LL,...js.map(jobLL)].concat(home?[home.ll]:[]),idx=id=>1+js.findIndex(j=>j.id===id),H=home?pts.length-1:-1;
+  let M,src="road (OpenStreetMap)";try{M=await osrmMatrix(pts);}catch(e){src="straight-line estimate (map server unreachable)";M={dur:pts.map(a=>pts.map(b=>hav(a,b)/40*3600)),dist:pts.map(a=>pts.map(b=>hav(a,b)*1609.34))};}
+  const cost=(sl,k)=>{let c=0,prev=0;sl.forEach(id=>{const n=idx(id);c+=M[k][prev][n];prev=n;});if(H>0)c+=M[k][prev][H];return c;};
+  let best=null,bd=1e15;perms(free).forEach(p=>{const sl=fixed.slice();holes.forEach((h,k)=>sl[h]=p[k].id);const d=cost(sl,"dur");if(d<bd){bd=d;best=sl;}});
+  if(best)r.slots=best;r.auto={mi:Math.round(cost(r.slots,"dist")/1609.34),min:Math.round(bd/60),src};return r.auto;}
 function openRoute(name,day,rep){document.querySelectorAll(".modal").forEach(m=>m.remove());RSEL=null;routeSheet(name,day,rep);}
 function routeSheet(name,day,rep){
   const r=RT(name,day),js=physJobs(name,day),other=rep==="asher"?"lance":"asher",mine=js.filter(j=>CREWS[j.crew].rep===rep),theirs=js.filter(j=>CREWS[j.crew].rep===other);
@@ -395,9 +401,9 @@ function routeSheet(name,day,rep){
   const unplaced=js.filter(j=>!placed(j.id));
   const bothODM=["asher","lance"].every(rp=>r.any[rp]||!js.some(j=>CREWS[j.crew].rep===rp)); // both reps (with jobs that day) pressed "Order doesn't matter"
   const canAuto=!r.locked&&!r.counter&&bothODM&&unplaced.length>0&&(RMODE==="override"||(!free&&canEditOwn));
-  const autoHtml=`<div class="card" style="margin-top:10px;border:2px dashed var(--blue)"><b>🤖 Free auto-route</b><div class="small">Office (33 Apex Dr) → jobs → ${CREW_HOME[name]?"crew house ("+CREW_HOME[name].label+")":"last job (Sammy's house TBD)"}. Shortest drive — free, no Google.</div>
+  const autoHtml=`<div class="card" style="margin-top:10px;border:2px dashed var(--blue)"><b>🤖 Free auto-route</b><div class="small">Office (33 Apex Dr) → jobs → ${CREW_HOME[name]?"crew house ("+CREW_HOME[name].label+")":"last job (Sammy's house TBD)"}. Fastest real road route (free OpenStreetMap / OSRM drive times — no Google, $0).</div>
     ${canAuto?`<button class="ok big au" style="margin-top:6px">Auto-Route</button>`:`<div class="mut small" style="margin-top:4px">${r.locked?"Route locked"+(rep==="asher"?" — use Asher override to re-run.":"."):(bothODM?"All stops are placed.":"Available after BOTH Asher and Lance tap \"Order doesn't matter\" (waiting on "+["asher","lance"].filter(rp=>!r.any[rp]&&js.some(j=>CREWS[j.crew].rep===rp)).map(rp=>REPS[rp]).join(" & ")+").")+" Stops you already placed stay put — Auto-Route only fills the empty ones."}</div>`}
-    ${r.auto?`<div class="small" style="margin-top:4px">Last auto-route: ≈${r.auto.mi} mi · ≈${r.auto.min} min driving (estimate)</div>`:""}</div>`;
+    ${r.auto?`<div class="small" style="margin-top:4px">Last Auto-Route: ${r.auto.min} min driving · ${r.auto.mi} mi — ${r.auto.src}</div>`:""}</div>`;
   sheet(`<h1>🧭 ${esc(name)}'s route · ${DAYS_EN[day]}</h1><div class="mut small">${js.length} jobs (Asher + Lance). Tap one of ${free?"the":"your"} jobs, then tap an empty stop.</div>${routeStatus(name,day)}
     <div class="step" style="margin-top:12px">Stops</div>${slotHtml}
     <div class="step" style="margin-top:12px">${REPS[rep]}'s jobs</div>${pool(mine,free||canEditOwn)}
@@ -411,7 +417,7 @@ function routeSheet(name,day,rep){
       else if(cur&&(free||CREWS[J(cur).crew].rep===rep&&canEditOwn)){r.slots[i]=null;re();}});
     const on=(q,f)=>{const e=m.querySelector(q);if(e)e.onclick=f;};
     on(".ad",()=>{r.any[rep]=!r.any[rep];re();});
-    on(".au",()=>{const d=autoFill(name,day,false);if(d!=null){logH("auto-route",{addr:name+" · ≈"+Math.round(d)+" mi",crew:repKey(rep,name)},{day});toast("Auto-routed ≈"+Math.round(d)+" mi");}re();});
+    on(".au",async()=>{const b=m.querySelector(".au");b.disabled=true;b.textContent="Routing…";const a=await autoFill(name,day);if(a){logH("auto-route",{addr:name+" · "+a.min+" min / "+a.mi+" mi",crew:repKey(rep,name)},{day});toast("Auto-Route: "+a.min+" min driving · "+a.mi+" mi");}re();});
     on(".cl",()=>{r.slots=r.slots.map(id=>id&&CREWS[J(id).crew].rep===rep?null:id);re();});
     on(".snd",()=>{r.sent[rep]=true;
       if(r.req&&r.req.to===rep){r.locked=true;logH("route locked",{addr:"",crew:repKey(rep,name)},{day});ping(other,"ready",`${REPS[rep]} finished ${name}'s route — locked`);}
