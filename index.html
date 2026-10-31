@@ -8292,7 +8292,16 @@ if (document.readyState === "loading") document.addEventListener("DOMContentLoad
 (function(){
 const OFFICE={label:"Office · 33 Apex Dr, Jefferson, GA",q:"33 Apex Dr, Jefferson, GA 30549"},ENDPT={label:"2009 Massey Ln, Winder, GA",q:"2009 Massey Ln, Winder, GA"};
 const DOWS=["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
-const K=()=>window.KPAPP;
+const K=()=>window.KPAPP,IS_OPS=!window.KPAPP,OPS="https://kpi-ops.pages.dev";
+try{window.__kpHash=location.hash;const hm=location.hash.match(/opsk=([\w-]+)/);if(hm&&!IS_OPS){localStorage.setItem("kpOpsKey",hm[1]);history.replaceState(null,"",location.pathname+location.search);}}catch(e){}
+const opsKey=()=>{try{return localStorage.getItem("kpOpsKey")||"";}catch(e){return "";}};
+let STORE=null; // {mine:{date:[jobs]}, plans:{date:plan}} — lives in KPI Ops (source of truth)
+async function loadStore(fresh){if(!opsKey()){STORE={mine:JSON.parse(localStorage.getItem("kpMyJobs")||"{}"),plans:{},ov:JSON.parse(localStorage.getItem("kpMyOv")||"{}"),local:1,doc:null};return STORE;}
+  try{const r=await fetch(OPS+"/api/measure?k="+encodeURIComponent(opsKey())+(fresh?"&fresh=1":""),{cache:"no-store"});const d=await r.json();if(d.error)throw 0;STORE={mine:d.mine||{},plans:d.plans||{},ov:d.ov||{},doc:d.doc||null};}catch(e){STORE=STORE||{mine:{},plans:{},err:1,doc:null};}return STORE;}
+function dayCounts(day){const D=STORE&&STORE.doc&&STORE.doc.text?parseDoc(STORE.doc.text).days[new Date(day+"T12:00").getDay()]:null;
+  return {doc:D?D.jobs.length:0,inDoc:!!D,mine:((STORE&&STORE.mine[day])||[]).length,plan:!!(STORE&&STORE.plans[day])};}
+function saveStore(part){if(!STORE)return;if(STORE.local){localStorage.setItem("kpMyJobs",JSON.stringify(STORE.mine));localStorage.setItem("kpMyOv",JSON.stringify(STORE.ov||{}));return;}
+  fetch(OPS+"/api/measure?k="+encodeURIComponent(opsKey()),{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify(part)}).catch(()=>{});}
 const LSK="kpDayPlan",DOCK="kpDayDoc",DOC_DEFAULT="https://docs.google.com/document/d/1bwqKv9CnxkY7vAsFDjPsBXmrG2boxuo07o-kaZHkGtk/edit",MEASURE_MIN=45;
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const iso=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
@@ -8309,14 +8318,15 @@ function parseLine(raw){let t=raw.replace(/^\s*(?:[•*\-]|\d{1,2}[.)])\s+/,"").
   else{const parts=t.split(/\s[-–—]\s/);if(parts.length>=2){cust=parts[0];addr=parts[1];note=parts.slice(2).join(" - ");}else return {cust:"",addr:"",note:t,time,mode:hint(t),bad:1};}
   const cityM=addr.match(/,\s*([A-Za-z .]+?),?\s*(?:GA|Ga|ga|Georgia)\b/)||addr.match(/\s([A-Z][a-z]+(?:\s[A-Z][a-z]+)?),?\s*(?:GA|Ga)\b/);
   return {cust,addr,city:cityM?cityM[1].trim():"",note,time,mode:hint(t+" "+note)};}
-function parseDoc(text){const days={};let cur=null;
-  text.replace(/\uFEFF/g,"").split(/\r?\n/).forEach(l=>{const s=l.trim();if(!s||/^[*•\-\s]*$/.test(s))return;
+function parseDoc(text){const days={},pre=[];let cur=null;
+  text.replace(/\uFEFF/g,"").split(/\r?\n/).forEach(l=>{const s=l.trim();
     const h=s.toLowerCase().match(/^[#*\s]*(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)[a-z]*\b[\s,.:\-–—]*(\d{1,2}\/\d{1,2})?[\s:\-–—]*$/);
-    if(h){cur=DOWS.findIndex(d=>d.startsWith(h[1].slice(0,3)));days[cur]=days[cur]||[];return;}
-    if(cur==null)return;const L=days[cur],prev=L[L.length-1];
-    if(/^\s{2,}[*•\-]/.test(l)&&prev){const t=s.replace(/^[*•\-]\s*/,"").trim();prev.note=prev.note?prev.note+" · "+t:t;const tm=parseTime(t);if(tm!=null&&prev.time==null)prev.time=tm;prev.mode=hint(prev.note);return;}
-    const j=parseLine(s);if(j)L.push(j);});
-  return days;}
+    if(h){cur=DOWS.findIndex(d=>d.startsWith(h[1].slice(0,3)));days[cur]=days[cur]||{label:s.replace(/[:\s]+$/,""),raw:[],jobs:[]};return;}
+    if(cur==null){if(s)pre.push(l.replace(/\s+$/,""));return;}
+    const D=days[cur];if(s)D.raw.push(l.replace(/\s+$/,""));if(!s||/^[*•\-\s]*$/.test(s))return;const prev=D.jobs[D.jobs.length-1];
+    if(/^\s{2,}[*•\-]/.test(l)&&prev){const t=s.replace(/^[*•\-]\s*/,"").trim();prev.note=prev.note?prev.note+"\n"+t:t;prev.raw.push(l.replace(/\s+$/,""));const tm=parseTime(t);if(tm!=null&&prev.time==null)prev.time=tm;prev.mode=hint(prev.note);return;}
+    const j=parseLine(s);if(j){j.raw=[l.replace(/\s+$/,"")];j.src="doc";D.jobs.push(j);}});
+  return {days,pre};}
 // geocode: Places (New) searchText with the app's key, then free Nominatim
 async function geo(q){try{if(K().placesKey()){const r=await fetch("https://places.googleapis.com/v1/places:searchText",{method:"POST",headers:{"Content-Type":"application/json","X-Goog-Api-Key":K().placesKey(),"X-Goog-FieldMask":"places.location,places.formattedAddress"},body:JSON.stringify({textQuery:q})});
     const d=await r.json();const p=d.places&&d.places[0];if(p&&p.location)return {lat:p.location.latitude,lng:p.location.longitude,fa:p.formattedAddress};}}catch(e){}
@@ -8337,58 +8347,102 @@ const css=document.createElement("style");css.textContent=`.dp-modal{position:fi
 .dp-row{border:1px solid #ddd;border-radius:12px;padding:10px;margin:8px 0}.dp-row input,.dp-row select{width:100%;margin:3px 0;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:16px}.dp-days{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.dp-days button{flex:1;min-width:64px}.dp-on{background:#c8102e!important;color:#fff!important}.dp-m{color:#777;font-size:13px}.dp-n{display:inline-block;background:#c8102e;color:#fff;border-radius:50%;width:24px;height:24px;text-align:center;line-height:24px;font-weight:800;margin-right:6px}`;document.head.appendChild(css);
 async function pullDoc(){const id=(localStorage.getItem(DOCK)||DOC_DEFAULT).match(/[-\w]{25,}/);if(!id)throw new Error("Add the Google Doc link first");
   const r=await fetch("https://kpi-ops.pages.dev/api/skyday?id="+id[0],{cache:"no-store"});const d=await r.json();if(!d.text)throw new Error(d.error||"Doc not readable");return d.text;}
-function importSheet(){const m=sheet(`<h2 style="margin:0">📋 Import measure list</h2><p class="dp-m">From the shared measure list Google Doc (everyone's jobs to measure). Pull it, or paste the day's list.</p>
-  <input class="dp-link" placeholder="Google Doc link (shared measure list)" value="${esc(localStorage.getItem(DOCK)||DOC_DEFAULT)}" style="width:100%;padding:8px;font-size:16px;border-radius:8px;border:1px solid #ccc">
-  <button type="button" class="btn btn-primary dp-pull" style="width:100%;margin-top:6px">⬇️ Pull from Google Doc</button>
-  <details style="margin-top:8px"><summary>…or paste the list</summary><textarea class="dp-txt" rows="8" style="width:100%;font-size:15px" placeholder="Wednesday&#10;Paul Pringle - 580 Tallassee Rd Athens, GA — Retro foam&#10;Don Sipsy - 1050 Golf Course Ln Athens, GA — meet builder 10AM"></textarea><button type="button" class="btn btn-secondary dp-parse" style="width:100%">Read pasted list</button></details>
+const myAll=()=>(STORE&&STORE.mine)||{};
+const myGet=d=>myAll()[d]||[];const mySet=(d,L)=>{const a=myAll();if(L.length)a[d]=L;else delete a[d];saveStore({day:d,mine:L});};
+const PKGS=[["standard","Standard (blow + batts)"],["total_bat","Total Batt"],["hybrid_foam_batts","Foam roofline + batt walls"],["foam_cellulose","Foam roofline + cellulose walls"],["foam_spider","Foam roofline + Spider walls"],["total_foam","Total foam"],["crawl_encap","Crawl encapsulation"],["custom","Custom mix"]];
+const FNDS=[["","— Foundation —"],["slab","Slab"],["crawl","Crawl space"],["unfinished","Unfinished basement"],["finished","Finished basement"]];
+const pkgHint=t=>{t=(t||"").toLowerCase();return /total\s*foam/.test(t)?"total_foam":/total\s*bat/.test(t)?"total_bat":/encap/.test(t)?"crawl_encap":/spider/.test(t)?"foam_spider":/cellulose/.test(t)?"foam_cellulose":/foam/.test(t)?"hybrid_foam_batts":"standard";};
+const fndHint=t=>{t=(t||"").toLowerCase();return /slab/.test(t)?"slab":/crawl/.test(t)?"crawl":/finished basement/.test(t)?"finished":/basement/.test(t)?"unfinished":"";};
+const ovKey=j=>(j.raw&&j.raw[0]||"").trim().slice(0,120);
+const hhmm=t=>t!=null?String(Math.floor(t/60)).padStart(2,"0")+":"+String(t%60).padStart(2,"0"):"";
+async function importSheet(selDay){await loadStore();const m=sheet(`<h2 style="margin:0">📋 Import measure list</h2><p class="dp-m">Sky's jobs come from the shared Google Doc (shown exactly as written). Add your own jobs with ➕ on any day ahead — saved in KPI Ops, so Ops and Takeoffs see the same list.${STORE.local?' <b style="color:#c8102e">Not connected to KPI Ops — your jobs stay on this phone. Open Takeoffs from KPI Ops ▸ Measure list once to connect.</b>':''}</p>
+  <details><summary class="dp-m">Doc link / paste instead</summary><input class="dp-link" placeholder="Google Doc link (shared measure list)" value="${esc(localStorage.getItem(DOCK)||DOC_DEFAULT)}" style="width:100%;padding:8px;font-size:16px;border-radius:8px;border:1px solid #ccc">
+  <textarea class="dp-txt" rows="6" style="width:100%;font-size:15px;margin-top:6px" placeholder="Paste the doc text here if the pull fails"></textarea><button type="button" class="btn btn-secondary dp-parse" style="width:100%">Read pasted text</button></details>
+  <button type="button" class="btn btn-primary dp-pull" style="width:100%;margin-top:6px">⬇️ Pull latest from Google Doc</button><div class="dp-st dp-m" style="margin-top:4px"></div>
   <div class="dp-out"></div>`);
-  const out=m.querySelector(".dp-out");
-  const show=text=>{const days=parseDoc(text),keys=Object.keys(days).map(Number);if(!keys.length){out.innerHTML='<p class="dp-m">No day headings found (e.g. “Wednesday”).</p>';return;}
-    const order=[...Array(7).keys()].map(k=>(new Date().getDay()+1+k)%7).filter(k=>keys.includes(k));
-    out.innerHTML='<div class="dp-days">'+order.map(k=>`<button type="button" class="btn btn-secondary dp-d" data-d="${k}">${DOWS[k].slice(0,3).toUpperCase()} · ${days[k].length}</button>`).join("")+'</div><div class="dp-list"></div>';
-    const pick=k=>{out.querySelectorAll(".dp-d").forEach(b=>b.classList.toggle("dp-on",+b.dataset.d===k));editList(out.querySelector(".dp-list"),days[k],nextDow(k),m);};
-    out.querySelectorAll(".dp-d").forEach(b=>b.onclick=()=>pick(+b.dataset.d));pick(order[0]);};
+  const out=m.querySelector(".dp-out"),st=m.querySelector(".dp-st");let doc=STORE.doc&&STORE.doc.text?parseDoc(STORE.doc.text):{days:{},pre:[]},sel=selDay||null,picked=selDay?1:0;
+  const render=()=>{const order=[...Array(7).keys()].map(k=>{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+k);return d;});
+    Object.keys(doc.days).map(Number).forEach(k=>{if(!order.some(d=>d.getDay()===k))order.push(nextDow(k));});
+    Object.keys(myAll()).concat(sel?[sel]:[]).forEach(k=>{if(k>=iso(new Date())&&!order.some(d=>iso(d)===k))order.push(new Date(k+"T12:00"));});order.sort((a,b)=>a-b);
+    if(sel==null){const f=order.find(d=>(doc.days[d.getDay()]||{jobs:[]}).jobs.length||myGet(iso(d)).length);sel=iso(f||order[1]);}
+    out.innerHTML=(doc.pre.length?`<div class="dp-row"><div class="dp-m"><b>📄 Doc notes (top of doc)</b></div><pre style="white-space:pre-wrap;margin:4px 0 0;font:14px/1.35 inherit">${esc(doc.pre.join("\n"))}</pre></div>`:"")+
+     '<div class="dp-days">'+order.map(d=>{const D=doc.days[d.getDay()],n=D?D.jobs.length:0,my=myGet(iso(d)).length;return `<button type="button" class="btn btn-secondary dp-d ${iso(d)===sel?"dp-on":""}" data-d="${iso(d)}">${DOWS[d.getDay()].slice(0,3).toUpperCase()} ${d.getMonth()+1}/${d.getDate()}<br><small>${D?"📄"+n:"—"}${my?" ✍️"+my:""}</small></button>`;}).join("")+'</div><label class="dp-m" style="display:flex;align-items:center;gap:6px;margin:4px 0 8px">📅 Any other day: <input type="date" class="dp-any" min="'+iso(new Date())+'" value="'+sel+'" style="flex:1;padding:6px;font-size:16px"></label><div class="dp-list"></div>';
+    out.querySelector(".dp-any").onchange=e=>{if(e.target.value){sel=e.target.value;picked=1;render();}};
+    out.querySelectorAll(".dp-d").forEach(b=>b.onclick=()=>{sel=b.dataset.d;picked=1;render();});
+    const date=new Date(sel+"T12:00");editList(out.querySelector(".dp-list"),doc.days[date.getDay()],date,m,render);};
+  const pull=async()=>{st.textContent="Pulling the doc…";try{if(!STORE.local){await loadStore(true);if(!STORE.doc||!STORE.doc.text)throw new Error((STORE.doc&&STORE.doc.err)||"Doc not readable");doc=parseDoc(STORE.doc.text);}else doc=parseDoc(await pullDoc());if(!picked)sel=null;st.textContent="✅ Doc pulled "+new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});}catch(e){st.textContent="⚠️ "+e.message+". Check the doc is shared “Anyone with the link → Viewer”, or paste the text above. Your own jobs still work.";}render();};
   m.querySelector(".dp-link").onchange=e=>localStorage.setItem(DOCK,e.target.value.trim());
-  m.querySelector(".dp-pull").onclick=async()=>{localStorage.setItem(DOCK,m.querySelector(".dp-link").value.trim());out.innerHTML='<p class="dp-m">Pulling…</p>';try{show(await pullDoc());}catch(e){out.innerHTML='<p class="dp-m">⚠️ '+esc(e.message)+'. Make sure the doc is shared “Anyone with the link → Viewer”, or paste the list below.</p>';}};
-  m.querySelector(".dp-parse").onclick=()=>show(m.querySelector(".dp-txt").value);}
-function editList(box,jobs,date,m){if(!jobs.length){box.innerHTML='<p class="dp-m">No jobs listed for this day.</p>';return;}
-  box.innerHTML=`<p class="dp-m">${date.toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})} · check each job, set any meet time, then build the route.</p>`+jobs.map((j,i)=>`<div class="dp-row" data-i="${i}">
-   <input class="c" placeholder="Customer / builder" value="${esc(j.cust)}"><input class="a" placeholder="Address" value="${esc(j.addr)}">
-   <input class="n" placeholder="Notes (job type, what to check)" value="${esc(j.note)}">
-   <div style="display:flex;gap:6px"><input class="t" type="time" value="${j.time!=null?String(Math.floor(j.time/60)).padStart(2,"0")+":"+String(j.time%60).padStart(2,"0"):""}" title="Meet / arrive-by time (optional)"><select class="md"><option value="new">New construction</option><option value="retro">Retro</option><option value="metal">Metal building</option></select></div>
-   ${j.bad?'<div class="dp-m" style="color:#c8102e">No address found in this line — type it in.</div>':""}</div>`).join("")+
-   `<label class="dp-m"><input type="time" class="st" value="08:00"> leave office at</label><button type="button" class="btn btn-primary dp-go" style="width:100%;margin-top:8px">🗺️ Build route + create draft jobs</button>`;
-  box.querySelectorAll(".dp-row").forEach(r=>{r.querySelector(".md").value=jobs[+r.dataset.i].mode;});
-  box.querySelector(".dp-go").onclick=async()=>{const b=box.querySelector(".dp-go");b.disabled=true;b.textContent="Finding addresses…";
-    const stops=[...box.querySelectorAll(".dp-row")].map(r=>{const t=r.querySelector(".t").value;return {cust:r.querySelector(".c").value.trim(),addr:r.querySelector(".a").value.trim(),note:r.querySelector(".n").value.trim(),mode:r.querySelector(".md").value,time:t?(+t.slice(0,2))*60+(+t.slice(3)):null};}).filter(s=>s.addr);
-    const pts=[await geo(OFFICE.q)];for(const s of stops){s.ll=await geo(s.addr);if(!s.ll){const cm=s.addr.match(/([A-Za-z]+(?:\s[A-Za-z]+)?)\s*,?\s*(?:GA|Georgia)\b/i);if(cm){s.ll=await geo(cm[1]+", GA");if(s.ll){s.ll.approx=1;s.note=(s.note?s.note+" · ":"")+"⚠️ map pin approx (town center)";}}}pts.push(s.ll);await new Promise(r=>setTimeout(r,250));}
+  m.querySelector(".dp-pull").onclick=pull;
+  m.querySelector(".dp-parse").onclick=()=>{doc=parseDoc(m.querySelector(".dp-txt").value);st.textContent="Using pasted text";sel=null;render();};
+  render();pull();}
+function editList(box,D,date,m,rerender){const day=iso(date),my=myGet(day),ovd=(STORE.ov&&STORE.ov[day])||{},dj=(D?D.jobs:[]).map(j=>Object.assign({},j,{pkg:pkgHint(j.note),fnd:fndHint(j.note)},ovd[ovKey(j)]||{}));
+  const rowH=(j,i,src)=>`<div class="dp-row" data-src="${src}" data-i="${i}" style="${src==="mine"?"border-color:#c8102e":""}">
+   <div class="dp-m" style="display:flex;justify-content:space-between"><b>${src==="mine"?"✍️ My job":"📄 From the doc"}</b>${src==="mine"?`<input type="date" class="mv" value="${day}" min="${iso(new Date())}" title="Move to another day" style="width:auto;margin:0;padding:2px 4px;font-size:14px">`:""}${src==="mine"?'<button type="button" class="dp-del" style="border:0;background:none;color:#c8102e;font-weight:700">Remove</button>':""}</div>
+   ${src==="doc"?`<pre style="white-space:pre-wrap;margin:2px 0 6px;font:13px/1.3 ui-monospace,monospace;background:rgba(0,0,0,.04);padding:6px;border-radius:6px">${esc(j.raw.join("\n"))}</pre>`:""}
+   <input class="c" placeholder="Customer / builder" value="${esc(j.cust)}"><input class="a" placeholder="Address (street, town, GA)" value="${esc(j.addr)}">
+   <textarea class="n" rows="${Math.max(2,(j.note||"").split("\n").length)}" placeholder="Notes (job type, what to check, who to meet)" style="width:100%;font-size:16px;padding:8px;border-radius:8px;border:1px solid #ccc">${esc(j.note)}</textarea>
+   <details ${src==="mine"&&!j.cust?"open":""}><summary class="dp-m">Takeoff details (contact, package, foundation)</summary>
+   <div style="display:flex;gap:6px"><input class="ph" type="tel" placeholder="Phone" value="${esc(j.phone||"")}"><input class="em" type="email" placeholder="Email" value="${esc(j.email||"")}"></div>
+   <div style="display:flex;gap:6px"><select class="pk">${PKGS.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join("")}</select><select class="fd">${FNDS.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join("")}</select></div></details>
+   <div style="display:flex;gap:6px;align-items:center"><span class="dp-m" style="white-space:nowrap">⏰ Meet</span><input class="t" type="time" value="${hhmm(j.time)}" title="Meet / arrive-by time (optional)"><select class="md"><option value="new">New construction</option><option value="retro">Retro</option><option value="metal">Metal building</option></select></div>
+   ${j.bad?'<div class="dp-m" style="color:#c8102e">No address found in this line — type it in.</div>':""}</div>`;
+  box.innerHTML=`<p class="dp-m"><b>${date.toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})}</b> · ${D?(dj.length?dj.length+" from the doc":"in the doc, no jobs listed"):"not in the doc"}${my.length?" · "+my.length+" of yours":""}</p>`+
+   (D&&!dj.length&&D.raw.length?`<pre class="dp-m" style="white-space:pre-wrap">${esc(D.raw.join("\n"))}</pre>`:"")+
+   dj.map((j,i)=>rowH(j,i,"doc")).join("")+my.map((j,i)=>rowH(j,i,"mine")).join("")+
+   `<button type="button" class="btn btn-secondary dp-add" style="width:100%;margin-top:4px">➕ Add my job</button>
+   <label class="dp-m" style="display:block;margin-top:8px"><input type="time" class="st" value="08:00"> leave office (33 Apex Dr) · ends 2009 Massey Ln, Winder</label><button type="button" class="btn btn-primary dp-go" style="width:100%;margin-top:8px" ${dj.length+my.length?"":"disabled"}>${IS_OPS?"🗺️ Build route":"🗺️ Build route + create draft jobs"}</button>`;
+  const read=r=>{const t=r.querySelector(".t").value,q=c=>r.querySelector(c).value.trim();return {cust:q(".c"),addr:q(".a"),note:q(".n"),mode:r.querySelector(".md").value,time:t?(+t.slice(0,2))*60+(+t.slice(3)):null,phone:q(".ph"),email:q(".em"),pkg:r.querySelector(".pk").value,fnd:r.querySelector(".fd").value};};
+  const saveOv=r=>{const j=dj[+r.dataset.i],k=ovKey(j);if(!k)return;const o=read(r);STORE.ov=STORE.ov||{};STORE.ov[day]=STORE.ov[day]||{};STORE.ov[day][k]=o;saveStore({day,ov:{[k]:o}});};
+  const saveMine=()=>mySet(day,[...box.querySelectorAll('.dp-row[data-src="mine"]')].map(r=>Object.assign(read(r),{src:"mine"})));
+  box.querySelectorAll(".dp-row").forEach(r=>{const j=(r.dataset.src==="mine"?my:dj)[+r.dataset.i];r.querySelector(".md").value=j.mode||"new";r.querySelector(".pk").value=j.pkg||pkgHint(j.note);r.querySelector(".fd").value=j.fnd||"";
+    if(r.dataset.src==="doc")r.querySelectorAll("input,textarea,select").forEach(x=>x.onchange=()=>saveOv(r));
+    {const ob=document.createElement("button");ob.type="button";ob.className="btn btn-secondary";ob.style.cssText="width:100%;margin-top:6px";ob.textContent=IS_OPS?"📐 Open in KPI Takeoffs":"📐 Measure now";r.appendChild(ob);
+     ob.onclick=async()=>{const o=Object.assign(read(r),{src:r.dataset.src,raw:r.dataset.src==="doc"?dj[+r.dataset.i].raw:null});if(r.dataset.src==="mine")saveMine();else saveOv(r);
+      if(IS_OPS){await new Promise(z=>setTimeout(z,400));window.open("https://astan-98.github.io/kp-takeoff/#opsk="+encodeURIComponent(opsKey())+"&mjob="+encodeURIComponent(day+"~"+r.dataset.src+"~"+r.dataset.i),"_blank");return;}
+      const id=await makeJob(o,day,0,null);K().refreshArchive();m.remove();K().openArchiveJob(id);};}
+    if(r.dataset.src==="mine"){r.querySelectorAll("input,textarea,select").forEach(x=>x.onchange=saveMine);r.querySelector(".dp-del").onclick=()=>{r.remove();saveMine();rerender();};r.querySelector(".mv").onchange=e=>{const nd=e.target.value;if(!nd||nd===day)return;const o=Object.assign(read(r),{src:"mine"});r.remove();saveMine();mySet(nd,myGet(nd).concat([o]));rerender();};}});
+  box.querySelector(".dp-add").onclick=()=>{saveMine();mySet(day,myGet(day).concat([{cust:"",addr:"",note:"",time:null,mode:"new",src:"mine"}]));rerender();setTimeout(()=>{const L=box.querySelectorAll('.dp-row[data-src="mine"] .c');if(L.length)L[L.length-1].focus();},50);};
+  box.querySelector(".dp-go").onclick=async()=>{saveMine();const b=box.querySelector(".dp-go");b.disabled=true;b.textContent="Finding addresses…";
+    const stops=[...box.querySelectorAll(".dp-row")].map(r=>{const o=read(r);o.src=r.dataset.src;o.raw=r.dataset.src==="doc"?dj[+r.dataset.i].raw:null;return o;}).filter(s=>s.addr);
+    const pts=[await geo(OFFICE.q)];for(const s of stops){s.ll=await geo(s.addr);if(!s.ll){const cm=s.addr.match(/([A-Za-z]+(?:\s[A-Za-z]+)?)\s*,?\s*(?:GA|Georgia)\b/i);if(cm){s.ll=await geo(cm[1]+", GA");if(s.ll){s.ll.approx=1;s.warn="⚠️ map pin approx (town center)";}}}pts.push(s.ll);await new Promise(r=>setTimeout(r,250));}
     const endLL=await geo(ENDPT.q);pts.push(endLL);const miss=stops.filter(s=>!s.ll);if(miss.length||!pts[0]||!endLL){b.disabled=false;b.textContent="🗺️ Build route + create draft jobs";alert("Couldn't find: "+(pts[0]?"":"office, ")+(endLL?"":"end point, ")+miss.map(s=>s.addr).join("; ")+"\nFix the address and try again.");return;}
-    b.textContent="Routing…";const M=await matrix(pts),st=box.querySelector(".st").value||"08:00",best=plan(stops,M,(+st.slice(0,2))*60+(+st.slice(3)));
-    b.textContent="Creating draft jobs…";const day=iso(date),out=[];
-    for(let k=0;k<best.order.length;k++){const s=stops[best.order[k]];const id=await makeJob(s,day,k+1,best.etas[k]);out.push({id,cust:s.cust,addr:s.addr,note:s.note,time:s.time,eta:best.etas[k],ll:s.ll});}
-    localStorage.setItem(LSK,JSON.stringify({day,start:st,drive:Math.round(best.drive),late:Math.round(best.late),endEta:best.endEta,stops:out}));
-    K().refreshArchive();m.remove();showPlan();};}
+    b.textContent="Routing…";const M=await matrix(pts),stv=box.querySelector(".st").value||"08:00",best=plan(stops,M,(+stv.slice(0,2))*60+(+stv.slice(3)));
+    b.textContent=IS_OPS?"Saving route…":"Creating draft jobs…";const out=[];
+    for(let k=0;k<best.order.length;k++){const s=stops[best.order[k]];const id=IS_OPS?null:await makeJob(s,day,k+1,best.etas[k]);out.push({id,cust:s.cust,addr:s.addr,note:s.note,warn:s.warn||"",src:s.src,time:s.time,eta:best.etas[k],ll:s.ll});}
+    const plan={day,start:stv,drive:Math.round(best.drive),late:Math.round(best.late),endEta:best.endEta,stops:out,by:IS_OPS?"ops":"takeoff",at:new Date().toISOString()};
+    localStorage.setItem(LSK,JSON.stringify(plan));if(STORE){STORE.plans[day]=Object.assign({},plan,{stops:out.map(x=>Object.assign({},x,{id:null}))});saveStore({day,plan:STORE.plans[day]});}
+    if(!IS_OPS)K().refreshArchive();m.remove();showPlan();};}
 async function makeJob(s,day,stop,eta){const {S,newJob,draftPayload,idbPut}=K();newJob();S.dateMeasured=day;S.builder=s.cust;S.address=s.addr;const cm=s.addr.match(/\s([A-Z][a-z]+(?:\s[A-Z][a-z]+)?),?\s*(?:GA|Ga)\b/);S.city=cm?cm[1]:"";
-  S.jobMode=s.mode;S.keywords=["Measure list",s.note,s.time!=null?"meet "+fmtT(s.time):""].filter(Boolean).join(" · ");S.woNotes=s.note;if(s.ll)S.siteCoords=s.ll.lat.toFixed(6)+","+s.ll.lng.toFixed(6);
-  const snap={id:S.jobId,savedAt:new Date().toISOString(),dateMeasured:day,owner:S.owner,builder:S.builder,city:S.city,address:S.address,packageLabel:"Measure list · needs measure (stop "+stop+")",packageType:S.pkg,jobMode:S.jobMode,gasType:S.gasType,keywords:S.keywords,airSealed:false,excelRows:[],fgRows:[],
+  S.jobMode=s.mode;if(s.phone)S.custPhone=s.phone;if(s.email)S.custEmail=s.email;if(s.pkg)S.pkg=s.pkg;if(s.fnd)S.foundation=s.fnd;{const nm=(s.cust||"").trim();if(nm&&!/\b(llc|inc|homes?|builders?|construction|group|co\.?)\b/i.test(nm)&&nm.split(/\s+/).length<=3){const w=nm.split(/\s+/);S.custFirst=w[0];S.custLast=w.slice(1).join(" ");}else if(nm)S.custCompany=nm;}S.keywords=["Measure list",s.src==="mine"?"my job":"from doc",(s.note||"").replace(/\n/g," · "),s.time!=null?"meet "+fmtT(s.time):""].filter(Boolean).join(" · ");S.woNotes=[s.note,s.time!=null?"Meet "+fmtT(s.time):"",s.raw?"From the doc:\n"+s.raw.join("\n"):""].filter(Boolean).join("\n\n");if(s.ll)S.siteCoords=s.ll.lat.toFixed(6)+","+s.ll.lng.toFixed(6);
+  const snap={id:S.jobId,savedAt:new Date().toISOString(),dateMeasured:day,owner:S.owner,builder:S.builder,city:S.city,address:S.address,packageLabel:"Measure list · needs measure"+(stop?" (stop "+stop+")":""),packageType:S.pkg,jobMode:S.jobMode,gasType:S.gasType,keywords:S.keywords,airSealed:false,excelRows:[],fgRows:[],
     dayPlan:{stop,eta,time:s.time},draft:draftPayload()};await idbPut(snap);return snap.id;}
 function mapsUrl(p){return "https://www.google.com/maps/dir/"+[OFFICE.q].concat(p.stops.map(s=>s.addr),[ENDPT.q]).map(encodeURIComponent).join("/");}
 function appleUrl(p){const e=encodeURIComponent;return "https://maps.apple.com/directions?source="+e(OFFICE.q)+p.stops.map(x=>"&waypoint="+e(x.addr)).join("")+"&destination="+e(ENDPT.q)+"&mode=driving";}
-function showPlan(){const p=JSON.parse(localStorage.getItem(LSK)||"null");if(!p){importSheet();return;}
+async function showPlan(day){let p=JSON.parse(localStorage.getItem(LSK)||"null");const today=iso(new Date());
+  if(day||!p||p.day<today){await loadStore();const ks=Object.keys(STORE.plans||{}).filter(k=>k>=today).sort();const k=day||ks[0];
+    const sp=k&&STORE.plans[k];if(sp&&(!p||p.day!==k||Date.parse(sp.at||0)>Date.parse(p.at||0)))p=sp;else if(day&&(!p||p.day!==day))p=null;}
+  if(!p){importSheet(day);return;}
   const m=sheet(`<h2 style="margin:0">🗺️ Measure route · ${new Date(p.day+"T12:00").toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})}</h2>
    <p class="dp-m">Start ${esc(OFFICE.label)} → end ${esc(ENDPT.label)} · leave at ${fmtT((+p.start.slice(0,2))*60+(+p.start.slice(3)))} · ~${p.drive} min driving · ${MEASURE_MIN} min per measure${p.late?` · ⚠️ ${p.late} min late for a meet time`:""}</p>
    ${p.stops.map((s,i)=>`<div class="dp-row"><div><span class="dp-n">${i+1}</span><b>${esc(s.cust||s.addr)}</b> <span style="float:right;font-weight:800;${s.time!=null&&s.eta>s.time?"color:#c8102e":""}">${fmtT(s.eta)}</span></div>
-     <div class="dp-m">${esc(s.addr)}${s.note?" · "+esc(s.note):""}${s.time!=null?` · <b style="color:#c8102e">meet ${fmtT(s.time)}</b>`:""}</div>
-     <div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="btn btn-primary dp-ms" data-id="${s.id}" style="flex:2">📐 Measure</button><a class="btn btn-secondary" style="flex:1;text-align:center" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.addr)}">Go</a></div></div>`).join("")}
+     <div class="dp-m">${s.src==="mine"?"✍️ ":"📄 "}${esc(s.addr)}${s.note?"<br>"+esc(s.note).replace(/\n/g,"<br>"):""}${s.warn?"<br>"+esc(s.warn):""}${s.time!=null?` · <b style="color:#c8102e">meet ${fmtT(s.time)}</b>`:""}</div>
+     <div style="display:flex;gap:6px;margin-top:6px">${s.id?`<button type="button" class="btn btn-primary dp-ms" data-id="${s.id}" style="flex:2">📐 Measure</button>`:IS_OPS?"":`<button type="button" class="btn btn-primary dp-mk" data-i="${i}" style="flex:2">📐 Measure (create draft)</button>`}<a class="btn btn-secondary" style="flex:1;text-align:center" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.addr)}">Go</a></div></div>`).join("")}
    <div class="dp-row" style="background:rgba(0,0,0,.03)"><span class="dp-n" style="background:#333">🏁</span><b>End · ${esc(ENDPT.label)}</b><span style="float:right;font-weight:800">${p.endEta!=null?fmtT(p.endEta):""}</span></div>
    <div class="grid2" style="margin-top:6px"><a class="btn btn-primary" style="text-align:center" target="_blank" href="${appleUrl(p)}"> Apple Maps (all stops)</a><a class="btn btn-secondary" style="text-align:center" target="_blank" href="${mapsUrl(p)}">Google Maps (all stops)</a></div><p class="dp-m">Office → stops in order → Massey Ln. Apple Maps multi-stop needs iOS 18.4+. Meet times stay here in the app.</p>
    <button type="button" class="btn btn-secondary dp-new" style="width:100%;margin-top:6px">📋 Import another day's list</button>`);
-  m.querySelectorAll(".dp-ms").forEach(b=>b.onclick=()=>{m.remove();K().openArchiveJob(b.dataset.id);});m.querySelector(".dp-new").onclick=()=>{m.remove();importSheet();};}
-window.kpDayPlan={importSheet,showPlan,parseDoc,parseLine,plan};
-function mount(){const sec=document.getElementById("tab-archive");if(!sec||document.getElementById("dpCard"))return;const d=document.createElement("div");d.className="section";d.id="dpCard";
-  d.innerHTML='<h2>Measure list</h2><p class="cap">Pull the day\'s jobs to measure from the shared Google Doc → draft jobs + best route from the office, ending at Massey Ln, Winder (meet times respected).</p><div class="grid2"><button type="button" class="btn btn-primary" id="dpImport">📋 Import measure list</button><button type="button" class="btn btn-secondary" id="dpRoute">🗺️ Today\'s measure list</button></div>';
-  sec.insertBefore(d,sec.firstChild);d.querySelector("#dpImport").onclick=importSheet;d.querySelector("#dpRoute").onclick=showPlan;}
-if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",mount);else mount();
+  m.querySelectorAll(".dp-ms").forEach(b=>b.onclick=()=>{m.remove();K().openArchiveJob(b.dataset.id);});
+  m.querySelectorAll(".dp-mk").forEach(b=>b.onclick=async()=>{const i=+b.dataset.i,s=p.stops[i];s.id=await makeJob(s,p.day,i+1,s.eta);localStorage.setItem(LSK,JSON.stringify(p));K().refreshArchive();m.remove();K().openArchiveJob(s.id);});m.querySelector(".dp-new").onclick=()=>{m.remove();importSheet();};}
+window.kpDayPlan={importSheet,showPlan,parseDoc,parseLine,plan,loadStore,dayCounts,iso};
+function mount(){if(IS_OPS)return;const sec=document.getElementById("tab-archive");if(!sec||document.getElementById("dpCard"))return;const d=document.createElement("div");d.className="section";d.id="dpCard";
+  d.innerHTML='<h2>Measure list</h2><p class="cap">Today\'s measure list from KPI Ops (Sky\'s Google Doc + your jobs) → draft jobs + best route from the office, ending at Massey Ln, Winder (meet times respected).</p><div class="grid2"><button type="button" class="btn btn-primary" id="dpImport">📋 Import measure list</button><button type="button" class="btn btn-secondary" id="dpRoute">🗺️ Today\'s measure list</button></div>';
+  sec.insertBefore(d,sec.firstChild);d.querySelector("#dpImport").onclick=()=>importSheet();d.querySelector("#dpRoute").onclick=()=>showPlan();
+  const info=document.createElement("p");info.className="cap";info.style.marginTop="6px";d.appendChild(info);
+  if(!opsKey()){info.innerHTML="Not connected to KPI Ops yet — open Takeoffs once from KPI Ops ▸ 📏 Measure row ▸ “Open in KPI Takeoffs”.";return;}
+  loadStore().then(()=>{const t=iso(new Date()),c=dayCounts(t),tm=iso(new Date(Date.now()+864e5)),c2=dayCounts(tm);info.textContent="From KPI Ops · today "+(c.doc+c.mine)+" job"+(c.doc+c.mine===1?"":"s")+(c.plan?" (route ready)":"")+" · tomorrow "+(c2.doc+c2.mine)+(c2.plan?" (route ready)":"");});}
+async function deepLink(){if(IS_OPS)return;const hm=(window.__kpHash||"").match(/mjob=([^&]+)/);if(!hm)return;const [day,src,i]=decodeURIComponent(hm[1]).split("~");await loadStore();
+  let j=null;if(src==="mine")j=(STORE.mine[day]||[])[+i];else{const D=STORE.doc&&STORE.doc.text?parseDoc(STORE.doc.text).days[new Date(day+"T12:00").getDay()]:null;const b=D&&D.jobs[+i];if(b){const o=((STORE.ov||{})[day]||{})[ovKey(b)]||{};j=Object.assign({},b,{pkg:pkgHint(b.note),fnd:fndHint(b.note)},o,{src:"doc"});}}
+  if(!j){alert("That measure job wasn't found in KPI Ops.");return;}const id=await makeJob(j,day,0,null);K().refreshArchive();setTimeout(()=>K().openArchiveJob(id),300);}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",()=>{mount();setTimeout(deepLink,800);});else{mount();setTimeout(deepLink,800);}
 })();
 
 </script>
