@@ -128,7 +128,7 @@ function go(){render();window.scrollTo(0,0);}
 
 /* ===================== CREW (Spanish) ===================== */
 function crew(c){
-  const C=CREWS[c],rep=REPS[C.rep],jobs=S.jobs.filter(j=>j.crew===c&&j.day===TOM);
+  const C=CREWS[c],rep=REPS[C.rep],jobs=dayJobs(c,TOM);
   if(S.openJob)return crewJob(c,S.jobs.find(j=>j.id===S.openJob));
   if(!S.confirmed[c]){h(`<div class="card lock"><div class="ico">🔒</div><h1>${L("Ma\u00f1ana todav\u00eda no est\u00e1 listo","Tomorrow isn't ready yet")}</h1><p class="mut" style="font-size:1.05rem">${rep} ${L("tiene que confirmar tu horario.<br>Te llegar\u00e1 un aviso cuando est\u00e9 listo.","has to confirm your schedule.<br>You'll get a notification when it's ready.")}</p></div>`);return;}
   if(S.recapDone[c]){h(`<div class="card lock"><div class="ico">✅</div><h1>${L("D\u00eda terminado","Day finished")}</h1><p class="mut" style="font-size:1.05rem">${L("Gracias. El próximo día se abre cuando "+rep+" confirme.","Thanks. The next day opens when "+rep+" confirms.")}</p></div>`);return;}
@@ -250,7 +250,7 @@ function oCal(rep,mine){
   const nav=h(`<div style="display:flex;gap:8px;align-items:center"><button class="wp" style="flex:1">◀ Prev week</button><div style="flex:2;text-align:center;font-weight:800">${wk===0?"This week":wk===1?"Next week":wk<0?Math.abs(wk)+" wk ago":"In "+wk+" weeks"}<br><span class="mut small">${DAYS_EN[cols[0]]} – ${DAYS_EN[cols[5]]}</span></div><button class="wn" style="flex:1">Next week ▶</button></div>${wk?'<div style="text-align:center"><button class="link wt">Back to this week</button></div>':""}`);
   nav.querySelector(".wp").onclick=()=>{S.week=wk-1;go();};nav.querySelector(".wn").onclick=()=>{S.week=wk+1;go();};const wt=nav.querySelector(".wt");if(wt)wt.onclick=()=>{S.week=0;go();};
   const d=h(`<div class="cal"><table><tr><th></th>${cols.map(i=>`<th class="${i===TOM?"tm":""}">${DAYS_EN[i]}${i===TOM?"<br>tomorrow":""}</th>`).join("")}</tr>
-   ${mine.map(c=>`<tr><td class="crew"><b>${esc(CREWS[c].name)}</b><br>${typeTag(c).replace(" · training","").replace(" · piece rate","")}</td>${cols.map(i=>{const js=S.jobs.filter(j=>j.crew===c&&j.day===i);
+   ${mine.map(c=>`<tr><td class="crew"><b>${esc(CREWS[c].name)}</b><br>${typeTag(c).replace(" · training","").replace(" · piece rate","")}</td>${cols.map(i=>{const js=dayJobs(c,i);
      return `<td class="${i===TOM?"tm":""}" data-c="${c}" data-d="${i}">${js.map(j=>`<div class="f${MOVE===j.id?" sel":""}" draggable="true" data-j="${j.id}" title="${esc(j.addr)}">📄 ${esc(j.addr.split(",")[0])}</div>`).join("")}<div class="plus">${MOVE?"⬇ Move here":js.length?"＋":"Drop file / tap"}</div></td>`;}).join("")}</tr>`).join("")}</table></div>`);
   d.querySelectorAll("td[data-c]").forEach(td=>{
     td.ondragover=e=>{e.preventDefault();td.classList.add("over");};td.ondragleave=()=>td.classList.remove("over");
@@ -264,12 +264,16 @@ function oCal(rep,mine){
   h(`<p class="mut small">Tip: file name like “WO - 123 Main St, Winder.pdf” fills the address. Tomorrow's column feeds the crews after you Confirm.</p>`);
 }
 $("#fpick").onchange=e=>{if(DROP)addFiles(DROP[0],DROP[1],[...e.target.files]);};
+// Daily stop order per crew: j.ord (lower = earlier). Office sets it on Confirm (▲▼) or by moving on the calendar.
+function dayJobs(c,day){return S.jobs.filter(j=>j.crew===c&&j.day===day).sort((a,b)=>(a.ord||0)-(b.ord||0)||a.id-b.id);}
+function reorder(id,dir){const j=S.jobs.find(x=>x.id===id),js=dayJobs(j.crew,j.day);js.forEach((x,i)=>x.ord=i+1);const i=js.indexOf(j),k=i+dir;if(k<0||k>=js.length)return;
+  [js[i].ord,js[k].ord]=[js[k].ord,js[i].ord];if(j.day===TOM&&S.confirmed[j.crew]){S.confirmed[j.crew]=false;S.crewNotifs[j.crew]=null;toast("Order changed — re-confirm "+CREWS[j.crew].name);}go();}
 function moveJob(id,c,day){const j=S.jobs.find(x=>x.id===id);MOVE=null;if(!j){go();return;}
   if(j.crew===c&&j.day===day){go();return;}
   const from=j.crew,fromDay=j.day;
   // the crew's own rep only: never move into the other rep's crews
   if(CREWS[c].rep!==CREWS[from].rep){toast("That crew belongs to "+REPS[CREWS[c].rep]+".");go();return;}
-  j.crew=c;j.day=day;const re=[];
+  j.crew=c;j.day=day;j.ord=dayJobs(c,day).filter(x=>x!==j).reduce((m,x)=>Math.max(m,x.ord||0),0)+1;const re=[];
   if(fromDay===TOM&&S.confirmed[from]){S.confirmed[from]=false;S.crewNotifs[from]=null;re.push(CREWS[from].name);}
   if(day===TOM&&S.confirmed[c]&&c!==from){S.confirmed[c]=false;S.crewNotifs[c]=null;re.push(CREWS[c].name);}
   toast("Moved to "+CREWS[c].name+" · "+DAYS_EN[day]+(re.length?" — re-confirm "+re.join(" & "):""));go();}
@@ -280,12 +284,12 @@ function addFiles(c,day,files){if(!files.length)return;
   toast(files.length+" file(s) added to "+CREWS[c].name+" · "+DAYS_EN[day]+(day===TOM?" — re-confirm needed":""));go();}
 function oConfirm(rep,mine){
   h(`<h1>Are Tomorrow's Jobs Ready?</h1><p class="mut" style="font-size:1.02rem">${DAYS_EN[TOM]}. Check each crew, tap Confirm. That crew gets notified and can see its jobs.</p>`);
-  mine.forEach(c=>{const js=S.jobs.filter(j=>j.crew===c&&j.day===TOM);
+  mine.forEach(c=>{const js=dayJobs(c,TOM);
     const d=h(`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0">${esc(CREWS[c].name)} ${typeTag(c)}</h2>${S.confirmed[c]?'<span class="pill ok">Confirmed</span>':""}</div>
-     ${js.length?`<table>${js.map(j=>`<tr><td>${esc(j.addr)}<br><span class="mut small">${esc(j.cust)}${j.file?" · 📄 "+esc(j.file):""}</span></td><td class="small" style="text-align:right">${j.miles} mi</td></tr>`).join("")}</table>`:'<p class="mut">No jobs tomorrow — drop files in Calendar.</p>'}
+     ${js.length?`<p class="mut small" style="margin:6px 0 0">Stop order — crew does them 1, 2, 3… Use ▲▼ to change.</p><table>${js.map((j,k)=>`<tr><td style="width:44px;font-size:1.3rem;font-weight:800;text-align:center">${k+1}</td><td>${esc(j.addr)}<br><span class="mut small">${esc(j.cust)}${j.file?" · 📄 "+esc(j.file):""}</span></td><td class="small" style="text-align:right;white-space:nowrap">${j.miles} mi<br><button class="ru" data-j="${j.id}" ${k?"":"disabled"} style="min-height:40px;padding:4px 10px">▲</button> <button class="rd" data-j="${j.id}" ${k<js.length-1?"":"disabled"} style="min-height:40px;padding:4px 10px">▼</button></td></tr>`).join("")}</table>`:'<p class="mut">No jobs tomorrow — drop files in Calendar.</p>'}
      ${S.confirmed[c]?'<button class="link un">Undo confirm</button>':`<button class="ok big go" ${js.length?"":"disabled"}>✔ Confirm ${esc(CREWS[c].name)}${/s$/i.test(CREWS[c].name)?"'":"'s"} jobs</button>`}
      ${S.recapDone[c]?'<p class="mut small">Today’s recap is in — confirming opens the next day.</p>':""}</div>`);
-    const g=d.querySelector(".go");if(g)g.onclick=()=>{S.confirmed[c]=true;S.recapDone[c]=false;S.crewNotifs[c]=now();if(S.notifPrefs[rep].ready)toast("📲 "+CREWS[c].name+" notified");go();};
+    d.querySelectorAll(".ru").forEach(b=>b.onclick=()=>reorder(+b.dataset.j,-1));d.querySelectorAll(".rd").forEach(b=>b.onclick=()=>reorder(+b.dataset.j,1));const g=d.querySelector(".go");if(g)g.onclick=()=>{S.confirmed[c]=true;S.recapDone[c]=false;S.crewNotifs[c]=now();if(S.notifPrefs[rep].ready)toast("📲 "+CREWS[c].name+" notified");go();};
     const u=d.querySelector(".un");if(u)u.onclick=()=>{S.confirmed[c]=false;S.crewNotifs[c]=null;go();};});
   const other=rep==="asher"?"lance":"asher";
   h(`<p class="mut small">${REPS[other]} confirms his own crews separately — never holds up yours.</p>`);
