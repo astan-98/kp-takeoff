@@ -165,14 +165,25 @@ function labor(c,j){let lvl=null,n=0;
     m.querySelector(".go").onclick=()=>{const r=m.querySelector(".rs").value.trim();if(!lvl)return toast(L("Elige cuánto","Pick how much"));if(!r)return toast(L("Escribe por qué","Write why"));if(!n)return toast(L("Toma la foto","Take the photo"));
       j.labor.push({lvl,amt:LAB_USD[lvl],es:r,en:toEN(r),status:"pending",crew:c});if(S.offline)S.queue++;
       ping(CREWS[c].rep,"labor",`${crewLabel(c)} asks for extra labor at ${j.addr}`);m.remove();toast(L("Enviado a la oficina","Sent to the office"));render();};});}
-function short(c,j,kind){const rep=CREWS[c].rep;let k=kind||"Falta material",n=0;
+function short(c,j,kind){const rep=CREWS[c].rep;let k=kind||"Falta material",n=0,wm=null,ww=null;const wrong=k==="Material equivocado";
+  const mats=j.load.map(x=>x[0]).filter(x=>/\d+"/.test(x)||/R-\d/.test(x));
   sheet(`<h1>${k==="Material equivocado"?L("❌ Material equivocado","❌ Wrong material"):L("📦 Falta material","📦 Material shortage")}</h1>
+   ${wrong?`<div class="card" style="border:2px solid var(--warn)"><div class="step">${L("Centros equivocados","Wrong centers")}</div>
+     <label>${L("¿Qué material está mal?","Which material is wrong?")}</label>${mats.map((x,i)=>`<button class="act wm" data-i="${i}">${esc(tr(x))}</button>`).join("")}<button class="act wm" data-i="other">${L("Otro (escribir abajo)","Other (type below)")}</button>
+     <label>${L("¿Qué ancho / centros se necesita?","What width / on-center is needed?")}</label><div style="display:flex;gap:8px">${["16","19","24"].map(w=>`<button class="ww" data-w="${w}" style="flex:1;font-size:1.2rem;font-weight:800">${w}"</button>`).join("")}</div></div>`:""}
    <label>${L("\u00bfQu\u00e9 pas\u00f3? (opcional)","What happened? (optional)")}</label><textarea class="rs" placeholder="${k==="Material equivocado"?L("Ej. llegó R-13, la orden dice R-19","E.g. R-13 came, the order says R-19"):L("Ej. faltan 6 bultos de R-13","E.g. short 6 bundles of R-13")}"></textarea>
    <button class="act need ph">${L("\ud83d\udcf7 Foto \u2014 obligatoria","\ud83d\udcf7 Photo \u2014 required")}</button><button class="p big go">${L("\ud83d\udea8 Avisar a","\ud83d\udea8 Alert")} ${REPS[rep]}${L(" ya</button>"," now</button>")}`,m=>{
     const pb=m.querySelector(".ph");pb.onclick=()=>{n++;pb.textContent="✅ Foto lista";pb.className="act done ph";};
     m.querySelectorAll(".kk").forEach(b=>b.onclick=()=>{k=b.dataset.v;m.querySelectorAll(".kk").forEach(x=>{x.style.background=x===b?"var(--ink)":"";x.style.color=x===b?"var(--bg)":"";});});
-    m.querySelector(".go").onclick=()=>{if(!n)return toast(L("Toma la foto","Take the photo"));const d=m.querySelector(".rs").value.trim(),es=k+(d?": "+d:"");
-      j.short.push({es,en:toEN(es)});ping(rep,"short",`🚨 ${crewLabel(c)} at ${j.addr}: ${toEN(es)} (photo attached)`);m.remove();toast(L("🚨 Aviso enviado a ","🚨 Alert sent to ")+REPS[rep]);render();};});}
+    const pick=(sel,cb)=>m.querySelectorAll(sel).forEach(b=>b.onclick=()=>{cb(b);m.querySelectorAll(sel).forEach(x=>{x.style.background=x===b?"var(--ink)":"";x.style.color=x===b?"var(--bg)":"";});});
+    pick(".wm",b=>{wm=b.dataset.i==="other"?"other":mats[+b.dataset.i];});pick(".ww",b=>{ww=b.dataset.w;});
+    m.querySelector(".go").onclick=()=>{const d=m.querySelector(".rs").value.trim();
+      if(wrong&&!wm)return toast(L("Elige qué material está mal","Pick which material is wrong"));if(wrong&&!ww)return toast(L("Elige 16, 19 o 24","Pick 16, 19 or 24"));
+      if(wrong&&wm==="other"&&!d)return toast(L("Escribe qué material","Type which material"));
+      if(!n)return toast(L("Toma la foto","Take the photo"));
+      const es=wrong?"Material equivocado — centros: "+(wm==="other"?d:wm)+" → necesita "+ww+'"'+(d&&wm!=="other"?" · "+d:""):k+(d?": "+d:"");
+      const en=wrong?"Wrong material — wrong centers: "+(wm==="other"?toEN(d):toEN(wm))+" → needs "+ww+'" on center'+(d&&wm!=="other"?" · "+toEN(d):""):toEN(es);
+      j.short.push({es,en,wrongCenters:wrong?{material:wm==="other"?d:wm,needs:ww}:null});ping(rep,"short",`🚨 ${crewLabel(c)} at ${j.addr}: ${en} (photo attached)`);m.remove();toast(L("🚨 Aviso enviado a ","🚨 Alert sent to ")+REPS[rep]);render();};});}
 function recap(c){sheet(`<h1>${L("\ud83d\udcdd Terminar el d\u00eda","\ud83d\udcdd Finish the day")}</h1><label>${L("\u00bfC\u00f3mo fue el d\u00eda? (opcional)","How did the day go? (optional)")}</label><textarea class="rs" placeholder="${L("Ej. terminamos todo bien","E.g. we finished, all good")}"></textarea>
    <label>${L("\u00bfSobr\u00f3 material? (opcional)","Any material left over? (optional)")}</label><input class="lo" placeholder="${L("Ej. sobr\u00f3 3 bultos R-13","E.g. 3 bundles R-13 left")}"><button class="p big go">${L("\u2714 Enviar y cerrar el d\u00eda","\u2714 Send and close the day")}</button>`,m=>m.querySelector(".go").onclick=()=>{
      const r=m.querySelector(".rs").value.trim()||"Sin comentarios",lo=m.querySelector(".lo").value.trim();
