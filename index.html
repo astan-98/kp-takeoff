@@ -371,6 +371,11 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 /* 32a: AHP PO tab (Asher only) — style 2: card per line, big qty block */
 .ahp-drop{display:block;border:2px dashed var(--line);border-radius:var(--radius);padding:18px;text-align:center;background:var(--bg2);font-weight:600;color:var(--accent-ink)}
 .ahp-job{margin-top:14px}
+.ahp-colall{display:flex;justify-content:flex-end;margin-top:10px}
+.ahp-colrow{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;text-align:left;background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;color:inherit;font:inherit;cursor:pointer}
+.ahp-colrow .chev{font-size:22px;line-height:1}.ahp-colrow .cr-l{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}.ahp-colrow .cr-x{font-weight:600;font-size:14px;opacity:.8}
+.ahp-job.col .btn{margin-top:0!important}
+.ahp-done summary{cursor:pointer;padding:6px 0}
 .ahp-head{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:10px}
 .ahp-head .t{font-weight:700;font-size:1.02rem}.ahp-sub{color:var(--text2);font-size:.8rem;margin-top:2px}
 .ahp-head select,.ahp-head input{width:100%;margin-top:6px}
@@ -5707,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02share";
+const APP_BUILD = "2026-11-02collapse";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8772,9 +8777,9 @@ const AHP = (function () {
 
 /* ---------- UI ---------- */
 const AHP_KEY = "kp.ahp.v1";
-const AHPS = { docs: [], jobs: {}, mapsFor: {}, ack: {}, exported: {}, added: {}, view: null, pulled: {}, fromEmail: {} };
+const AHPS = { docs: [], jobs: {}, mapsFor: {}, ack: {}, exported: {}, added: {}, view: null, pulled: {}, fromEmail: {}, restored: {}, collapsed: {} };
 const AHP_API = "https://kpi-ops.pages.dev/ahp/", AHP_KEYK = "kp.ahp.key";
-function ahpSave() { try { localStorage.setItem(AHP_KEY, JSON.stringify({ docs: AHPS.docs, jobs: AHPS.jobs, mapsFor: AHPS.mapsFor, ack: AHPS.ack, exported: AHPS.exported, added: AHPS.added, view: AHPS.view, pulled: AHPS.pulled, fromEmail: AHPS.fromEmail })); }
+function ahpSave() { try { localStorage.setItem(AHP_KEY, JSON.stringify({ docs: AHPS.docs, jobs: AHPS.jobs, mapsFor: AHPS.mapsFor, ack: AHPS.ack, exported: AHPS.exported, added: AHPS.added, view: AHPS.view, pulled: AHPS.pulled, fromEmail: AHPS.fromEmail, restored: AHPS.restored, collapsed: AHPS.collapsed })); }
   catch (e) { const st = document.getElementById("ahpStatus"); if (st) st.textContent = "Couldn't save on this phone (storage full?) — " + e.message; } }
 function ahpLoad() { try { const o = JSON.parse(localStorage.getItem(AHP_KEY) || "null"); if (o) Object.assign(AHPS, o);
   AHPS.docs.forEach(d => { const n = +String(d.uid || "").slice(1); if (n > ahpUid) ahpUid = n; }); } catch (e) {} }
@@ -8808,22 +8813,28 @@ function renderAhp() {
   const out = document.getElementById("ahpOut"); if (!out) return;
   const jobs = ahpJobs(), allIds = Object.keys(jobs), loose = AHPS.docs.filter(d => !d.job && d.kind !== "po");
   allIds.forEach(id => { if (!AHPS.added[id]) AHPS.added[id] = ahpToday(); });
-  if (AHPS.view && !jobs[AHPS.view]) AHPS.view = null;
-  const ids = AHPS.view ? [AHPS.view] : allIds;
+  AHPS.restored = AHPS.restored || {}; AHPS.collapsed = AHPS.collapsed || {};
+  const isDone = id => AHPS.exported[id] && !AHPS.restored[id], active = allIds.filter(id => !isDone(id)), doneIds = allIds.filter(isDone);
+  if (AHPS.view && (!jobs[AHPS.view] || isDone(AHPS.view))) AHPS.view = null;
+  const ids = AHPS.view ? [AHPS.view] : active;
   let h = "";
   const statusOf = id => { const j = jobs[id], res = AHP.buildJob(j), ack = AHPS.ack[id] || {}, cust = res.customer || (AHPS.jobs[id] || {}).cust;
     const open = res.flags.filter(f => f.block && (!ack[f.key] || f.key === "addr") && !(f.key === "addr" && j.addr) && !(f.key === "office" && cust)).length;
     return AHPS.exported[id] ? { t: "Exported " + AHPS.exported[id], c: "ok" } : open ? { t: open + " flag" + (open > 1 ? "s" : ""), c: "" } : { t: "Ready", c: "ok" }; };
-  if (allIds.length) h += '<div class="ahp-flags" id="ahpSaved"><b>Saved jobs (' + allIds.length + ")</b>" + allIds.map(id => { const s = statusOf(id);
+  if (active.length) h += '<div class="ahp-flags" id="ahpSaved"><b>Saved jobs (' + active.length + ")</b>" + active.map(id => { const s = statusOf(id);
     return '<div class="ahp-saved' + (AHPS.view === id ? " on" : "") + '"><div class="sv-l"><div class="m">' + ahpEsc(jobs[id].jobName || "Job") + " · #" + id + '</div><div class="ahp-sub">Added ' + ahpEsc(AHPS.added[id]) + (AHPS.fromEmail[id] ? ' <span class="ahp-chip email">✉ New from email</span>' : "") + ' <span class="ahp-chip ' + s.c + '">' + ahpEsc(s.t) + "</span>" + (() => { AHPS.lastJobs = jobs; const c = cpForPo(id); return c.length ? '<div class="ahp-sub cp-on-po">📅 CP: ' + c.map(it => ahpEsc(it.task) + " " + ahpEsc(it.dateText || it.date) + (it.scheduled ? " ✅" : "")).join(" · ") + "</div>" : '<div class="ahp-sub cp-on-po">📅 Not on a CP yet</div>'; })() + "</div></div>" +
       '<button type="button" class="sv-b" data-open="' + id + '">' + (AHPS.view === id ? "Show all" : "Open") + '</button><button type="button" class="sv-b sv-del" data-del="' + id + '">Delete</button></div>'; }).join("") + "</div>";
+  if (ids.length) { const allC = ids.every(id => ahpIsCol(id)); h += '<div class="ahp-colall"><button type="button" class="sv-b" data-colall="' + (allC ? "0" : "1") + '">' + (allC ? "▾ Expand all" : "▸ Collapse all") + "</button></div>"; }
   ids.forEach(id => {
     const j = jobs[id], res = AHP.buildJob(j), ack = AHPS.ack[id] || (AHPS.ack[id] = {});
     if (!res.customer && AHPS.jobs[id] && AHPS.jobs[id].cust) res.customer = AHPS.jobs[id].cust;
     j.res = res;
     const open = res.flags.filter(f => f.block && (!ack[f.key] || f.key === "addr") && !(f.key === "addr" && j.addr) && !(f.key === "office" && res.customer));
     const blocking = open.length;
-    h += '<div class="ahp-job" data-job="' + id + '"><div class="ahp-head"><div class="t">' + ahpEsc(j.jobName || "Job") + " · #" + id + "</div>" +
+    const cExp = res.phases.reduce((a, p) => a + p.total, 0), cMatch = res.phases.every(p => p.total === p.poTotal) && !blocking;
+    const expBtn = '<button type="button" class="btn btn-primary btn-block" style="margin-top:12px" data-export="' + id + '"' + (blocking ? " disabled" : "") + ">" + (blocking ? "Export for FieldGroove — " + blocking + " left to review" : "Export for FieldGroove (.xlsx)") + "</button>";
+    if (ahpIsCol(id)) { h += '<div class="ahp-job col" data-job="' + id + '"><button type="button" class="ahp-colrow" data-col="' + id + '"><span class="chev">▸</span><span class="cr-l"><b>' + ahpEsc(j.jobName || "Job") + " · #" + id + '</b><span class="ahp-sub">' + j.pos.length + " PO" + (j.pos.length > 1 ? "s" : "") + ' · <span class="ahp-chip' + (cMatch ? " ok" : "") + '">' + (cMatch ? "✓ All phases match" : "⚠️ Needs review") + "</span> · " + ahpMoney(cExp) + '</span></span><span class="cr-x">Expand</span></button>' + expBtn + "</div>"; return; }
+    h += '<div class="ahp-job" data-job="' + id + '"><button type="button" class="ahp-colrow open" data-col="' + id + '"><span class="chev">▾</span><span class="cr-l"><b>' + ahpEsc(j.jobName || "Job") + " · #" + id + '</b></span><span class="cr-x">Collapse</span></button><div class="ahp-head"><div class="t">' + ahpEsc(j.jobName || "Job") + " · #" + id + "</div>" +
       '<div class="ahp-sub">' + ahpEsc(res.customer || "Customer?") + " · " + (res.basement ? "Basement job" : j.pos.some(p => p.lines.some(l => /POLY|FLOOR/i.test(l.desc))) ? "Crawl job" : "No floors PO") + (res.second ? " · 2nd floor" : "") +
       " · " + j.pos.length + " PO" + (j.pos.length > 1 ? "s" : "") + (j.plans.length ? " + plans" : "") + (j.maps.length ? " + map" : "") + "</div>" +
       (res.customer && /^(Home Place|Home Place-Gainesville)$/.test(res.customer) && !AHPS.jobs[id]?.cust ? "" :
@@ -8849,18 +8860,20 @@ function renderAhp() {
       "<div><span>Export total</span><b>" + ahpMoney(exp) + "</b></div><div><span>All POs</span><b>" + ahpMoney(poT) + "</b></div></div>";
     h += '<button type="button" class="btn btn-primary btn-block" style="margin-top:12px" data-export="' + id + '"' + (blocking ? " disabled" : "") + ">" + (blocking ? "Export for FieldGroove — " + blocking + " left to review" : "Export for FieldGroove (.xlsx)") + "</button></div>";
   });
+  if (doneIds.length) h += '<details class="ahp-flags ahp-done"><summary><b>Exported (' + doneIds.length + ")</b> <span class=\"ahp-sub\">tap to show</span></summary>" + doneIds.map(id => '<div class="ahp-saved"><div class="sv-l"><div class="m">' + ahpEsc(jobs[id].jobName || "Job") + " · #" + id + '</div><div class="ahp-sub">Exported ' + ahpEsc(AHPS.exported[id]) + '</div></div><button type="button" class="sv-b" data-restore="' + id + '">Restore</button></div>').join("") + "</details>";
   if (loose.length) h += '<div class="ahp-maps"><b>Files not matched to a job</b>' + loose.map(d => "<div style='margin-top:8px'>" + ahpEsc(d.label) + (d.kind === "maps" || d.kind === "image" ? '<select data-map="' + d.uid + '" style="width:100%;margin-top:4px"><option value="">Which job?</option>' + ids.map(id => "<option value='" + id + "'>" + ahpEsc(jobs[id].jobName + " #" + id) + "</option>").join("") + "</select>" : "") + "</div>").join("") + "</div>";
   if (!ids.length && AHPS.docs.length) h += '<p class="cap">No Home Place POs found in these files yet.</p>';
   out.innerHTML = h;
   AHPS.lastJobs = jobs;
   ahpSave(); try { renderAhpCp(); } catch (e) {}
 }
+function ahpIsCol(id) { const c = (AHPS.collapsed || {})[id]; return c === undefined ? !!AHPS.exported[id] : !!c; }
 function ahpExport(id) {
   const j = AHPS.lastJobs[id]; if (!j) return;
   if (AHPS.exported[id] && !confirm("Job #" + id + " was already exported to FieldGroove on " + AHPS.exported[id] + ". Exporting again can make a duplicate estimate in FieldGroove. Export anyway?")) return;
   const rows = AHP.fgRows(j, j.res), name = (j.jobName || "AHP").replace(/[\\/:*?"<>|,]+/g, " ").replace(/\s+/g, " ").trim() + " - AHP " + id + " - FieldGroove import.xlsx";
   const st = document.getElementById("ahpStatus");
-  KPAHP.fgDeliver(KPAHP.fgXlsx(rows), name, name).then(ok => { if (st) st.textContent = ok ? "Exported " + name + " · " + rows.length + " lines" : "Export cancelled."; if (ok) { AHPS.exported[id] = ahpToday(); renderAhp(); } });
+  KPAHP.fgDeliver(KPAHP.fgXlsx(rows), name, name).then(ok => { if (st) st.textContent = ok ? "Exported " + name + " · " + rows.length + " lines" : "Export cancelled."; if (ok) { AHPS.exported[id] = ahpToday(); delete AHPS.restored[id]; if (AHPS.view === id) AHPS.view = null; renderAhp(); if (st) st.textContent += " — moved to Exported at the bottom."; } });
 }
 let ahpUid = 0;
 // 32c: email inbox — the bot uploads each AHP email's PDFs; this pulls new batches once and marks them pulled on the server
@@ -9071,12 +9084,16 @@ function initAhp() {
   out.addEventListener("click", e => { const a = e.target.closest("[data-ack]"), x = e.target.closest("[data-export]");
     if (a) { const [id, key] = a.dataset.ack.split("|"), k = key.replace(/-rule$/, "") + (key.endsWith("-rule") ? "-rule" : ""); AHPS.ack[id] = AHPS.ack[id] || {}; AHPS.ack[id][k] = !AHPS.ack[id][k]; renderAhp(); }
     if (x && !x.disabled) ahpExport(x.dataset.export);
+    const cl = e.target.closest("[data-col]"), ca = e.target.closest("[data-colall]"), rs = e.target.closest("[data-restore]");
+    if (cl) { AHPS.collapsed[cl.dataset.col] = !ahpIsCol(cl.dataset.col); renderAhp(); const el = out.querySelector('.ahp-job[data-job="' + cl.dataset.col + '"]'); if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: "start" }); return; }
+    if (ca) { out.querySelectorAll(".ahp-job[data-job]").forEach(el => { AHPS.collapsed[el.dataset.job] = ca.dataset.colall === "1"; }); renderAhp(); return; }
+    if (rs) { AHPS.restored[rs.dataset.restore] = true; AHPS.collapsed[rs.dataset.restore] = false; renderAhp(); return; }
     const op = e.target.closest("[data-open]"), dl = e.target.closest("[data-del]");
     if (op) { delete AHPS.fromEmail[op.dataset.open]; AHPS.view = AHPS.view === op.dataset.open ? null : op.dataset.open; renderAhp(); }
     if (dl) { const id = dl.dataset.del, nm = (AHPS.lastJobs[id] || {}).jobName || "";
       if (!confirm("Delete " + nm + " #" + id + " and its POs, plans and map from this phone?" + (AHPS.exported[id] ? "" : " It hasn't been exported yet."))) return;
       AHPS.docs = AHPS.docs.filter(d => d.job !== id); Object.keys(AHPS.mapsFor).forEach(k => { if (AHPS.mapsFor[k] === id) delete AHPS.mapsFor[k]; });
-      ["jobs", "ack", "exported", "added", "fromEmail"].forEach(k => delete AHPS[k][id]); if (AHPS.view === id) AHPS.view = null; renderAhp(); } });
+      ["jobs", "ack", "exported", "added", "fromEmail", "restored", "collapsed"].forEach(k => delete AHPS[k][id]); if (AHPS.view === id) AHPS.view = null; renderAhp(); } });
   out.addEventListener("change", e => { const t = e.target;
     if (t.dataset.addr) { (AHPS.jobs[t.dataset.addr] = AHPS.jobs[t.dataset.addr] || {}).addrTyped = t.value.trim(); renderAhp(); }
     if (t.dataset.cust) { (AHPS.jobs[t.dataset.cust] = AHPS.jobs[t.dataset.cust] || {}).cust = t.value; renderAhp(); }
