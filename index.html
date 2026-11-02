@@ -2139,7 +2139,7 @@ function fgDeliver(bytes, name, title) {
     const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); return true; };
   if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] }))
-    return navigator.share({ files: [file], title: title || name }).then(() => true, err => (err && err.name === "AbortError") ? false : dl());
+    return navigator.share({ files: [file] }).then(() => true, err => (err && err.name === "AbortError") ? false : dl());
   return Promise.resolve(dl());
 }
 // 30an: FieldGroove rows for a saved Library job (compare jobs export both options in one file)
@@ -2179,7 +2179,7 @@ function exportFieldGroove(foamChoice) {
     const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000); if (st) st.textContent = "Downloaded " + name + " — " + msg; };
   if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
-    return navigator.share({ files: [file], title: name }).then(() => { if (st) st.textContent = "Shared " + name + " — " + msg; },
+    return navigator.share({ files: [file] }).then(() => { if (st) st.textContent = "Shared " + name + " — " + msg; },
       err => { if (err && err.name === "AbortError") { if (st) st.textContent = "Share cancelled."; } else { dl(); fgMarkOpen(); } }).then(r => { if (st && /^Shared/.test(st.textContent)) fgMarkOpen(); return r; });
   }
   dl(); fgMarkOpen(); return Promise.resolve();
@@ -4236,7 +4236,7 @@ function exportOptions(idxs) {
     if (st) st.textContent = "Downloaded " + made.map(m => m.name).join(", ") + "."; };
   window.__lastOptionExport = made;
   if (files.length === made.length && navigator.canShare && navigator.share && navigator.canShare({ files })) {
-    return navigator.share({ files, title: made.length > 1 ? "Takeoff options" : made[0].name })
+    return navigator.share({ files })
       .then(() => { if (st) st.textContent = "Shared " + made.length + " file" + (made.length > 1 ? "s" : "") + "."; },
         err => { if (err && err.name === "AbortError") { if (st) st.textContent = "Share cancelled."; } else dl(); });
   }
@@ -5707,7 +5707,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02stair";
+const APP_BUILD = "2026-11-02share";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -6140,7 +6140,7 @@ function backupDeliver(name, text) {
   const blob = new Blob([text], { type: "application/json" });
   let file = null; try { file = new File([blob], name, { type: "application/json" }); } catch (e) {}
   if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
-    return navigator.share({ files: [file], title: name }).then(() => "shared", err => {
+    return navigator.share({ files: [file] }).then(() => "shared", err => {
       if (err && err.name === "AbortError") return "cancelled";
       return backupDownload(name, blob);
     });
@@ -7865,7 +7865,7 @@ function exportFiles(cats, msgEl) {
   if (o.ticketType) logSent([o], cats[0] === "attic" ? "attic" : "walls");
   var m = msgEl || $("woExportMsg");
   var msgParts = o.ticketType ? K.typedShareText([o], who(cats[0]).name) : shareText(o, cats.filter(function (c) { return o.sheets[c]; }));
-  var data = { files: files, title: msgParts.title, text: msgParts.text };
+  var data = { files: files };
   if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) {
     navigator.share(data).then(function () { m.textContent = "Shared " + files.map(function (f) { return f.name; }).join(" and ") + "."; })
       .catch(function (e) { if (e && e.name === "AbortError") m.textContent = "Share canceled."; else { download(files); m.textContent = "Share didn't open, so I downloaded the file instead."; } });
@@ -7975,7 +7975,7 @@ function exportBatch(cats) {
   used.forEach(function (u) { saveRecent(u.o, u.cats); });
   var m = $("woBatchMsg");
   var mp = used.length === 1 ? shareText(used[0].o, used[0].cats) : batchShareText(used);
-  var data = { files: files, title: mp.title, text: mp.text };
+  var data = { files: files };
   function done(t) { if (m) m.textContent = t; }
   if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) {
     navigator.share(data).then(function () { done("Shared " + files.length + " files: " + files.map(function (f) { return f.name; }).join(", ") + "."); })
@@ -8147,7 +8147,7 @@ function exportTyped(to) {
   logSent(ts.map(function (t) { return t.order; }), to);
   var mp = K.typedShareText(ts.map(function (t) { return t.order; }), who(to).name), m = $("woBatchMsg");
   function done(x) { if (m) m.textContent = x; }
-  var data = { files: files, title: mp.title, text: mp.text };
+  var data = { files: files };
   if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) {
     navigator.share(data).then(function () { done("Shared " + files.length + " file" + (files.length > 1 ? "s" : "") + ": " + files.map(function (f) { return f.name; }).join(", ") + "."); })
       .catch(function (e) { if (e && e.name === "AbortError") done("Share canceled."); else { download(files); done("Share didn't open, so I downloaded the files instead."); } });
