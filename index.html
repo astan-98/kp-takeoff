@@ -5712,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02chipsel";
+const APP_BUILD = "2026-11-02winshare";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8157,11 +8157,19 @@ function exportTyped(to) {
   logSent(ts.map(function (t) { return t.order; }), to);
   var mp = K.typedShareText(ts.map(function (t) { return t.order; }), who(to).name), m = $("woBatchMsg");
   function done(x) { if (m) m.textContent = x; }
-  var data = { files: files };
-  if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) {
-    navigator.share(data).then(function () { done("Shared " + files.length + " file" + (files.length > 1 ? "s" : "") + ": " + files.map(function (f) { return f.name; }).join(", ") + "."); })
-      .catch(function (e) { if (e && e.name === "AbortError") done("Share canceled."); else { download(files); done("Share didn't open, so I downloaded the files instead."); } });
-  } else { download(files); done("Downloaded " + files.map(function (f) { return f.name; }).join(", ") + "."); }
+  // winshare: try xlsx MIME, then octet-stream; files only (no title/text). If no file share, download + mailto prefilled.
+  function cs(fs) { try { return !!(navigator.canShare && navigator.share && navigator.canShare({ files: fs })); } catch (e) { return false; } }
+  if (!cs(files)) { var alt = files.map(function (f) { return new File([f], f.name, { type: "application/octet-stream" }); }); if (cs(alt)) files = alt; }
+  function mailFallback(lead) {
+    download(files);
+    var c = who(to) || {}, body = mp.text + "\n\n(Attachments downloaded \u2014 drag them in: " + files.map(function (f) { return f.name; }).join(", ") + ")";
+    setTimeout(function () { location.href = "mailto:" + encodeURIComponent(c.email || "").replace(/%40/g, "@") + "?subject=" + encodeURIComponent(mp.title) + "&body=" + encodeURIComponent(body); }, 600);
+    done(lead + "Downloaded " + files.length + " file" + (files.length > 1 ? "s" : "") + " and opened an email to " + (c.name || "") + (c.email ? " (" + c.email + ")" : "") + " \u2014 drag the downloaded files into it.");
+  }
+  if (cs(files)) {
+    navigator.share({ files: files }).then(function () { done("Shared " + files.length + " file" + (files.length > 1 ? "s" : "") + ": " + files.map(function (f) { return f.name; }).join(", ") + "."); })
+      .catch(function (e) { if (e && e.name === "AbortError") done("Share canceled."); else mailFallback("Share didn't open. "); });
+  } else mailFallback("");
 }
 /* ---- ?wo=<text> link (Apple Shortcut "Send to KP Takeoff"): fill the box and run Find. Never sends. ---- */
 function takeUrlRequest() {
