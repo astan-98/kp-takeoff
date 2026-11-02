@@ -5712,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02pdfshare";
+const APP_BUILD = "2026-11-02pdfshare2";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -7972,10 +7972,12 @@ function pdfTwins(list) { // list: [{o, cat, name}]
     return fs.every(Boolean) && canShareFiles(fs) ? fs : null;
   } catch (e) { return null; }
 }
-function shareFilesOr(files, list, msg, fallback) { // xlsx first (iPhone), else PDFs, else fallback(files)
+function shareFilesOr(files, list, msg, fallback, extra) { // xlsx first (iPhone, files only), else PDFs (+title/text if accepted), else fallback(files)
   var use = canShareFiles(files) ? files : pdfTwins(list), isPdf = use && use !== files;
   if (!use) return fallback(files, "");
-  navigator.share({ files: use }).then(function () { msg("Shared " + use.length + (isPdf ? " PDF" : "") + " file" + (use.length > 1 ? "s" : "") + ": " + use.map(function (f) { return f.name; }).join(", ") + "."); })
+  var data = { files: use };
+  if (isPdf && extra) { var d2 = { files: use, title: extra.title, text: extra.text }; try { if (navigator.canShare(d2)) data = d2; } catch (e) {} }
+  navigator.share(data).then(function () { msg("Shared " + use.length + (isPdf ? " PDF" : "") + " file" + (use.length > 1 ? "s" : "") + ": " + use.map(function (f) { return f.name; }).join(", ") + "."); })
     .catch(function (e) { if (e && e.name === "AbortError") msg("Share canceled."); else fallback(files, "Share didn't open. "); });
 }
 function download(files) {
@@ -8242,6 +8244,17 @@ function renderTyped() {
   a.appendChild(el("p", "status", "")); a.lastChild.id = "woBatchMsg";
   box.appendChild(a);
 }
+/* Email templates for the one-tap Chafin sends (edit wording here). body = [1 ticket, 2 tickets, 3+ tickets] */
+var SHARE_TPL = {
+  attic: { subject: "Chafin Attic Blows", body: [
+    "Hey man. Here's one attic blow for Chafin. Holler if you have any questions. Thank you",
+    "Hey man. Here's a couple attic blows for Chafin. Holler if you have any questions. Thank you",
+    "Hey man. Here's a few attic blows for Chafin. Holler if you have any questions. Thank you"] },
+  walls: { subject: "Chafin Work Orders", body: [ // Sky — placeholder wording
+    "Hey. Here's one work order for Chafin. Holler if you have any questions. Thank you",
+    "Hey. Here's a couple work orders for Chafin. Holler if you have any questions. Thank you",
+    "Hey. Here's a few work orders for Chafin. Holler if you have any questions. Thank you"] }
+};
 function exportTyped(to) {
   var ts = readyTickets(to), files = [], names = {}, list = [];
   ts.forEach(function (t) {
@@ -8254,16 +8267,20 @@ function exportTyped(to) {
   ts.forEach(function (t) { saveRecent(t.order, [K.ticketCat(t.order)]); });
   logSent(ts.map(function (t) { return t.order; }), to);
   var mp = K.typedShareText(ts.map(function (t) { return t.order; }), who(to).name), m = $("woBatchMsg");
+  var tpl = SHARE_TPL[to];
+  if (tpl) { var n = ts.length; mp = { title: tpl.subject, text: tpl.body[n === 1 ? 0 : n === 2 ? 1 : 2] }; }
+  try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(mp.text).catch(function () {}); } catch (e) {}
   function done(x) { if (m) m.textContent = x; }
   // pdfshare: xlsx (iPhone) -> octet-stream xlsx -> PDF copies (Windows) -> download + mailto prefilled. Files only (no title/text).
   if (!canShareFiles(files)) { var alt = files.map(function (f) { return new File([f], f.name, { type: "application/octet-stream" }); }); if (canShareFiles(alt)) files = alt; }
   function mailFallback(fs, lead) {
     download(fs);
-    var c = who(to) || {}, body = mp.text + "\n\n(Attachments downloaded \u2014 drag them in: " + fs.map(function (f) { return f.name; }).join(", ") + ")";
+    var c = who(to) || {}; 
+    var body = mp.text + "\n\n(Attachments downloaded \u2014 drag them in: " + fs.map(function (f) { return f.name; }).join(", ") + ")";
     setTimeout(function () { location.href = "mailto:" + encodeURIComponent(c.email || "").replace(/%40/g, "@") + "?subject=" + encodeURIComponent(mp.title) + "&body=" + encodeURIComponent(body); }, 600);
     done(lead + "Downloaded " + fs.length + " file" + (fs.length > 1 ? "s" : "") + " and opened an email to " + (c.name || "") + (c.email ? " (" + c.email + ")" : "") + " \u2014 drag the downloaded files into it.");
   }
-  shareFilesOr(files, list, done, mailFallback);
+  shareFilesOr(files, list, done, mailFallback, tpl ? mp : null);
 }
 /* ---- ?wo=<text> link (Apple Shortcut "Send to KP Takeoff"): fill the box and run Find. Never sends. ---- */
 function takeUrlRequest() {
