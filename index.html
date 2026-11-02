@@ -5713,7 +5713,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02skylink";
+const APP_BUILD = "2026-11-02skylink2";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -9403,7 +9403,7 @@ function draw(){var b=box();if(!b)return;b.style.display="";if(!key()){b.innerHT
  var n=items.filter(function(i){return !i.sent;}).length,ag=data.at?Math.round((Date.now()-Date.parse(data.at))/60000):null;
  b.innerHTML="<b>📅 Sky's schedule — needs WO</b> <span class='cap'>"+(items.length?n+" of "+items.length+" not sent":"")+"</span><div class='cap' style='margin:2px 0 6px'>"+(data.at?"From Sky's Outlook calendar · updated "+(ag<60?ag+" min":Math.round(ag/60)+" h")+" ago":"Waiting for the Surface to upload Sky's calendar (runs hourly 6 AM–7 PM).")+"</div>"+
   (items.length?items.map(function(i){return "<div class='sky-row'><div class='l'><b>"+esc(dd(i.date))+" · "+esc(i.sub||"?")+" "+esc(i.lots.join(", "))+"</b><span>"+esc(TL[i.type]||i.type||"type?")+(i.flags&&i.flags.length?" · "+esc(i.flags.join(", ")):"")+" · "+esc(i.subject)+"</span></div><span class='sky-pill "+(i.sent?"ok":"no")+"'>"+(i.sent?(i.manual?"✓ Marked":"✓ Sent"):"Not sent")+"</span>"+(i.sent&&!i.manual?"":"<button type='button' data-skymark='"+esc(i.id)+"' data-on='"+(i.manual?"0":"1")+"'>"+(i.manual?"Undo":"Mark sent")+"</button>")+"</div>";}).join(""):"<div class='cap'>No upcoming Chafin jobs on Sky's calendar.</div>");}
-function load(force){if(!key()||busy)return;if(!force&&Date.now()-last<60000){draw();return;}busy=true;last=Date.now();draw();
+function load(force){if(!key()){draw();return;}if(busy)return;if(!force&&Date.now()-last<60000){draw();return;}busy=true;last=Date.now();draw();
  orders().then(function(all){var s=sentList(all);return api(s.length?{sent:s}:null);}).then(function(d){data=d;busy=false;draw();},function(e){busy=false;data=data||{items:[],at:""};draw();});}
 document.addEventListener("click",function(e){var lk=e.target.closest&&e.target.closest("[data-skylink]");if(lk){var v=prompt("Paste your KPI Ops link (the one with k= or opsk=) or just the key:");if(!v)return;v=v.trim();var mm=v.match(/(?:opsk|[#?&]k)=([\w-]+)/);var k=mm?mm[1]:(/^[\w-]{8,}$/.test(v)?v:"");if(!k){alert("That doesn't look like a KPI Ops link or key.");return;}try{localStorage.setItem("kpOpsKey",k);}catch(x){}data=null;load(true);api(null).then(function(){},function(){alert("KPI Ops didn't accept that key — check it and try again.");try{localStorage.removeItem("kpOpsKey");}catch(x){}draw();});return;}var m=e.target.closest&&e.target.closest("[data-skymark]");if(m){api({mark:{id:m.dataset.skymark,on:m.dataset.on==="1"}}).then(function(d){data=d;draw();}).catch(function(){alert("Couldn't reach KPI Ops — try again.");});return;}
  var nb=e.target.closest&&e.target.closest('.nav-btn[data-tab="workorder"]');if(nb)setTimeout(function(){load();},50);},true);
