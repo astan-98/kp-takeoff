@@ -8323,6 +8323,10 @@ function takeUrlRequest() {
   var q = null;
   try {
     var u = new URL(location.href);
+    var tb = u.searchParams.get("tab"), th = /(?:^#|&)tab=([^&]*)/.exec(location.hash); if (tb == null && th) tb = decodeURIComponent(th[1]);
+    if (tb) { var tmap = { chafin: "workorder", workorder: "workorder", ahp: "ahp", archive: "archive", pricing: "pricing", output: "output" }; u.searchParams.delete("tab");
+      history.replaceState(history.state, "", u.pathname + (u.searchParams.toString() ? "?" + u.searchParams.toString() : ""));
+      var tbn = document.querySelector('.nav-btn[data-tab="' + (tmap[tb] || tb) + '"]'); if (tbn) setTimeout(function () { tbn.click(); }, 0); }
     var rc = u.searchParams.get("recap"), rh = /(?:^#|&)recap=([^&]*)/.exec(location.hash);
     if (rc == null && rh) rc = decodeURIComponent(rh[1]);
     if (rc != null) {
