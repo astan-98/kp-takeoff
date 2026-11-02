@@ -399,6 +399,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 .ahp-tot{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-top:12px;font-size:.88rem}
 .ahp-tot div{display:flex;justify-content:space-between;padding:3px 0}
 .ahp-maps{background:var(--bg2);border:1px solid var(--err-border);border-radius:var(--radius);padding:12px;margin-top:10px;font-size:.84rem}
+.ahp-chip.email{background:#e6f0ff;border-color:#5b8def;color:#1f4fa8}
 .ahp-saved{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid var(--line);margin-top:6px}.ahp-saved.on{background:var(--accent-soft);border-radius:10px;padding:8px}
 .ahp-saved .sv-l{flex:1;min-width:0}.ahp-saved .m{font-weight:700;font-size:.88rem}
 .sv-b{border:0;border-radius:9px;padding:8px 10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}.sv-b.sv-del{background:var(--bg3);color:var(--danger)}
@@ -8748,8 +8749,9 @@ const AHP = (function () {
 
 /* ---------- UI ---------- */
 const AHP_KEY = "kp.ahp.v1";
-const AHPS = { docs: [], jobs: {}, mapsFor: {}, ack: {}, exported: {}, added: {}, view: null };
-function ahpSave() { try { localStorage.setItem(AHP_KEY, JSON.stringify({ docs: AHPS.docs, jobs: AHPS.jobs, mapsFor: AHPS.mapsFor, ack: AHPS.ack, exported: AHPS.exported, added: AHPS.added, view: AHPS.view })); }
+const AHPS = { docs: [], jobs: {}, mapsFor: {}, ack: {}, exported: {}, added: {}, view: null, pulled: {}, fromEmail: {} };
+const AHP_API = "https://kpi-ops.pages.dev/ahp/", AHP_KEYK = "kp.ahp.key";
+function ahpSave() { try { localStorage.setItem(AHP_KEY, JSON.stringify({ docs: AHPS.docs, jobs: AHPS.jobs, mapsFor: AHPS.mapsFor, ack: AHPS.ack, exported: AHPS.exported, added: AHPS.added, view: AHPS.view, pulled: AHPS.pulled, fromEmail: AHPS.fromEmail })); }
   catch (e) { const st = document.getElementById("ahpStatus"); if (st) st.textContent = "Couldn't save on this phone (storage full?) — " + e.message; } }
 function ahpLoad() { try { const o = JSON.parse(localStorage.getItem(AHP_KEY) || "null"); if (o) Object.assign(AHPS, o);
   AHPS.docs.forEach(d => { const n = +String(d.uid || "").slice(1); if (n > ahpUid) ahpUid = n; }); } catch (e) {} }
@@ -8790,7 +8792,7 @@ function renderAhp() {
     const open = res.flags.filter(f => f.block && (!ack[f.key] || f.key === "addr") && !(f.key === "addr" && j.addr) && !(f.key === "office" && cust)).length;
     return AHPS.exported[id] ? { t: "Exported " + AHPS.exported[id], c: "ok" } : open ? { t: open + " flag" + (open > 1 ? "s" : ""), c: "" } : { t: "Ready", c: "ok" }; };
   if (allIds.length) h += '<div class="ahp-flags" id="ahpSaved"><b>Saved jobs (' + allIds.length + ")</b>" + allIds.map(id => { const s = statusOf(id);
-    return '<div class="ahp-saved' + (AHPS.view === id ? " on" : "") + '"><div class="sv-l"><div class="m">' + ahpEsc(jobs[id].jobName || "Job") + " · #" + id + '</div><div class="ahp-sub">Added ' + ahpEsc(AHPS.added[id]) + ' <span class="ahp-chip ' + s.c + '">' + ahpEsc(s.t) + "</span></div></div>" +
+    return '<div class="ahp-saved' + (AHPS.view === id ? " on" : "") + '"><div class="sv-l"><div class="m">' + ahpEsc(jobs[id].jobName || "Job") + " · #" + id + '</div><div class="ahp-sub">Added ' + ahpEsc(AHPS.added[id]) + (AHPS.fromEmail[id] ? ' <span class="ahp-chip email">✉ New from email</span>' : "") + ' <span class="ahp-chip ' + s.c + '">' + ahpEsc(s.t) + "</span></div></div>" +
       '<button type="button" class="sv-b" data-open="' + id + '">' + (AHPS.view === id ? "Show all" : "Open") + '</button><button type="button" class="sv-b sv-del" data-del="' + id + '">Delete</button></div>'; }).join("") + "</div>";
   ids.forEach(id => {
     const j = jobs[id], res = AHP.buildJob(j), ack = AHPS.ack[id] || (AHPS.ack[id] = {});
@@ -8838,13 +8840,37 @@ function ahpExport(id) {
   KPAHP.fgDeliver(KPAHP.fgXlsx(rows), name, name).then(ok => { if (st) st.textContent = ok ? "Exported " + name + " · " + rows.length + " lines" : "Export cancelled."; if (ok) { AHPS.exported[id] = ahpToday(); renderAhp(); } });
 }
 let ahpUid = 0;
-async function ahpAddFiles(files) {
+// 32c: email inbox — the bot uploads each AHP email's PDFs; this pulls new batches once and marks them pulled on the server
+function ahpKey() { const m = location.hash.match(/ahpkey=([\w-]+)/); if (m) { try { localStorage.setItem(AHP_KEYK, m[1]); } catch (e) {} history.replaceState(null, "", location.pathname + location.search); } try { return localStorage.getItem(AHP_KEYK) || ""; } catch (e) { return ""; } }
+let ahpPulling = false;
+async function ahpPull() {
+  const key = ahpKey(), st = document.getElementById("ahpStatus"); if (!key || ahpPulling) return; ahpPulling = true;
+  try {
+    const r = await fetch(AHP_API + "pending", { headers: { "x-ahp-key": key }, cache: "no-store" }); if (!r.ok) throw new Error("inbox " + r.status);
+    const list = ((await r.json()).batches || []).filter(b => !AHPS.pulled[b.id]).reverse();
+    for (const b of list) {
+      if (st) st.textContent = "New AHP email: downloading " + b.files.length + " PDFs…";
+      const files = [];
+      for (const f of b.files) { const x = await fetch(AHP_API + "file/" + b.id + "/" + f.n, { headers: { "x-ahp-key": key }, cache: "no-store" }); if (x.ok) files.push(new File([await x.arrayBuffer()], f.name, { type: "application/pdf" })); }
+      const before = new Set(AHPS.docs.map(d => d.uid));
+      await ahpAddFiles(files, b.id);
+      const jobs = Array.from(new Set(AHPS.docs.filter(d => !before.has(d.uid) && d.kind === "po").map(d => d.job)));
+      jobs.forEach(j => { AHPS.fromEmail[j] = (b.created || "").slice(0, 10); });
+      AHPS.pulled[b.id] = new Date().toISOString(); ahpSave();
+      fetch(AHP_API + "mark/" + b.id, { method: "POST", headers: { "x-ahp-key": key, "content-type": "application/json" }, body: JSON.stringify({ status: "pulled", jobs: jobs.join(",") }) }).catch(() => {});
+    }
+    if (list.length && st) st.textContent = list.length + " new AHP email" + (list.length > 1 ? "s" : "") + " added — see “New from email” below.";
+    renderAhp();
+  } catch (e) { if (st) st.textContent = "Couldn't check the AHP email inbox (" + e.message + "). Manual upload still works."; }
+  ahpPulling = false;
+}
+async function ahpAddFiles(files, batch) {
   const st = document.getElementById("ahpStatus"); let n = 0;
   for (const f of files) {
     if (st) st.textContent = "Reading " + f.name + "… (" + (++n) + "/" + files.length + ")";
     try { const buf = await f.arrayBuffer(), pages = await AHP.readPdf(buf.slice(0)), d = AHP.classify(pages, f.name);
       if (d.kind === "image") { if (st) st.textContent = "Reading scanned " + f.name + " (map?)…"; try { const o = await AHP.ocrMap(buf.slice(0)); if (o.addr) { d.kind = "maps"; d.addr = o.addr; d.ocr = true; } d.text = o.text; } catch (e) {} }
-      d.uid = "d" + (++ahpUid); d.label = (d.kind === "po" ? "PO " + d.no : d.kind === "maps" ? "Map: " + (d.addr || "?") : d.kind === "image" ? "Scanned PDF (no text — map?)" : "Plans") + " · " + f.name;
+      d.uid = "d" + (++ahpUid); if (batch) d.batch = batch; d.label = (d.kind === "po" ? "PO " + d.no : d.kind === "maps" ? "Map: " + (d.addr || "?") : d.kind === "image" ? "Scanned PDF (no text — map?)" : "Plans") + " · " + f.name;
       if (d.kind === "po" && AHPS.docs.some(o => o.kind === "po" && o.no === d.no)) continue; AHPS.docs.push(d);
     } catch (e) { if (st) st.textContent = "Couldn't read " + f.name + ": " + e.message; await new Promise(r => setTimeout(r, 1200)); }
   }
@@ -8859,16 +8885,18 @@ function initAhp() {
   inp.onchange = () => { const fs = Array.from(inp.files || []); inp.value = ""; if (fs.length) ahpAddFiles(fs); };
   document.getElementById("ahpClear").onclick = () => { if (!confirm("Clear every AHP job saved on this phone?")) return; AHPS.docs = []; AHPS.jobs = {}; AHPS.mapsFor = {}; AHPS.ack = {}; AHPS.exported = {}; AHPS.added = {}; AHPS.view = null; document.getElementById("ahpStatus").textContent = ""; renderAhp(); };
   ahpLoad(); renderAhp(); if (AHPS.docs.length) document.getElementById("ahpStatus").textContent = "Restored saved AHP jobs from this phone.";
+  ahpKey(); ahpPull(); const nb = document.querySelector('.nav-btn[data-tab="ahp"]'); if (nb) nb.addEventListener("click", () => ahpPull());
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && document.getElementById("tab-ahp").classList.contains("active")) ahpPull(); });
   const out = document.getElementById("ahpOut");
   out.addEventListener("click", e => { const a = e.target.closest("[data-ack]"), x = e.target.closest("[data-export]");
     if (a) { const [id, key] = a.dataset.ack.split("|"), k = key.replace(/-rule$/, "") + (key.endsWith("-rule") ? "-rule" : ""); AHPS.ack[id] = AHPS.ack[id] || {}; AHPS.ack[id][k] = !AHPS.ack[id][k]; renderAhp(); }
     if (x && !x.disabled) ahpExport(x.dataset.export);
     const op = e.target.closest("[data-open]"), dl = e.target.closest("[data-del]");
-    if (op) { AHPS.view = AHPS.view === op.dataset.open ? null : op.dataset.open; renderAhp(); }
+    if (op) { delete AHPS.fromEmail[op.dataset.open]; AHPS.view = AHPS.view === op.dataset.open ? null : op.dataset.open; renderAhp(); }
     if (dl) { const id = dl.dataset.del, nm = (AHPS.lastJobs[id] || {}).jobName || "";
       if (!confirm("Delete " + nm + " #" + id + " and its POs, plans and map from this phone?" + (AHPS.exported[id] ? "" : " It hasn't been exported yet."))) return;
       AHPS.docs = AHPS.docs.filter(d => d.job !== id); Object.keys(AHPS.mapsFor).forEach(k => { if (AHPS.mapsFor[k] === id) delete AHPS.mapsFor[k]; });
-      ["jobs", "ack", "exported", "added"].forEach(k => delete AHPS[k][id]); if (AHPS.view === id) AHPS.view = null; renderAhp(); } });
+      ["jobs", "ack", "exported", "added", "fromEmail"].forEach(k => delete AHPS[k][id]); if (AHPS.view === id) AHPS.view = null; renderAhp(); } });
   out.addEventListener("change", e => { const t = e.target;
     if (t.dataset.addr) { (AHPS.jobs[t.dataset.addr] = AHPS.jobs[t.dataset.addr] || {}).addrTyped = t.value.trim(); renderAhp(); }
     if (t.dataset.cust) { (AHPS.jobs[t.dataset.cust] = AHPS.jobs[t.dataset.cust] || {}).cust = t.value; renderAhp(); }
