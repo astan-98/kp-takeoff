@@ -5712,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02pdfshare2";
+const APP_BUILD = "2026-11-02pdfshare3";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8250,11 +8250,22 @@ var SHARE_TPL = {
     "Hey man. Here's one attic blow for Chafin. Holler if you have any questions. Thank you",
     "Hey man. Here's a couple attic blows for Chafin. Holler if you have any questions. Thank you",
     "Hey man. Here's a few attic blows for Chafin. Holler if you have any questions. Thank you"] },
-  walls: { subject: "Chafin Work Orders", body: [ // Sky — placeholder wording
-    "Hey. Here's one work order for Chafin. Holler if you have any questions. Thank you",
-    "Hey. Here's a couple work orders for Chafin. Holler if you have any questions. Thank you",
-    "Hey. Here's a few work orders for Chafin. Holler if you have any questions. Thank you"] }
+  walls: { subject: "Chafin Tickets", body: [ // Sky
+    "Hey man. Got this one for you. Thank you",
+    "Hey man. Got these for you. Thank you",
+    "Hey man. Got these for you. Thank you"] }
 };
+// greeting, then a plain-text summary grouped by neighborhood, then "Thank you"
+function tplText(body, orders) {
+  var subs = [], by = {};
+  orders.forEach(function (o) {
+    var sb = o.sub || "Chafin"; if (!by[sb]) { by[sb] = []; subs.push(sb); }
+    var d = o.date instanceof Date && !isNaN(o.date) ? String(o.date.getMonth() + 1).padStart(2, "0") + "/" + String(o.date.getDate()).padStart(2, "0") : (o.dateText || "");
+    by[sb].push("- Lot " + lotNo(o) + (o.address ? " (" + o.address + ")" : "") + " \u2013 " + K.ticketLabel(o) + (d ? " \u2013 " + d : ""));
+  });
+  var m = /^(.*?)\s*(Thank you\.?)$/.exec(body), head = m ? m[1] : body, tail = m ? m[2] : "";
+  return head + "\n\n" + subs.map(function (sb) { return sb + "\n" + by[sb].join("\n"); }).join("\n\n") + (tail ? "\n\n" + tail : "");
+}
 function exportTyped(to) {
   var ts = readyTickets(to), files = [], names = {}, list = [];
   ts.forEach(function (t) {
@@ -8268,7 +8279,7 @@ function exportTyped(to) {
   logSent(ts.map(function (t) { return t.order; }), to);
   var mp = K.typedShareText(ts.map(function (t) { return t.order; }), who(to).name), m = $("woBatchMsg");
   var tpl = SHARE_TPL[to];
-  if (tpl) { var n = ts.length; mp = { title: tpl.subject, text: tpl.body[n === 1 ? 0 : n === 2 ? 1 : 2] }; }
+  if (tpl) { var n = ts.length; mp = { title: tpl.subject, text: tplText(tpl.body[n === 1 ? 0 : n === 2 ? 1 : 2], ts.map(function (t) { return t.order; })) }; }
   try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(mp.text).catch(function () {}); } catch (e) {}
   function done(x) { if (m) m.textContent = x; }
   // pdfshare: xlsx (iPhone) -> octet-stream xlsx -> PDF copies (Windows) -> download + mailto prefilled. Files only (no title/text).
