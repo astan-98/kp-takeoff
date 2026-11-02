@@ -460,6 +460,7 @@ body.has-ahp .bottom-nav{grid-template-columns:repeat(6,1fr)}
       <p class="cap">One customer box (also what FieldGroove gets). Builder / company for builders; first + last for homeowners or the builder's contact.</p>
       <div class="field"><label>Builder / company</label><input id="builder" autocomplete="organization"></div>
       <input id="custCompany" type="hidden">
+      <button type="button" class="btn btn-secondary btn-block" id="btnPickContact" style="margin:2px 0 8px">📇 Select from contacts</button>
       <div class="grid2">
         <div class="field"><label>First name</label><input id="custFirst" autocomplete="off"></div>
         <div class="field"><label>Last name</label><input id="custLast" autocomplete="off"></div>
@@ -5712,7 +5713,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02addon";
+const APP_BUILD = "2026-11-02contacts";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -9331,5 +9332,24 @@ document.addEventListener("focusin",upd,true);
 document.addEventListener("focusout",function(){clearTimeout(t);t=setTimeout(upd,80);},true);
 if(vv)vv.addEventListener("resize",function(){clearTimeout(t);t=setTimeout(upd,50);});
 window.addEventListener("orientationchange",function(){setTimeout(function(){base=vv?vv.height:window.innerHeight;upd();},400);});
-window.addEventListener("pageshow",upd);document.addEventListener("visibilitychange",function(){if(!document.hidden)setTimeout(upd,100);});})();</script></body>
+window.addEventListener("pageshow",upd);document.addEventListener("visibilitychange",function(){if(!document.hidden)setTimeout(upd,100);});})();</script><style id="kpcStyle">.kpc-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;display:flex;align-items:flex-end;justify-content:center}.kpc{background:var(--bg,#fff);color:inherit;width:100%;max-width:560px;max-height:85vh;border-radius:16px 16px 0 0;padding:12px;display:flex;flex-direction:column}.kpc input{font-size:16px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--line,#ccc)}.kpc-l{overflow:auto;margin-top:8px;flex:1}.kpc-i{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line,#ddd);background:none;color:inherit;padding:10px 4px;font:inherit}.kpc-i b{display:block}.kpc-i span{font-size:12px;opacity:.7}</style><script>/* contacts: Select from contacts — native picker (Android Chrome) or the KPI Ops contact list (/api/contacts, read with kpOpsKey) */
+(function(){var btn=document.getElementById("btnPickContact");if(!btn)return;var cache=null;
+function key(){try{return localStorage.getItem("kpOpsKey")||"";}catch(e){return "";}}
+function set(id,v){var e=document.getElementById(id);if(!e||v==null||v==="")return;e.value=v;e.dispatchEvent(new Event("input",{bubbles:true}));e.dispatchEvent(new Event("change",{bubbles:true}));}
+function fill(c){var first=c.first||"",last=c.last||"";if(!first&&!last&&c.name){var p=String(c.name).trim().split(/\s+/);first=p.shift()||"";last=p.join(" ");}
+ if(c.company)set("builder",c.company);set("custFirst",first);set("custLast",last);set("custPhone",(c.phones||[])[0]);set("custEmail",(c.emails||[])[0]);
+ if(c.address){var a=String(c.address),m=a.match(/^(.*?),\s*([^,]+),\s*([A-Z]{2})\s*(\d{5})?/);if(m&&!c.city){set("address",m[1]);set("city",m[2]);set("siteState",m[3]);set("siteZip",m[4]);}else set("address",a);}
+ set("city",c.city);set("siteState",c.state);set("siteZip",c.zip);try{(window.toast||function(){})("Filled from "+(c.name||c.company));}catch(e){}}
+function esc(t){return String(t==null?"":t).replace(/[&<>"]/g,function(x){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[x];});}
+async function load(){var k=key();if(!k)throw new Error("nokey");var r=await fetch("https://kpi-ops.pages.dev/api/contacts?k="+encodeURIComponent(k),{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);var d=await r.json();cache=d.contacts||[];try{localStorage.setItem("kpContactsCache",JSON.stringify(d));}catch(e){}return cache;}
+function picker(){var bg=document.createElement("div");bg.className="kpc-bg";bg.innerHTML='<div class="kpc"><div style="display:flex;gap:8px;align-items:center"><input type="search" placeholder="Search name, company, phone, email" class="kpc-q"><button type="button" class="btn btn-secondary kpc-x">Close</button></div><div class="kpc-l"><div class="cap">Loading contacts…</div></div></div>';document.body.appendChild(bg);
+ var q=bg.querySelector(".kpc-q"),L=bg.querySelector(".kpc-l"),list=[];bg.onclick=function(e){if(e.target===bg||e.target.closest(".kpc-x"))bg.remove();};
+ function draw(){var t=q.value.toLowerCase().trim(),ws=t.split(/\s+/).filter(Boolean),hits=list.filter(function(c){var h=[c.name,c.company,(c.phones||[]).join(" "),(c.emails||[]).join(" "),c.address,c.city].join(" ").toLowerCase(),hd=h.replace(/\D/g,"");return ws.every(function(w){return h.indexOf(w)>=0||(/^\d{3,}$/.test(w)&&hd.indexOf(w)>=0);});}).slice(0,200);
+  L.innerHTML=hits.length?hits.map(function(c,i){return '<button type="button" class="kpc-i" data-i="'+list.indexOf(c)+'"><b>'+esc(c.name||c.company)+'</b><span>'+esc([c.name&&c.company?c.company:"",(c.phones||[])[0],(c.emails||[])[0]].filter(Boolean).join(" · "))+'</span></button>';}).join(""):'<div class="cap" style="padding:10px">'+(list.length?"No match.":"No contacts uploaded yet.")+'</div>';}
+ L.onclick=function(e){var b=e.target.closest(".kpc-i");if(!b)return;fill(list[+b.dataset.i]);bg.remove();};q.oninput=draw;
+ var show=function(a){list=(a||[]).slice().sort(function(x,y){return String(x.name||x.company).localeCompare(String(y.name||y.company));});draw();};
+ try{var c0=JSON.parse(localStorage.getItem("kpContactsCache")||"null");if(c0&&c0.contacts)show(c0.contacts);}catch(e){}
+ load().then(show,function(e){if(list.length)return;L.innerHTML='<div class="cap" style="padding:10px">'+(e.message==="nokey"?"This device isn't linked to KPI Ops yet. Open KP Takeoff once from the KPI Ops link (it carries your key), then try again.":"Couldn't load contacts ("+esc(e.message)+"). Check the connection.")+'</div>';});
+ setTimeout(function(){q.focus();},50);}
+btn.onclick=async function(){if(navigator.contacts&&navigator.contacts.select){try{var r=await navigator.contacts.select(["name","email","tel","address"],{multiple:false});if(r&&r[0]){var c=r[0],ad=(c.address||[])[0];fill({name:(c.name||[])[0]||"",phones:c.tel||[],emails:c.email||[],address:ad?(ad.addressLine||[]).join(" "):"",city:ad&&ad.city||"",state:ad&&ad.region||"",zip:ad&&ad.postalCode||""});}return;}catch(e){}}picker();};})();</script></body>
 </html>
