@@ -5712,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02collapse";
+const APP_BUILD = "2026-11-02lotname";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8752,7 +8752,7 @@ const AHP = (function () {
   function splitAddr(a) { const m = String(a || "").match(/^(.*?),\s*([^,]+?),\s*([A-Z]{2})\s*(\d{5})?/); return m ? [m[1].trim(), m[2].trim(), m[3], m[4] || ""] : [String(a || "").trim(), "", "", ""]; }
   function fgRows(job, res) {
     const [site, city, st, zip] = splitAddr(job.addr), est = "AHP " + job.job + " - " + (job.jobName || "");
-    return res.phases.flatMap(p => p.lines.map(o => [res.customer, "", "", "", "", "", "", "", "", site || job.jobName, site, city, st, zip, "", "", "Residential", est, "Fiberglass",
+    return res.phases.flatMap(p => p.lines.map(o => [res.customer, "", "", "", "", "", "", "", "", job.jobName || site, site, city, st, zip, "", "", "Residential", est, "Fiberglass",
       p.name === "Base Estimate" ? "" : p.name, "", "", o.item, o.area, o.qty, o.uom, "", o.rv, "No", "", o.unit, "", ""]));
   }
   // scanned Google Maps printout (no text layer): OCR the top of page 1 for "A to B" → B
