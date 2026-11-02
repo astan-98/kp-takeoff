@@ -5712,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02winshare";
+const APP_BUILD = "2026-11-02pdfshare";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -7475,6 +7475,97 @@ function buildXlsx(o, cats) { // cats: ["attic"] or ["walls"] or both
 }
 
 
+/* ---------- pdfshare: tiny self-contained PDF of a work order (same layout model as the xlsx) ---------- */
+var HB_W = [278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584];
+function pdfTxt(s) {
+  return String(s == null ? "" : s).replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[\u2013\u2014]/g, "-").replace(/\u2026/g, "...")
+    .replace(/[\u2713\u2714\u2705]/g, "").replace(/[^\x20-\x7E\xA0-\xFF]/g, "");
+}
+function pdfW(s, sz) { var w = 0; for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); w += (c >= 32 && c <= 126) ? HB_W[c - 32] : 556; } return w * sz / 1000; }
+function pdfEsc(s) { return s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)"); }
+function jpegSize(u8) {
+  for (var i = 2; i < u8.length - 9;) {
+    if (u8[i] !== 0xFF) { i++; continue; }
+    var m = u8[i + 1], len = (u8[i + 2] << 8) | u8[i + 3];
+    if (m >= 0xC0 && m <= 0xCF && m !== 0xC4 && m !== 0xC8 && m !== 0xCC) return { h: (u8[i + 5] << 8) | u8[i + 6], w: (u8[i + 7] << 8) | u8[i + 8], comps: u8[i + 9] };
+    i += 2 + len;
+  }
+  return null;
+}
+function buildPdf(o, cat) {
+  var sh = o.sheets[cat]; if (!sh) return null;
+  var L = sheetLayout(o, sh), PT = { b10: 10, b12: 12, b14: 14 };
+  var colpt = L.COLW.map(function (w) { return (w * 7 + 5) * 0.75; }), tw = colpt.reduce(function (a, b) { return a + b; }, 0);
+  var PW = 612, PH = 792, M = 36, k = Math.min(1, (PW - 2 * M) / tw);
+  var x0 = (PW - tw * k) / 2, colX = [x0]; colpt.forEach(function (w, i) { colX.push(colX[i] + w * k); });
+  var rowY = [0, PH - M - 22]; // row r top = rowY[r]
+  for (var r = 1; r <= L.R; r++) rowY[r + 1] = rowY[r] - (L.HT[r] || L.DEF_HT) * k;
+  var ops = ["0 g 0 G"], f2 = function (n) { return (Math.round(n * 100) / 100).toString(); };
+  var hd = pdfTxt(L.header), hs = 12;
+  ops.push("BT /F1 " + hs + " Tf " + f2((PW - pdfW(hd, hs)) / 2) + " " + f2(PH - M - 12) + " Td (" + pdfEsc(hd) + ") Tj ET");
+  // borders
+  var lines = { "medium": [], "thin": [] };
+  for (r = 1; r <= L.R; r++) for (var c = 0; c < L.C; c++) {
+    var cell = L.cells[r + "," + c]; if (!cell) continue; var b = cell.st.b || {};
+    var xl = colX[c], xr = colX[c + 1], yt = rowY[r], yb = rowY[r + 1];
+    if (b.l) lines[b.l].push([xl, yt, xl, yb]); if (b.r) lines[b.r].push([xr, yt, xr, yb]);
+    if (b.t) lines[b.t].push([xl, yt, xr, yt]); if (b.b) lines[b.b].push([xl, yb, xr, yb]);
+  }
+  ["thin", "medium"].forEach(function (w) {
+    if (!lines[w].length) return;
+    ops.push((w === "medium" ? 1.5 : 0.6) + " w"); lines[w].forEach(function (l) { ops.push(f2(l[0]) + " " + f2(l[1]) + " m " + f2(l[2]) + " " + f2(l[3]) + " l S"); });
+  });
+  // logo (JPEG only)
+  var img = null, lg = L.logo ? logoBytes(L.logo) : null;
+  if (lg && lg.ext === "jpeg") { var js = jpegSize(lg.bytes); if (js) img = { bytes: lg.bytes, w: js.w, h: js.h, cs: js.comps === 1 ? "/DeviceGray" : js.comps === 4 ? "/DeviceCMYK" : "/DeviceRGB" }; }
+  // text
+  L.regions.forEach(function (g) {
+    var cell = L.cells[g.r1 + "," + g.c1]; if (!cell) return;
+    var st = cell.st, s = pdfTxt(fmtCell(g.v, st)); if (!s) return;
+    var sz = (PT[st.font] || 14) * k, xl = colX[g.c1] + 3, xr = colX[g.c2 + 1] - 3, yt = rowY[g.r1], yb = rowY[g.r2 + 1], avail = xr - xl;
+    if (img && g.r1 === 1 && g.c1 === 0) {} // title still centered
+    var parts = [s];
+    if (st.wrap && pdfW(s, sz) > avail) {
+      parts = []; var cur = "";
+      s.split(/\s+/).forEach(function (wd) { var t = cur ? cur + " " + wd : wd; if (cur && pdfW(t, sz) > avail) { parts.push(cur); cur = wd; } else cur = t; });
+      if (cur) parts.push(cur);
+      while (parts.length > 1 && parts.length * sz * 1.05 > (yt - yb)) sz *= 0.9;
+    }
+    while (pdfW(parts.reduce(function (a, p) { return pdfW(p, 1) > pdfW(a, 1) ? p : a; }, ""), sz) > avail && sz > 5) sz *= 0.92;
+    var lh = sz * 1.05, top = (yt + yb) / 2 + (parts.length * lh) / 2 - sz * 0.8;
+    parts.forEach(function (p, i) {
+      var w = pdfW(p, sz), x = st.h === "center" ? xl + (avail - w) / 2 : st.h === "right" ? xr - w : xl;
+      ops.push("BT /F1 " + f2(sz) + " Tf " + f2(x) + " " + f2(top - i * lh) + " Td (" + pdfEsc(p) + ") Tj ET");
+    });
+  });
+  if (img) { var ih = 54 * k, iw = ih * img.w / img.h; ops.push("q " + f2(iw) + " 0 0 " + f2(ih) + " " + f2(colX[0] + 3) + " " + f2(rowY[1] - 2 - ih) + " cm /Im1 Do Q"); }
+  var content = ops.join("\n");
+  var enc = function (s) { var u = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 255; return u; };
+  var title = pdfTxt((o.customer != null ? o.customer : "Chafin") + " Work Order - " + (o.jobSite || ""));
+  var objs = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + PW + " " + PH + "] /Resources << /Font << /F1 4 0 R >>" + (img ? " /XObject << /Im1 7 0 R >>" : "") + " >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+    "<< /Length " + content.length + " >>\nstream\n" + content + "\nendstream",
+    "<< /Title (" + pdfEsc(title) + ") /Producer (KP Takeoff) >>"
+  ];
+  if (img) objs.push({ head: "<< /Type /XObject /Subtype /Image /Width " + img.w + " /Height " + img.h + " /ColorSpace " + img.cs + " /BitsPerComponent 8 /Filter /DCTDecode" + (img.cs === "/DeviceCMYK" ? " /Decode [1 0 1 0 1 0 1 0]" : "") + " /Length " + img.bytes.length + " >>\nstream\n", bytes: img.bytes });
+  var chunks = [], pos = 0, offs = [];
+  function add(u) { chunks.push(u); pos += u.length; }
+  add(enc("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n"));
+  objs.forEach(function (ob, i) {
+    offs.push(pos);
+    if (typeof ob === "string") add(enc((i + 1) + " 0 obj\n" + ob + "\nendobj\n"));
+    else { add(enc((i + 1) + " 0 obj\n" + ob.head)); add(ob.bytes); add(enc("\nendstream\nendobj\n")); }
+  });
+  var xref = pos, x = "xref\n0 " + (objs.length + 1) + "\n0000000000 65535 f \n";
+  offs.forEach(function (n) { x += String(n).padStart(10, "0") + " 00000 n \n"; });
+  add(enc(x + "trailer\n<< /Size " + (objs.length + 1) + " /Root 1 0 R /Info 6 0 R >>\nstartxref\n" + xref + "\n%%EOF\n"));
+  var out = new Uint8Array(pos), p = 0; chunks.forEach(function (u) { out.set(u, p); p += u.length; });
+  return out;
+}
+
 /* ---------- HTML preview (same layout model as the xlsx) ---------- */
 function fmtCell(v, st) {
   if (v && typeof v === "object" && "n" in v) {
@@ -7608,7 +7699,7 @@ function rowsToLots(rows) {
 
 return {
   DATA: DATA, KNOWN_CITIES: KNOWN_CITIES, parseRequest: parseRequest, extractDate: extractDate, buildOrder: buildOrder,
-  buildXlsx: buildXlsx, fileNameFor: fileNameFor, planInfo: planInfo, subDisplay: subDisplay, subPhase: subPhase,
+  buildXlsx: buildXlsx, buildPdf: buildPdf, fileNameFor: fileNameFor, planInfo: planInfo, subDisplay: subDisplay, subPhase: subPhase,
   subdivisions: subdivisions, cityFor: cityFor, fmtDate: fmtDate, unzip: unzip, xlsxRows: xlsxRows, csvRows: csvRows,
   rowsToLots: rowsToLots, TICKET_TYPES: TICKET_TYPES, buildTicket: buildTicket, ticketCat: ticketCat, ticketTo: ticketTo, parseTyped: parseTyped, parseLegacy: parseLegacy, findDates: findDates, subMatch: subMatch, INFO_NOTE: INFO_NOTE, ticketLabel: ticketLabel, ticketDateStr: ticketDateStr, typedShareText: typedShareText, findTypes: findTypes, previewHtml: previewHtml, sheetLayout: sheetLayout, normLot: normLot, crc32: crc32, zipStore: zipStore, canonPlan: canonPlan
 };
@@ -7870,11 +7961,22 @@ function exportFiles(cats, msgEl) {
   if (o.ticketType) logSent([o], cats[0] === "attic" ? "attic" : "walls");
   var m = msgEl || $("woExportMsg");
   var msgParts = o.ticketType ? K.typedShareText([o], who(cats[0]).name) : shareText(o, cats.filter(function (c) { return o.sheets[c]; }));
-  var data = { files: files };
-  if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) {
-    navigator.share(data).then(function () { m.textContent = "Shared " + files.map(function (f) { return f.name; }).join(" and ") + "."; })
-      .catch(function (e) { if (e && e.name === "AbortError") m.textContent = "Share canceled."; else { download(files); m.textContent = "Share didn't open, so I downloaded the file instead."; } });
-  } else { download(files); m.textContent = "Downloaded " + files.map(function (f) { return f.name; }).join(" and ") + "."; }
+  var list = files.map(function (f, i) { return { o: o, cat: cats.filter(function (c) { return o.sheets[c]; })[i], name: f.name }; });
+  shareFilesOr(files, list, function (t) { m.textContent = t; }, function (fs, lead) { download(fs); m.textContent = lead + "Downloaded " + fs.map(function (f) { return f.name; }).join(" and ") + "."; });
+}
+/* pdfshare: if xlsx can't be file-shared (Windows/desktop Chrome/Edge), share PDF copies instead; files only. Returns files to use or null. */
+function canShareFiles(fs) { try { return !!(fs.length && navigator.canShare && navigator.share && navigator.canShare({ files: fs })); } catch (e) { return false; } }
+function pdfTwins(list) { // list: [{o, cat, name}]
+  try {
+    var fs = list.map(function (x) { var b = K.buildPdf(x.o, x.cat); return b ? new File([b], x.name.replace(/\.xlsx$/i, "") + ".pdf", { type: "application/pdf" }) : null; });
+    return fs.every(Boolean) && canShareFiles(fs) ? fs : null;
+  } catch (e) { return null; }
+}
+function shareFilesOr(files, list, msg, fallback) { // xlsx first (iPhone), else PDFs, else fallback(files)
+  var use = canShareFiles(files) ? files : pdfTwins(list), isPdf = use && use !== files;
+  if (!use) return fallback(files, "");
+  navigator.share({ files: use }).then(function () { msg("Shared " + use.length + (isPdf ? " PDF" : "") + " file" + (use.length > 1 ? "s" : "") + ": " + use.map(function (f) { return f.name; }).join(", ") + "."); })
+    .catch(function (e) { if (e && e.name === "AbortError") msg("Share canceled."); else fallback(files, "Share didn't open. "); });
 }
 function download(files) {
   files.forEach(function (f, i) {
@@ -7967,12 +8069,13 @@ function wallsLabel(orders) {
   return k.join("/");
 }
 function exportBatch(cats) {
-  var orders = batchOrders(), files = [], used = [];
+  var orders = batchOrders(), files = [], used = [], list = [];
   orders.forEach(function (o) {
     var oc = cats.filter(function (c) { return o.sheets[c]; });
     if (!oc.length) return;
     used.push({ o: o, cats: oc });
     oc.forEach(function (cat) { // one file per lot per sheet kind — lots are never merged
+      list.push({ o: o, cat: cat, name: K.fileNameFor(o, cat) });
       files.push(new File([K.buildXlsx(o, [cat])], K.fileNameFor(o, cat), { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
     });
   });
@@ -7980,12 +8083,7 @@ function exportBatch(cats) {
   used.forEach(function (u) { saveRecent(u.o, u.cats); });
   var m = $("woBatchMsg");
   var mp = used.length === 1 ? shareText(used[0].o, used[0].cats) : batchShareText(used);
-  var data = { files: files };
-  function done(t) { if (m) m.textContent = t; }
-  if (navigator.canShare && navigator.share && navigator.canShare({ files: files })) {
-    navigator.share(data).then(function () { done("Shared " + files.length + " files: " + files.map(function (f) { return f.name; }).join(", ") + "."); })
-      .catch(function (e) { if (e && e.name === "AbortError") done("Share canceled."); else { download(files); done("Share didn't open, so I downloaded the files instead."); } });
-  } else { download(files); done("Downloaded " + files.map(function (f) { return f.name; }).join(", ") + "."); }
+  shareFilesOr(files, list, done, function (fs, lead) { download(fs); done(lead + "Downloaded " + fs.map(function (f) { return f.name; }).join(", ") + "."); });
 }
 function batchShareText(used) {
   var cats = [], subs = [], bySub = {};
@@ -8145,11 +8243,11 @@ function renderTyped() {
   box.appendChild(a);
 }
 function exportTyped(to) {
-  var ts = readyTickets(to), files = [], names = {};
+  var ts = readyTickets(to), files = [], names = {}, list = [];
   ts.forEach(function (t) {
     var o = t.order, cat = K.ticketCat(o), nm = K.fileNameFor(o, cat), base = nm.replace(/\.xlsx$/, ""), k = 2;
     while (names[nm]) nm = base + " (" + (k++) + ").xlsx";
-    names[nm] = 1;
+    names[nm] = 1; list.push({ o: o, cat: cat, name: nm });
     files.push(new File([K.buildXlsx(o, [cat])], nm, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
   });
   if (!files.length) return;
@@ -8157,19 +8255,15 @@ function exportTyped(to) {
   logSent(ts.map(function (t) { return t.order; }), to);
   var mp = K.typedShareText(ts.map(function (t) { return t.order; }), who(to).name), m = $("woBatchMsg");
   function done(x) { if (m) m.textContent = x; }
-  // winshare: try xlsx MIME, then octet-stream; files only (no title/text). If no file share, download + mailto prefilled.
-  function cs(fs) { try { return !!(navigator.canShare && navigator.share && navigator.canShare({ files: fs })); } catch (e) { return false; } }
-  if (!cs(files)) { var alt = files.map(function (f) { return new File([f], f.name, { type: "application/octet-stream" }); }); if (cs(alt)) files = alt; }
-  function mailFallback(lead) {
-    download(files);
-    var c = who(to) || {}, body = mp.text + "\n\n(Attachments downloaded \u2014 drag them in: " + files.map(function (f) { return f.name; }).join(", ") + ")";
+  // pdfshare: xlsx (iPhone) -> octet-stream xlsx -> PDF copies (Windows) -> download + mailto prefilled. Files only (no title/text).
+  if (!canShareFiles(files)) { var alt = files.map(function (f) { return new File([f], f.name, { type: "application/octet-stream" }); }); if (canShareFiles(alt)) files = alt; }
+  function mailFallback(fs, lead) {
+    download(fs);
+    var c = who(to) || {}, body = mp.text + "\n\n(Attachments downloaded \u2014 drag them in: " + fs.map(function (f) { return f.name; }).join(", ") + ")";
     setTimeout(function () { location.href = "mailto:" + encodeURIComponent(c.email || "").replace(/%40/g, "@") + "?subject=" + encodeURIComponent(mp.title) + "&body=" + encodeURIComponent(body); }, 600);
-    done(lead + "Downloaded " + files.length + " file" + (files.length > 1 ? "s" : "") + " and opened an email to " + (c.name || "") + (c.email ? " (" + c.email + ")" : "") + " \u2014 drag the downloaded files into it.");
+    done(lead + "Downloaded " + fs.length + " file" + (fs.length > 1 ? "s" : "") + " and opened an email to " + (c.name || "") + (c.email ? " (" + c.email + ")" : "") + " \u2014 drag the downloaded files into it.");
   }
-  if (cs(files)) {
-    navigator.share({ files: files }).then(function () { done("Shared " + files.length + " file" + (files.length > 1 ? "s" : "") + ": " + files.map(function (f) { return f.name; }).join(", ") + "."); })
-      .catch(function (e) { if (e && e.name === "AbortError") done("Share canceled."); else mailFallback("Share didn't open. "); });
-  } else mailFallback("");
+  shareFilesOr(files, list, done, mailFallback);
 }
 /* ---- ?wo=<text> link (Apple Shortcut "Send to KP Takeoff"): fill the box and run Find. Never sends. ---- */
 function takeUrlRequest() {
