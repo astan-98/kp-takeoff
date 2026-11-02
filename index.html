@@ -5713,7 +5713,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02kpcontact";
+const APP_BUILD = "2026-11-02skycal";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -9386,5 +9386,28 @@ function boot(){fromHash();pending();
   else if(!window.kpContactPicker){btn.style.display="none";}
   else{var cache=null;try{cache=JSON.parse(localStorage.getItem("kpContactsCache")||"null");}catch(e){}if(!key()&&!(cache&&cache.contacts&&cache.contacts.length)&&!(navigator.contacts&&navigator.contacts.select))btn.style.display="none";}}}
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else setTimeout(boot,0);
-window.addEventListener("hashchange",fromHash);document.addEventListener("visibilitychange",function(){if(!document.hidden)pending();});window.addEventListener("pageshow",function(){pending();});})();</script></body>
+window.addEventListener("hashchange",fromHash);document.addEventListener("visibilitychange",function(){if(!document.hidden)pending();});window.addEventListener("pageshow",function(){pending();});})();</script><style id="skyStyle">.sky-card{border:2px solid #0e7490;border-radius:14px;padding:10px 12px;margin:0 0 14px;background:rgba(14,116,144,.06)}.sky-row{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line,#ddd);padding:7px 0}.sky-row:first-of-type{border-top:0}.sky-row .l{flex:1;min-width:0}.sky-row .l b{display:block}.sky-row .l span{font-size:12px;opacity:.75}.sky-pill{font-size:11px;font-weight:800;border-radius:999px;padding:3px 8px;white-space:nowrap}.sky-pill.ok{background:#16702e;color:#fff}.sky-pill.no{background:#b45309;color:#fff}.sky-row button{min-height:34px;border-radius:9px;font-weight:700;font-size:12px;padding:4px 9px;border:1px solid var(--line,#ccc);background:var(--bg2,#f4f4f6);color:inherit}</style><script id="skyJs">/* skycal: "Sky's schedule — needs WO" (Chafin tab). Events come from the Surface watcher via KPI Ops /api/skycal; sent status = tickets saved/sent here (orders store) + manual marks. KPI Ops pushes a 7 AM digest for unsent jobs within 3 days. */
+(function(){var API="https://kpi-ops.pages.dev/api/skycal",TL={prehang:"Prehang",cf:"Caulk & Foam",attic:"Attic",fiberglass:"Fiberglass"},busy=false,last=0,data=null;
+function key(){try{return localStorage.getItem("kpOpsKey")||"";}catch(e){return "";}}
+function esc(t){return String(t==null?"":t).replace(/[&<>"]/g,function(x){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[x];});}
+function orders(){return new Promise(function(ok){try{var r=indexedDB.open("kp-chafin-v1",1);r.onupgradeneeded=function(){var d=r.result;if(!d.objectStoreNames.contains("kv"))d.createObjectStore("kv");if(!d.objectStoreNames.contains("orders"))d.createObjectStore("orders",{keyPath:"id"});};
+ r.onsuccess=function(){try{var q=r.result.transaction("orders").objectStore("orders").getAll();q.onsuccess=function(){r.result.close();ok(q.result||[]);};q.onerror=function(){ok([]);};}catch(e){ok([]);}};r.onerror=function(){ok([]);};}catch(e){ok([]);}});}
+function sentList(all){var out=[];all.forEach(function(rec){var o=rec&&rec.order;if(!o||!o.lot)return;var lot=String(isNaN(o.lot.n)||o.lot.n==null?o.lot.l:o.lot.n).toUpperCase(),types=o.ticketType?[o.ticketType]:(rec.cats||[]).map(function(c){return c==="walls"?"fiberglass":c;});
+ types.forEach(function(t){out.push({sub:o.sub||"",lot:lot,type:t,at:rec.at||"",to:t==="attic"?"Josh":"Sky"});});});return out;}
+function api(body){var k=key();var u=API+"?k="+encodeURIComponent(k);return fetch(u,body?{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify(body)}:{cache:"no-store"}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});}
+function box(){var sec=document.querySelector("#tab-workorder .section");if(!sec)return null;var b=document.getElementById("skyCard");if(!b){b=document.createElement("div");b.id="skyCard";b.className="sky-card";sec.insertBefore(b,sec.firstChild);}return b;}
+function dd(d){var x=new Date(d+"T12:00:00");return isNaN(x)?d:x.toLocaleDateString(undefined,{weekday:"short",month:"numeric",day:"numeric"});}
+function draw(){var b=box();if(!b)return;if(!key()){b.style.display="none";return;}b.style.display="";
+ if(!data){b.innerHTML="<b>📅 Sky's schedule — needs WO</b><div class='cap'>Loading…</div>";return;}
+ var today=new Date();today.setHours(0,0,0,0);var t0=today.toISOString().slice(0,10),items=(data.items||[]).filter(function(i){return i.date>=t0;});
+ var n=items.filter(function(i){return !i.sent;}).length,ag=data.at?Math.round((Date.now()-Date.parse(data.at))/60000):null;
+ b.innerHTML="<b>📅 Sky's schedule — needs WO</b> <span class='cap'>"+(items.length?n+" of "+items.length+" not sent":"")+"</span><div class='cap' style='margin:2px 0 6px'>"+(data.at?"From Sky's Outlook calendar · updated "+(ag<60?ag+" min":Math.round(ag/60)+" h")+" ago":"Waiting for the Surface to upload Sky's calendar (runs hourly 6 AM–7 PM).")+"</div>"+
+  (items.length?items.map(function(i){return "<div class='sky-row'><div class='l'><b>"+esc(dd(i.date))+" · "+esc(i.sub||"?")+" "+esc(i.lots.join(", "))+"</b><span>"+esc(TL[i.type]||i.type||"type?")+(i.flags&&i.flags.length?" · "+esc(i.flags.join(", ")):"")+" · "+esc(i.subject)+"</span></div><span class='sky-pill "+(i.sent?"ok":"no")+"'>"+(i.sent?(i.manual?"✓ Marked":"✓ Sent"):"Not sent")+"</span>"+(i.sent&&!i.manual?"":"<button type='button' data-skymark='"+esc(i.id)+"' data-on='"+(i.manual?"0":"1")+"'>"+(i.manual?"Undo":"Mark sent")+"</button>")+"</div>";}).join(""):"<div class='cap'>No upcoming Chafin jobs on Sky's calendar.</div>");}
+function load(force){if(!key()||busy)return;if(!force&&Date.now()-last<60000){draw();return;}busy=true;last=Date.now();draw();
+ orders().then(function(all){var s=sentList(all);return api(s.length?{sent:s}:null);}).then(function(d){data=d;busy=false;draw();},function(e){busy=false;data=data||{items:[],at:""};draw();});}
+document.addEventListener("click",function(e){var m=e.target.closest&&e.target.closest("[data-skymark]");if(m){api({mark:{id:m.dataset.skymark,on:m.dataset.on==="1"}}).then(function(d){data=d;draw();}).catch(function(){alert("Couldn't reach KPI Ops — try again.");});return;}
+ var nb=e.target.closest&&e.target.closest('.nav-btn[data-tab="workorder"]');if(nb)setTimeout(function(){load();},50);},true);
+window.addEventListener("kpwo-saved",function(){setTimeout(function(){load(true);},400);});
+document.addEventListener("visibilitychange",function(){if(!document.hidden&&document.getElementById("tab-workorder")&&document.getElementById("tab-workorder").classList.contains("active"))load();});
+setTimeout(function(){load(true);},1500);window.kpSkyLoad=load;})();</script></body>
 </html>
