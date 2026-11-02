@@ -9019,8 +9019,8 @@ function cpChecked(it) { const m = cpCkLoad(), k = (it.key || "") + "@" + it.dat
 function cpWhen(it) { const dt = String(it.dateText || it.date || ""); return dt.startsWith("~") ? "around " + dt.slice(1) : dt; }
 function cpBody(its) { const by = {}, ord = []; its.forEach(it => { if (!(it.job in by)) { by[it.job] = []; ord.push(it.job); } by[it.job].push(it); });
   const lc = t => String(t || "").toLowerCase().replace(/\+/g, "and");
-  if (its.length === 1) { const it = its[0], w = cpWhen(it); return "Hey man, I saw the " + it.job + " job on the critical path calling for " + lc(it.task) + (w.startsWith("around") ? " " : " on ") + w + ". Am I good to get that on schedule or do we need to adjust that date?"; }
-  const parts = ord.map((j, n) => { const xs = by[j].map(it => lc(it.task) + " " + cpWhen(it)); const tj = xs.length > 1 ? xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1] : xs[0]; return (n === 0 ? "the " + j + " on the critical path calling for " : "the " + j + " for ") + tj; });
+  if (its.length === 1) { const it = its[0], w = cpWhen(it); return "Hey man, I saw the " + (/\bjob$/i.test(it.job) ? it.job : it.job + " job") + " on the critical path calling for " + lc(it.task) + (w.startsWith("around") ? " " : " on ") + w + ". Am I good to get that on schedule or do we need to adjust that date?"; }
+  const parts = ord.map((j, n) => { const xs = by[j].map(it => lc(it.task) + " " + cpWhen(it)); const tj = xs.length > 1 ? xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1] : xs[0]; const jj = /\bjob$/i.test(j) ? j : j + " job"; return (n === 0 ? "the " + jj + " on the critical path calling for " : "the " + jj + " for ") + tj; });
   const body = parts.length > 1 ? parts.slice(0, -1).join(", ") + (parts.length > 2 ? "," : "") + " and " + parts[parts.length - 1] : parts[0];
   return "Hey man, I saw " + body + ". Am I good to get those on schedule or do we need to adjust any dates?"; }
 function cpRefreshTexts() { document.querySelectorAll("#ahpCpOut a.ahp-sms[data-grp]").forEach(a => { const g = a.dataset.grp;
