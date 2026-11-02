@@ -5523,7 +5523,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02tkodel";
+const APP_BUILD = "2026-11-02kpcontact";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -7437,5 +7437,38 @@ document.addEventListener("focusin",upd,true);
 document.addEventListener("focusout",function(){clearTimeout(t);t=setTimeout(upd,80);},true);
 if(vv)vv.addEventListener("resize",function(){clearTimeout(t);t=setTimeout(upd,50);});
 window.addEventListener("orientationchange",function(){setTimeout(function(){base=vv?vv.height:window.innerHeight;upd();},400);});
-window.addEventListener("pageshow",upd);document.addEventListener("visibilitychange",function(){if(!document.hidden)setTimeout(upd,100);});})();</script></body>
+window.addEventListener("pageshow",upd);document.addEventListener("visibilitychange",function(){if(!document.hidden)setTimeout(upd,100);});})();</script><script id="kpContactJs">/* kpcontact: contact from the iPhone "KP Contact" Shortcut via #contact&first=..&last=..&company=..&phone=..&email=..&street=..&city=..&state=..&zip=.. (or #contact=<JSON>).
+   Fills the open takeoff's Customer fields. Safari and the home-screen app have separate storage on iOS, so Safari also hands it to the app through KPI Ops (3 min, read with the app's own key). */
+(function(){var ED=/\/lance\//.test(location.pathname)?"lance":/\/sky\//.test(location.pathname)?"sky":/\/choice\//.test(location.pathname)?"choice":"asher",PK="kpPendingContact",API="https://kpi-ops.pages.dev/api/contactdrop";
+var IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
+var STANDALONE=(window.navigator.standalone===true)||(window.matchMedia&&matchMedia("(display-mode: standalone)").matches);
+function key(){try{return localStorage.getItem("kpOpsKey")||"";}catch(e){return "";}}
+function set(id,v){var e=document.getElementById(id);if(!e||v==null||String(v).trim()==="")return;e.value=String(v).trim();e.dispatchEvent(new Event("input",{bubbles:true}));e.dispatchEvent(new Event("change",{bubbles:true}));}
+function toast(t){var d=document.createElement("div");d.textContent=t;d.style.cssText="position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:99999;background:#16702e;color:#fff;font-weight:800;padding:10px 16px;border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw";document.body.appendChild(d);setTimeout(function(){d.remove();},3500);}
+function norm(c){c=c||{};var first=c.first||"",last=c.last||"";if(!first&&!last&&c.name){var p=String(c.name).trim().split(/\s+/);first=p.shift()||"";last=p.join(" ");}
+ var ph=c.phone||(c.phones||[])[0]||"",em=c.email||(c.emails||[])[0]||"";return {first:first,last:last,company:c.company||"",phone:ph,email:em,street:c.street||c.address||"",city:c.city||"",state:c.state||"",zip:c.zip||""};}
+function fill(c0){var c=norm(c0);if(!(c.first||c.last||c.company||c.phone||c.email||c.street))return false;
+ try{var mb=document.querySelector('.nav-btn[data-tab="measure"]')||document.querySelector(".nav-btn");if(mb&&!mb.classList.contains("active"))mb.click();}catch(e){}
+ setTimeout(function(){if(c.company)set("builder",c.company);set("custFirst",c.first);set("custLast",c.last);set("custPhone",c.phone);set("custEmail",c.email);
+  var st=String(c.street).split(/\n/)[0];set("address",st);set("city",c.city);set("siteState",c.state);set("siteZip",String(c.zip).replace(/[^\d-]/g,""));
+  try{var sc=document.getElementById("sec-customer");if(sc)sc.scrollIntoView({block:"start"});}catch(e){}
+  toast("Contact filled: "+([c.first,c.last].filter(Boolean).join(" ")||c.company));},120);return true;}
+window.kpFillContact=fill;
+function parse(h){h=String(h||"").replace(/^#/,"");if(!/^contact\b/.test(h))return null;var r=h.slice(7);
+ if(r.charAt(0)==="="){var v=r.slice(1),i=v.indexOf("&");try{return JSON.parse(decodeURIComponent(v));}catch(e){} r="&"+v.replace(/^([^&=]*)/,"name=$1");}
+ var o={};r.replace(/^[&?]/,"").split("&").forEach(function(kv){if(!kv)return;var i=kv.indexOf("="),k=i<0?kv:kv.slice(0,i),v=i<0?"":kv.slice(i+1);try{v=decodeURIComponent(v.replace(/\+/g," "));}catch(e){}o[k.toLowerCase()]=v;});return o;}
+function fromHash(){var c=parse(location.hash);if(!c)return;try{history.replaceState(null,"",location.pathname+location.search);}catch(e){location.hash="";}
+ try{localStorage.setItem(PK,JSON.stringify({c:c,at:Date.now()}));}catch(e){}
+ if(IOS&&!STANDALONE&&(ED==="asher"||ED==="lance")){try{fetch(API,{method:"POST",headers:{"content-type":"text/plain"},body:JSON.stringify({who:ED,c:c})}).catch(function(){});}catch(e){}}
+ if(fill(c)){try{localStorage.removeItem(PK);}catch(e){}}}
+function pending(){try{var p=JSON.parse(localStorage.getItem(PK)||"null");if(p){localStorage.removeItem(PK);if(Date.now()-p.at<120000)fill(p.c);}}catch(e){}
+ var k=key();if(k&&(ED==="asher"||ED==="lance")&&STANDALONE&&IOS){fetch(API+"?k="+encodeURIComponent(k),{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){if(d&&d.c&&Date.now()-d.at<180000)fill(d.c);}).catch(function(){});}}
+function boot(){fromHash();pending();
+ var btn=document.getElementById("btnPickContact");
+ if(!btn){var cf=document.getElementById("custFirst"),g=cf&&cf.closest(".grid2");if(g&&IOS){btn=document.createElement("button");btn.type="button";btn.id="btnPickContact";btn.className="btn btn-secondary btn-block";btn.style.margin="2px 0 8px";g.parentNode.insertBefore(btn,g);}}
+ if(btn){if(IOS){btn.textContent="📇 Pick contact (runs the KP Contact Shortcut)";btn.style.display="";btn.onclick=function(){location.href="shortcuts://run-shortcut?name="+encodeURIComponent("KP Contact");};}
+  else if(!window.kpContactPicker){btn.style.display="none";}
+  else{var cache=null;try{cache=JSON.parse(localStorage.getItem("kpContactsCache")||"null");}catch(e){}if(!key()&&!(cache&&cache.contacts&&cache.contacts.length)&&!(navigator.contacts&&navigator.contacts.select))btn.style.display="none";}}}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else setTimeout(boot,0);
+window.addEventListener("hashchange",fromHash);document.addEventListener("visibilitychange",function(){if(!document.hidden)pending();});window.addEventListener("pageshow",function(){pending();});})();</script></body>
 </html>
