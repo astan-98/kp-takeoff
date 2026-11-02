@@ -2421,7 +2421,7 @@ function twoPreview(foamChoice, previewOnly) {
     '<button type="button" class="btn btn-secondary btn-block" id="twoXlPrint">🖨 Print / save as PDF</button>' +
     (previewOnly ? '<p class="status" style="text-align:center">Preview — this is what goes to ' + escHtml(twoWho("walls").name) + '. Nothing is sent from here.</p>' : "") +
     '<button type="button" class="btn btn-primary btn-block' + (previewOnly ? " hidden" : "") + '" id="twoXlMail">✉️ Email ' + escHtml(twoWho("walls").name) + '</button>' +
-    '<button type="button" class="btn btn-secondary btn-block' + (previewOnly ? " hidden" : "") + '" id="twoXlShare" style="margin-top:6px">Share file… ' + ' + (orders.length > 1 ? "both work orders" + (S.photos.length ? " + photos" : "") : S.photos.length ? "work order + photos" : "this file") + " to " + escHtml(twoWho("walls").name) + "</button>" +
+    '<button type="button" class="btn btn-secondary btn-block' + (previewOnly ? " hidden" : "") + '" id="twoXlShare" style="margin-top:6px">Share file… ' + (orders.length > 1 ? "both work orders" + (S.photos.length ? " + photos" : "") : S.photos.length ? "work order + photos" : "this file") + " to " + escHtml(twoWho("walls").name) + "</button>" +
     '<div id="twoXlRecip"></div><p class="status" id="twoXlMsg" style="text-align:center"></p></div>';
   document.body.appendChild(m); document.body.classList.add("xl-open", "wo-print");
   if (!previewOnly) $("twoXlRecip").appendChild(twoRecipient("walls"));
