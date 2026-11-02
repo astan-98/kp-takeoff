@@ -8079,7 +8079,7 @@ function renderTyped() {
   var B = WO.batch, box = $("woBatch");
   box.classList.remove("hidden"); box.innerHTML = "";
   var s = el("div", "section"), n = B.tickets.length;
-  s.innerHTML = "<h2>" + n + " ticket" + (n === 1 ? "" : "s") + " \u00b7 " + B.items.length + " lot" + (B.items.length === 1 ? "" : "s") + "</h2><p class='cap'>Each ticket is its own Excel file with its own date. Anything I wasn't sure about is flagged \u26a0\ufe0f and held back until you fix it, confirm it, or leave it out.</p>";
+  s.innerHTML = "<h2>" + n + " ticket" + (n === 1 ? "" : "s") + " \u00b7 " + B.items.length + " lot" + (B.items.length === 1 ? "" : "s") + "</h2><p class='cap'>Each ticket is its own Excel file with its own date. Anything I wasn't sure about is flagged \u26a0\ufe0f and held back until you fix or confirm it in Review / edit. Flagged tickets just stay behind; only \u2705 ready ones get sent.</p>";
   B.reqFlags.forEach(function (f) { s.appendChild(el("div", "callout warn", h(f))); });
   B.items.forEach(function (it) {
     var c = el("div", "row-card"), rec = it.rec;
@@ -8115,9 +8115,7 @@ function renderTyped() {
         }
       });
       if (o) { var rv = el("button", "btn btn-secondary btn-sm", on ? "Reviewing \u2713" : "Review / edit"); rv.type = "button"; rv.onclick = function () { selectTicket(t); }; acts.appendChild(rv); }
-      var lo = el("button", "btn btn-danger btn-sm", "Leave out"); lo.type = "button";
-      lo.onclick = function () { B.tickets = B.tickets.filter(function (x) { return x !== t; }); if (o && WO.order === o) hideOrder(); renderBatch(); };
-      acts.appendChild(lo); row.appendChild(acts); c.appendChild(row);
+      row.appendChild(acts); c.appendChild(row);
     });
     var add = el("div", "archive-actions"); add.style.marginTop = "8px";
     ["prehang", "cf", "fiberglass", "attic"].forEach(function (type) {
@@ -8128,19 +8126,17 @@ function renderTyped() {
       sb.setAttribute("aria-pressed", "true"); sb.title = tLabel(type) + " ticket already built";
       sb.onclick = function () {
         var r = have[0]._row; if (r) { r.scrollIntoView({ behavior: "smooth", block: "center" }); r.style.transition = "background .6s"; r.style.background = "rgba(255,200,0,.35)"; setTimeout(function () { r.style.background = ""; }, 900); }
-        setTimeout(function () { if (confirm("This lot already has " + (have.length > 1 ? have.length + " " : "an ") + tLabel(type) + " ticket" + (have.length > 1 ? "s" : "") + ". Add another one?")) addTicket(it, type); }, 700);
+        setTimeout(function () { if (confirm("This lot already has " + (have.length > 1 ? have.length + " " : (/^[AEIOU]/i.test(tLabel(type)) ? "an " : "a ")) + tLabel(type) + " ticket" + (have.length > 1 ? "s" : "") + ". Add another one?")) addTicket(it, type); }, 700);
       };
       add.appendChild(sb);
     });
-    var lol = el("button", "btn btn-danger btn-sm", "Leave out lot"); lol.type = "button";
-    lol.onclick = function () { B.items = B.items.filter(function (x) { return x !== it; }); B.tickets = B.tickets.filter(function (t) { if (t.item === it && t.order && WO.order === t.order) hideOrder(); return t.item !== it; }); renderBatch(); };
-    add.appendChild(lol); c.appendChild(add);
+    c.appendChild(add);
     s.appendChild(c);
   });
   box.appendChild(s);
   var a = el("div", "section"); a.innerHTML = "<h2>Send</h2>";
   var sky = readyTickets("walls"), josh = readyTickets("attic"), held = B.tickets.length - sky.length - josh.length;
-  if (!sky.length && !josh.length) a.appendChild(el("p", "status", "Nothing is ready yet. Fix or leave out the flagged tickets above."));
+  if (!sky.length && !josh.length) a.appendChild(el("p", "status", "Nothing is ready yet. Fix or confirm the flagged tickets above in Review / edit."));
   a.appendChild(el("p", "cap", "One share, one Excel file per ticket. Tap Copy email first, then paste it into Mail's To line."));
   if (sky.length) { a.appendChild(btn("Share all " + sky.length + " to " + who("walls").name, "btn-primary", function () { exportTyped("walls"); })); a.appendChild(recipientBlock("walls")); }
   if (josh.length) { a.appendChild(btn("Share " + josh.length + " Attic to " + who("attic").name, "btn-primary", function () { exportTyped("attic"); })); a.appendChild(recipientBlock("attic")); }
