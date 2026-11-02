@@ -368,6 +368,38 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 .wo-recip a { color: var(--accent-ink); text-decoration: none; }
 .wo-recip .btn { flex-shrink: 0; }
 .xl-foot .wo-recip { margin-top: 8px; }
+/* 32a: AHP PO tab (Asher only) — style 2: card per line, big qty block */
+.ahp-drop{display:block;border:2px dashed var(--line);border-radius:var(--radius);padding:18px;text-align:center;background:var(--bg2);font-weight:600;color:var(--accent-ink)}
+.ahp-job{margin-top:14px}
+.ahp-head{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:10px}
+.ahp-head .t{font-weight:700;font-size:1.02rem}.ahp-sub{color:var(--text2);font-size:.8rem;margin-top:2px}
+.ahp-head select,.ahp-head input{width:100%;margin-top:6px}
+.ahp-flags{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:10px}
+.ahp-flag{background:var(--err-bg);border:1px solid var(--err-border);color:var(--err-ink);border-radius:10px;padding:8px 10px;margin-top:6px;font-size:.84rem;display:flex;gap:8px;align-items:center;justify-content:space-between}
+.ahp-flag.done{background:var(--bg3);border-color:var(--line);color:var(--text2);text-decoration:line-through}
+.ahp-flag.block b{color:var(--danger)}
+.ahp-flag button{flex:none;border:0;border-radius:9px;padding:7px 10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}
+.ahp-flag.done button{background:var(--line);color:var(--text2)}
+.ahp-ph{display:flex;justify-content:space-between;align-items:center;margin:16px 2px 6px;gap:8px}
+.ahp-ph .n{font-weight:700;font-size:1rem}
+.ahp-chip{display:inline-block;font-size:.72rem;padding:2px 8px;border-radius:10px;background:var(--err-bg);border:1px solid var(--err-border);color:var(--err-ink);margin:4px 4px 0 0}
+.ahp-chip.ok{background:rgba(48,209,88,.14);border-color:var(--ok);color:#16702e}
+.ahp-line{display:flex;gap:10px;background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:10px;margin-bottom:8px;align-items:stretch}
+.ahp-line.fl{border-color:var(--err-border);box-shadow:inset 4px 0 0 var(--err-border)}
+.ahp-qty{flex:none;min-width:76px;background:var(--accent-soft);color:var(--accent-ink);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 8px}
+.ahp-qty b{font-size:1.55rem;line-height:1.05;font-weight:800;letter-spacing:-.5px}
+.ahp-qty span{font-size:.72rem;font-weight:700;text-transform:uppercase}
+.ahp-qty i{font-size:.66rem;font-style:normal;opacity:.75}
+.ahp-body{flex:1;min-width:0}
+.ahp-body .m{font-weight:700;font-size:.9rem}
+.ahp-body .a{color:var(--text2);font-size:.78rem;margin-top:1px}
+.ahp-body .po{color:var(--text2);font-size:.7rem;margin-top:3px}
+.ahp-money{display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid var(--line);font-size:.8rem}
+.ahp-money b{font-size:.95rem}
+.ahp-tot{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-top:12px;font-size:.88rem}
+.ahp-tot div{display:flex;justify-content:space-between;padding:3px 0}
+.ahp-maps{background:var(--bg2);border:1px solid var(--err-border);border-radius:var(--radius);padding:12px;margin-top:10px;font-size:.84rem}
+body.has-ahp .bottom-nav{grid-template-columns:repeat(6,1fr)}
 </style>
 </head>
 <body>
@@ -821,6 +853,17 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       <p class="status" id="woMissing"></p>
     </div>
   </section>
+  <section id="tab-ahp" class="tabs-panel">
+    <div class="section" id="sec-ahp">
+      <h2>AHP PO → FieldGroove</h2>
+      <p class="cap">Add every attachment from the Home Place emails at once: POs, plans and the Google Maps page. Jobs group by Job#. Flags must be cleared before export.</p>
+      <label class="ahp-drop" for="ahpFiles">＋ Add PDFs (POs, plans, maps)</label>
+      <input type="file" id="ahpFiles" accept="application/pdf,.pdf" multiple class="hidden">
+      <p class="cap" id="ahpStatus" style="margin-top:8px"></p>
+      <div id="ahpOut"></div>
+      <button type="button" class="btn btn-secondary btn-block" id="ahpClear" style="margin-top:12px">Clear all</button>
+    </div>
+  </section>
 </main>
 
 <div class="save-dock hidden" id="saveDock"><div id="saveDockRow"><button type="button" class="btn btn-primary" id="btnSaveDock">Save to Library</button><button type="button" class="btn" id="btnCalcDock" aria-label="Calculator">🧮 Calculator</button></div></div>
@@ -833,6 +876,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
   <button type="button" class="nav-btn" data-tab="archive"><span class="ico"><svg class="tab-ico" data-icon="archive" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="5" x="2" y="3" rx="1" /> <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /> <path d="M10 12h4" /></svg></span>Library</button>
   <button type="button" class="nav-btn" data-tab="workorder"><span class="ico ico-chafin"><svg class="tab-ico" data-icon="home-check" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2" /> <path d="M19 13.488v-1.488h2l-9 -9l-9 9h2v7a2 2 0 0 0 2 2h4.525" /> <path d="M15 19l2 2l4 -4" /></svg></span>Chafin</button>
   <button type="button" class="nav-btn" data-tab="pricing"><span class="ico"><svg class="tab-ico" data-icon="circle-dollar-sign" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /> <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" /> <path d="M12 18V6" /></svg></span>Pricing</button>
+  <button type="button" class="nav-btn" data-tab="ahp"><span class="ico"><svg class="tab-ico" data-icon="file-stack" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7h-3a2 2 0 0 1-2-2V2"/><path d="M21 6v6.5c0 .8-.7 1.5-1.5 1.5h-7c-.8 0-1.5-.7-1.5-1.5v-9c0-.8.7-1.5 1.5-1.5H17Z"/><path d="M7 8v8.8c0 .3.2.6.4.8.2.2.5.4.8.4H15"/><path d="M3 12v8.8c0 .3.2.6.4.8.2.2.5.4.8.4H11"/></svg></span>AHP PO</button>
 </nav>
 
 <script>
@@ -5380,7 +5424,7 @@ function trainSteps() {
   const choice = APP_EDITION === "choice", who = choice ? "Crew" : "Sky", woHead = choice ? "Work order" : "Work order → Sky";
   const tabs = Array.from(document.querySelectorAll(".bottom-nav .nav-btn"));
   const what = { wizard: "measure the house — every job starts here", output: "the finished takeoff, " + trainSheet() + " and the FieldGroove file",
-    archive: "your saved jobs — search and reopen them", workorder: "builder lot-log work orders", pricing: "unit prices and the ballpark price" };
+    archive: "your saved jobs — search and reopen them", workorder: "builder lot-log work orders", pricing: "unit prices and the ballpark price", ahp: "Home Place POs → FieldGroove import" };
   const tabList = '<ul class="train-tabs">' + tabs.map(b => { const ic = b.querySelector("svg"); return "<li>" + (ic ? ic.outerHTML : "") + "<span><b>" + escHtml(b.textContent.trim()) + "</b> — " + escHtml(what[b.dataset.tab] || "") + "</span></li>"; }).join("") + "</ul>";
   const ul = a => '<ul class="train-list">' + a.map(x => "<li>" + x + "</li>").join("") + "</ul>";
   const fld = (label, inner) => '<div class="field"><label>' + escHtml(label) + "</label>" + inner + "</div>";
@@ -6675,6 +6719,7 @@ function init() {
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
 else init();
+window.KPAHP={fgXlsx,fgDeliver,escHtml,edition:APP_EDITION}; // 32a: AHP PO tab uses the FieldGroove export
 window.KPAPP={S,newJob,draftPayload,idbPut,refreshArchive,openArchiveJob,placesKey:()=>PLACES_KEY,edition:"asher"};
 })();
 </script>
@@ -8525,6 +8570,285 @@ async function deepLink(){if(IS_OPS)return;const hm=(window.__kpHash||"").match(
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",()=>{mount();setTimeout(deepLink,800);});else{mount();setTimeout(deepLink,800);}
 })();
 
+</script>
+<script>
+// ===== 32a: AHP PO → FieldGroove (Asher's copy only). Rules: /workspace/ahp-po/rules.md (Asher, Nov 2026) =====
+const AHP = (function () {
+  const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+  let lib = null;
+  function loadLib() {
+    if (lib) return lib;
+    lib = new Promise((res, rej) => { if (window.pdfjsLib) return res(window.pdfjsLib);
+      const s = document.createElement("script"); s.src = PDFJS + "pdf.min.js";
+      s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + "pdf.worker.min.js"; res(window.pdfjsLib); };
+      s.onerror = () => { lib = null; rej(new Error("Couldn't load the PDF reader — check the connection and try again.")); };
+      document.head.appendChild(s); });
+    return lib;
+  }
+  // text rows per page: [{y, it:[{x,s}]}] top→bottom
+  async function readPdf(buf) {
+    const pdfjs = await loadLib();
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise, pages = [];
+    for (let p = 1; p <= doc.numPages; p++) {
+      const tc = await (await doc.getPage(p)).getTextContent(), rows = [];
+      tc.items.forEach(i => { if (!i.str || !i.str.trim()) return; const y = i.transform[5], x = i.transform[4];
+        let r = rows.find(r => Math.abs(r.y - y) <= 3); if (!r) rows.push(r = { y, it: [] }); r.it.push({ x, s: i.str.trim() }); });
+      rows.sort((a, b) => b.y - a.y); rows.forEach(r => r.it.sort((a, b) => a.x - b.x)); pages.push(rows);
+    }
+    return pages;
+  }
+  const money = s => parseFloat(String(s).replace(/[$,]/g, "")) || 0;
+  const r2 = v => Math.round(v * 100) / 100;
+  function parsePo(pages) {
+    const po = { lines: [] };
+    pages.forEach(rows => {
+      const txt = rows.map(r => r.it.map(i => i.s).join(" "));
+      txt.forEach(t => {
+        let m;
+        if (!po.job && (m = t.match(/Job#\s*(\d{5,})/))) po.job = m[1];
+        if (!po.office && (m = t.match(/Office:\s*([A-Za-z .'-]+?)\s*$/))) po.office = m[1].trim();
+        if (!po.jobName && (m = t.match(/Job Name:\s*(.+?)\s+Job#/))) po.jobName = m[1].replace(/\s+,/g, ",").trim();
+        if (!po.no && (m = t.match(/PO#:\s*(\S+)/))) po.no = m[1];
+        if (!po.desc && (m = t.match(/Description:\s*(.+?)\s*$/))) po.desc = m[1].replace(/^\d\d-\d{3}:\s*/, "");
+        if ((m = t.match(/Grand Total:\s*(\$[\d,.]+)/))) po.total = money(m[1]);
+      });
+      let headerSeen = false;
+      rows.forEach((r, k) => {
+        const T = r.it.map(i => i.s).join(" ");
+        if (/^#\s+Qty/.test(T)) { headerSeen = true; return; }
+        const f = r.it[0];
+        if (!headerSeen || !f || f.x > 40 || !/^\d+$/.test(f.s)) return;
+        const ext = r.it.filter(i => /^\$[\d,]+\.\d\d$/.test(i.s)).pop(); if (!ext) return;
+        const qtyI = r.it.find(i => i.x > 40 && i.x < 92 && /^[\d,.]+$/.test(i.s));
+        const descI = r.it.filter(i => i.x >= 90 && i.x < 372);
+        const ccI = r.it.find(i => /^\d\d-\d{3}$/.test(i.s));
+        const after = ccI ? r.it.filter(i => i.x > ccI.x && i !== ext) : [];
+        const nums = after.filter(i => /^[\d,.]+$/.test(i.s));
+        const priceI = nums.length > 1 ? nums[nums.length - 1] : null;
+        let uom = after.filter(i => !/^[\d,.]+$/.test(i.s)).map(i => i.s).join(" ");
+        let desc = descI.map(i => i.s).join(" ");
+        // continuation text sits on the row(s) just above (e.g. "SUPPLY & INSTALL INSULATION & WRAP BEHIND"); "Squar" + "e Feet" split UOM
+        for (let j = k - 1; j >= 0; j--) { const p = rows[j], pt = p.it.map(i => i.s).join(" ");
+          if (/^#\s+Qty/.test(pt) || (p.it[0] && p.it[0].x < 40)) break;
+          const pd = p.it.filter(i => i.x >= 90 && i.x < 372).map(i => i.s).join(" "), pu = p.it.filter(i => i.x >= 372).map(i => i.s).join("");
+          if (pu) uom = pu + uom; if (pd) desc = pd + " " + desc; if (!pd && !pu) break; }
+        uom = uom.replace(/\s+/g, " ").trim(); const U = uom.toUpperCase().replace(/\s/g, "");
+        po.lines.push({ n: +f.s, qty: money(qtyI ? qtyI.s : 0), desc: desc.replace(/\s+/g, " ").trim(), price: priceI ? money(priceI.s) : 0,
+          uom: /FEET|SQ/.test(U) ? "SF" : /EACH|^EA/.test(U) ? "EA" : /JOB/.test(U) ? "JOB" : uom, ext: money(ext.s), po: po.no });
+      });
+    });
+    return po;
+  }
+  function classify(pages, name) {
+    const all = pages.map(rs => rs.map(r => r.it.map(i => i.s).join(" ")).join("\n")).join("\n");
+    if (/Americas Home Place\s*-\s*Work Order/i.test(all) || (/PO#:/.test(all) && /Job#/.test(all))) return Object.assign({ kind: "po", name }, parsePo(pages));
+    if (/Google Maps/i.test(all) || /\d+\s*min\s*\([\d.]+\s*mi\)/.test(all)) {
+      let m = all.match(/\bto\s+(\d+[^,\n]{2,50},\s*[A-Za-z .]{2,30},\s*[A-Z]{2}\s*\d{5})/), addr = m ? m[1].trim() : "";
+      if (!addr) { const lines = all.split("\n").filter(l => /,\s*[A-Z]{2}\s*\d{5}/.test(l)); addr = lines.length ? lines[lines.length - 1].trim() : ""; }
+      return { kind: "maps", name, addr, text: all };
+    }
+    if (all.replace(/\s/g, "").length < 40) return { kind: "image", name, pages: pages.length, text: "" };
+    return { kind: "plans", name, text: all, pages: pages.length };
+  }
+  const U = s => String(s || "").toUpperCase();
+  function surname(jobName) { return U((jobName || "").split(",")[0]).replace(/[^A-Z' -]/g, "").trim(); }
+  function docMatchesJob(doc, job) {
+    const T = U(doc.text).replace(/\s+/g, " "), j = job.job, sn = surname(job.jobName);
+    if (j && (T.indexOf(j) >= 0 || T.indexOf(j.slice(0, 2) + "-" + j.slice(2, 4) + "-" + j.slice(4)) >= 0)) return 2;
+    if (sn.length > 2 && new RegExp("\\b" + sn.replace(/[^A-Z]/g, "") + "\\b").test(T)) return 1;
+    return 0;
+  }
+  // FieldGroove exact names (FG_ITEM_NAMES / FG_WORK_AREAS)
+  const IT = { r13: "R13/15/9' UF (Owens Corning)", r19_15: "R19/15 UF (Owens Corning)", r19_16: "R19/16 UF (Owens Corning)", r19_19: "R19/19 UF (Owens Corning)",
+    r38_24: "R38/24 UF (Owens Corning)", knauf: "Knauf Jet Stream Ultra Blowing Wool (Owens Corning)", baf24: 'Baffles - 24"', poly: "6 Mil Poly",
+    tub: "Pre Hang Tubs/FP - House Wrap", air: "Standard Caulk & Foam Air Package", bdt: "Blower Door Test", dbt: "Duct Blaster Test" };
+  const SHORT = { [IT.r13]: "R13/15/9 UF", [IT.r19_15]: "R19/15 UF", [IT.r19_16]: "R19/16 UF", [IT.r19_19]: "R19/19 UF", [IT.r38_24]: "R38/24 UF", [IT.knauf]: "Knauf Jet Stream R38" };
+  const PH = { base: "Base Estimate", crawl: "Crawlspace", bsmt: "Basement Ceiling", blow: "Blow Phase", hpt: "Home Performance Testing" };
+  // unit price that makes qty × unit round to the PO extended price (fewest decimals)
+  function unitFor(qty, ext) { for (let d = 2; d <= 6; d++) { const f = Math.pow(10, d), u = Math.round(ext / qty * f) / f; if (r2(u * qty) === r2(ext)) return u; } return Math.round(ext / qty * 1e6) / 1e6; }
+  function buildJob(job) {
+    const flags = [], out = [], lines = [];
+    job.pos.forEach(p => p.lines.forEach(l => lines.push(Object.assign({ poDesc: p.desc }, l))));
+    const plansT = job.plans.map(d => U(d.text)).join("\n").replace(/SECOND FLOOR OPERABLE WINDOWS?/g, "").replace(/\(?BASEMENTS OR CONDITIONED CRAWL ?SPACES?( ONLY)?\)?/g, "");
+    const add = (key, text, block = true) => flags.push({ key, text, block });
+    const bsmtPo = lines.some(l => /BASEMENT/.test(U(l.desc))), bsmtPlans = /\bBASEMENT\b/.test(plansT), poly = lines.some(l => /POLY/.test(U(l.desc)));
+    const basement = (bsmtPo || bsmtPlans) && !poly ? true : false;
+    if ((bsmtPo || bsmtPlans) && poly) add("bsmt-poly", "Job has a poly line (crawlspace) AND basement " + (bsmtPo ? "wall lines" : "on the plans") + " — check which it is. Floor batts treated as crawl.");
+    const second = /(SECOND|2ND|UPPER)\s+FLOOR/.test(plansT);
+    const joists = []; (plansT.match(/FLOOR\s+JOISTS?\s*@\s*[\d.]+\s*("|''|”|IN)/g) || []).forEach(s => { const v = parseFloat(s.replace(/^[^@]*@\s*/, "")); if (v && v !== 16 && joists.indexOf(v) < 0) joists.push(v); });
+    if (!job.plans.length) add("no-plans", "No plans loaded for this job — 2nd floor, basement and joist spacing weren't checked.");
+    const office = U(job.office), customer = office === "ATHENS" ? "Home Place" : office === "GAINESVILLE" ? "Home Place-Gainesville" : "";
+    if (!customer) add("office", "PO Office is “" + (job.office || "blank") + "” — not Athens or Gainesville. Pick the FieldGroove customer by hand.");
+    lines.forEach((l, i) => {
+      const D = U(l.desc), id = "L" + i; let r = null;
+      const mk = (item, area, ph, qty, opts) => Object.assign({ item, area, phase: PH[ph], qty, uom: l.uom === "SF" ? "SqFt" : "Ea.", rv: "" }, opts || {});
+      if (/FURNACE/.test(D) && /R-?38/.test(D)) {
+        const q = l.qty === 64 ? 68 : l.qty === 128 ? 132 : l.qty;
+        r = mk(IT.r38_24, "Dead Air space", "base", q, { note: q !== l.qty ? l.qty + " → " + q + " SF (extra for the load ticket); unit price lowered so the total still matches the PO" : "" });
+        if (q === l.qty) add(id + "-furn", "Furnace platform batts are " + l.qty + " SF (not 64 or 128) — set the footage yourself.");
+      } else if (/R-?38/.test(D) && /BLOW/.test(D)) r = mk(IT.knauf, "Attic", "blow", l.qty, { rv: "R38" });
+      else if (/BAFFLE/.test(D) && /24/.test(D)) r = mk(IT.baf24, "Soffit Locations", "base", l.qty);
+      else if (/R-?13/.test(D) && /EXTERIOR WALL/.test(D)) { r = mk(IT.r13, "2/4 Exterior Walls", "base", l.qty);
+        if (second) add(id + "-2nd", "Plans show a 2nd floor — part of the R-13 walls are R13/15/8' UF. Split the " + l.qty + " SF yourself."); }
+      else if (/R-?19/.test(D) && /BASEMENT/.test(D) && /STAIR/.test(D)) r = mk(IT.r19_15, "Stair Shaft Walls", "base", l.qty);
+      else if (/R-?19/.test(D) && /BASEMENT/.test(D) && /EXTERIOR WALL/.test(D)) r = mk(IT.r19_15, "2/6 Daylight Walls", "base", l.qty);
+      else if (/R-?19/.test(D) && /KNEE/.test(D)) r = mk(IT.r19_15, "2/6 Exterior Walls", "base", l.qty);
+      else if (/R-?19/.test(D) && /FLOOR/.test(D)) {
+        if (basement) { r = mk(IT.r19_19, "Basement Ceiling", "bsmt", l.qty); add(id + "-1919", "Basement ceiling batts set to R19/19 UF — AHP has changed this width before. Confirm."); }
+        else r = mk(IT.r19_16, "Crawl Space Subfloor", "crawl", l.qty);
+        if (joists.length) add(id + "-joist", "Plans show floor joists at " + joists.join("/") + "\" O.C. (not 16\") — check the batt width.");
+      } else if (/POLY/.test(D)) r = mk(IT.poly, "Crawl Floor", "crawl", l.qty);
+      else if (/TUB/.test(D)) { r = mk(IT.tub, "Pre Hang Tubs", "base", 1, { uom: "Ea." }); if (!/TUB\/SHOWER/.test(D)) add(id + "-tub", "PO says “" + l.desc + "” (not the usual TUB/SHOWER wording) — treated as the pre-hang tub wrap. Confirm."); }
+      else if (/FOAM/.test(D) && /CAULK/.test(D)) r = mk(IT.air, "Air Infiltration", "base", 1, { uom: "Ea." });
+      else if (/BLOWER\s*DOOR/.test(D)) r = mk(IT.bdt, "Blower Door Test", "hpt", 1, { uom: "Ea." });
+      else if (/DUCT\s*BLAST/.test(D)) r = mk(IT.dbt, "Duct Blaster Test", "hpt", 1, { uom: "Ea." });
+      if (/INTERIOR WALL|INT\.? WALL|GARAGE|SOUND/.test(D)) add(id + "-int", "“" + l.desc + "” — interior / garage / sound line. Review.");
+      if (/VAULT|SLOPE|CATHEDRAL/.test(D)) add(id + "-vault", "“" + l.desc + "” — vaulted/sloped: open or closed vault? Review.");
+      if (!r) { add(id + "-rule", "Needs a rule: “" + l.desc + "” (" + l.qty + " " + l.uom + ", $" + l.ext.toFixed(2) + ", PO " + l.po + "). Not exported."); out.push({ id, po: l, rule: false }); return; }
+      r.unit = unitFor(r.qty, l.ext); r.total = r2(r.unit * r.qty);
+      if (r2(l.qty * l.price) !== r2(l.ext) && r.qty === l.qty) add(id + "-math", "PO math is off on “" + l.desc + "”: " + l.qty + " × $" + l.price + " ≠ $" + l.ext.toFixed(2) + ". Using the extended price.");
+      out.push(Object.assign(r, { id, po: l, rule: true, flagged: flags.some(f => f.key.indexOf(id + "-") === 0) }));
+    });
+    if (!job.addr) add("addr", "No address — add the Google Maps PDF or type the address.");
+    job.pos.forEach(p => { const s = r2(p.lines.reduce((a, l) => a + l.ext, 0)); if (p.total != null && s !== r2(p.total)) add("pot-" + p.no, "PO " + p.no + " lines add to $" + s.toFixed(2) + " but its Grand Total is $" + p.total.toFixed(2) + " — a line may not have read. Check the PDF."); });
+    const phases = [];
+    Object.values(PH).forEach(n => { const L = out.filter(o => o.rule && o.phase === n); if (!L.length) return;
+      phases.push({ name: n, lines: L, total: r2(L.reduce((a, o) => a + o.total, 0)), poTotal: r2(L.reduce((a, o) => a + o.po.ext, 0)) }); });
+    phases.forEach(p => { if (p.total !== p.poTotal) add("ph-" + p.name, p.name + " totals $" + p.total.toFixed(2) + " but its PO lines total $" + p.poTotal.toFixed(2) + "."); });
+    return { customer, basement, second, joists, flags, lines: out, phases, unmatched: out.filter(o => !o.rule) };
+  }
+  function splitAddr(a) { const m = String(a || "").match(/^(.*?),\s*([^,]+?),\s*([A-Z]{2})\s*(\d{5})?/); return m ? [m[1].trim(), m[2].trim(), m[3], m[4] || ""] : [String(a || "").trim(), "", "", ""]; }
+  function fgRows(job, res) {
+    const [site, city, st, zip] = splitAddr(job.addr), est = "AHP " + job.job + " - " + (job.jobName || "");
+    return res.phases.flatMap(p => p.lines.map(o => [res.customer, "", "", "", "", "", "", "", "", site || job.jobName, site, city, st, zip, "", "", "Residential", est, "Fiberglass",
+      p.name === "Base Estimate" ? "" : p.name, "", "", o.item, o.area, o.qty, o.uom, "", o.rv, "No", "", o.unit, "", ""]));
+  }
+  // scanned Google Maps printout (no text layer): OCR the top of page 1 for "A to B" → B
+  let tess = null;
+  function loadTess() { return tess || (tess = new Promise((res, rej) => { if (window.Tesseract) return res(window.Tesseract);
+    const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    s.onload = () => res(window.Tesseract); s.onerror = () => { tess = null; rej(new Error("OCR unavailable")); }; document.head.appendChild(s); })); }
+  async function ocrMap(buf) {
+    const pdfjs = await loadLib(), doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise, page = await doc.getPage(1);
+    const vp = page.getViewport({ scale: 2.5 }), cv = document.createElement("canvas"); cv.width = vp.width; cv.height = Math.round(vp.height * 0.32);
+    await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+    const T = await loadTess(), r = await T.recognize(cv, "eng"), t = r.data.text.replace(/\s+/g, " ");
+    if (!/google|maps|drive|mi\b|min\b/i.test(t)) return { text: t, addr: "" };
+    let addr = "", m = t.match(/\bto\s+(\d+[^,\-]{2,50},\s*[A-Za-z .]{2,30},\s*[A-Z]{2}\s*\d{5})/);
+    if (m) addr = m[1].replace(/\s+,/g, ",").trim();
+    else if ((m = t.match(/\bto\s+(\d+[^,\-]{2,50}?)\s+-\s+Google Maps/))) { const street = m[1].trim(), i = t.lastIndexOf(street), tail = t.slice(i + street.length, i + street.length + 60);
+      const c = tail.match(/([A-Z][a-z]+(?: [A-Z][a-z]+)*),\s*([A-Z]{2})\s*(\d{5})/); addr = street + (c ? ", " + c[1] + ", " + c[2] + " " + c[3] : ""); }
+    return { text: t, addr };
+  }
+  return { readPdf, classify, ocrMap, buildJob, fgRows, docMatchesJob, SHORT, splitAddr, r2 };
+})();
+
+/* ---------- UI ---------- */
+const AHPS = { docs: [], jobs: {}, mapsFor: {}, ack: {} };
+function ahpJobs() {
+  const jobs = {};
+  AHPS.docs.filter(d => d.kind === "po" && d.job).forEach(d => { const j = jobs[d.job] || (jobs[d.job] = { job: d.job, jobName: d.jobName, office: d.office, pos: [], plans: [], maps: [] }); j.pos.push(d); if (!j.office) j.office = d.office; });
+  const ids = Object.keys(jobs);
+  AHPS.docs.filter(d => d.kind === "plans").forEach(d => { let best = null, sc = 0; ids.forEach(id => { const s = AHP.docMatchesJob(d, jobs[id]); if (s > sc) { sc = s; best = id; } });
+    if (!best && ids.length === 1) best = ids[0]; d.job = best; if (best) jobs[best].plans.push(d); });
+  AHPS.docs.filter(d => d.kind === "maps" || d.kind === "image").forEach(d => {
+    let to = AHPS.mapsFor[d.uid];
+    if (to === undefined) { const m = ids.filter(id => AHP.docMatchesJob(d, jobs[id])); to = m.length === 1 ? m[0] : null; }
+    if (to === undefined || to === null) { const free = ids.filter(id => !jobs[id].maps.length && !AHPS.docs.some(o => o !== d && AHPS.mapsFor[o.uid] === id));
+      const unassigned = AHPS.docs.filter(o => (o.kind === "maps" || o.kind === "image") && AHPS.mapsFor[o.uid] == null);
+      if (free.length === 1 && unassigned.length === 1) to = free[0]; }
+    if (!to) { const T = String(d.text || "").toUpperCase(), off = /HILTON DR,? GAINESVILLE|HOME PLACE\W+GAINESVILLE/.test(T) ? "GAINESVILLE" : /ATLANTA HWY,? ATHENS|HOME PLACE\W+ATHENS/.test(T) ? "ATHENS" : "";
+      const cand = off ? ids.filter(id => String(jobs[id].office || "").toUpperCase() === off && !jobs[id].maps.length) : [];
+      if (cand.length === 1 && AHPS.mapsFor[d.uid] !== null) to = cand[0]; }
+    d.job = to || null; if (d.job && jobs[d.job]) jobs[d.job].maps.push(d);
+  });
+  ids.forEach(id => { const j = jobs[id], typed = AHPS.jobs[id] && AHPS.jobs[id].addrTyped, m = j.maps.find(d => d.addr);
+    j.addr = typed != null ? typed : m ? m.addr : ""; j.addrFrom = typed != null ? "typed" : m ? "maps" : ""; });
+  return jobs;
+}
+function ahpEsc(s) { return window.KPAHP ? KPAHP.escHtml(s) : String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function ahpMoney(v) { return "$" + (+v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+function ahpUnit(u) { const d = Math.max(2, (String(u).split(".")[1] || "").length); return "$" + (+u).toFixed(d); }
+function ahpFmtQty(q) { return (+q).toLocaleString("en-US"); }
+function renderAhp() {
+  const out = document.getElementById("ahpOut"); if (!out) return;
+  const jobs = ahpJobs(), ids = Object.keys(jobs), loose = AHPS.docs.filter(d => !d.job && d.kind !== "po");
+  let h = "";
+  ids.forEach(id => {
+    const j = jobs[id], res = AHP.buildJob(j), ack = AHPS.ack[id] || (AHPS.ack[id] = {});
+    if (!res.customer && AHPS.jobs[id] && AHPS.jobs[id].cust) res.customer = AHPS.jobs[id].cust;
+    j.res = res;
+    const open = res.flags.filter(f => f.block && (!ack[f.key] || f.key === "addr") && !(f.key === "addr" && j.addr) && !(f.key === "office" && res.customer));
+    const blocking = open.length;
+    h += '<div class="ahp-job" data-job="' + id + '"><div class="ahp-head"><div class="t">' + ahpEsc(j.jobName || "Job") + " · #" + id + "</div>" +
+      '<div class="ahp-sub">' + ahpEsc(res.customer || "Customer?") + " · " + (res.basement ? "Basement job" : j.pos.some(p => p.lines.some(l => /POLY|FLOOR/i.test(l.desc))) ? "Crawl job" : "No floors PO") + (res.second ? " · 2nd floor" : "") +
+      " · " + j.pos.length + " PO" + (j.pos.length > 1 ? "s" : "") + (j.plans.length ? " + plans" : "") + (j.maps.length ? " + map" : "") + "</div>" +
+      (res.customer && /^(Home Place|Home Place-Gainesville)$/.test(res.customer) && !AHPS.jobs[id]?.cust ? "" :
+        '<select data-cust="' + id + '"><option value="">FieldGroove customer…</option><option' + (res.customer === "Home Place" ? " selected" : "") + '>Home Place</option><option' + (res.customer === "Home Place-Gainesville" ? " selected" : "") + ">Home Place-Gainesville</option></select>") +
+      '<input type="text" data-addr="' + id + '" placeholder="Street, City, GA 30000" value="' + ahpEsc(j.addr || "") + '"><div class="ahp-sub">' + (j.addrFrom === "maps" ? "Address from the Google Maps PDF" + (j.maps.some(d => d.ocr) ? " (read from a scan — double-check)" : "") : j.addrFrom === "typed" ? "Address typed" : "No map matched — type it or assign a map below") + "</div></div>";
+    const all = res.flags.filter(f => !(f.key === "addr" && j.addr) && !(f.key === "office" && res.customer));
+    h += '<div class="ahp-flags"><b>' + (blocking ? "⚠️ " + blocking + " to review before export" : "✓ All flags reviewed") + "</b>" +
+      all.map(f => f.key === "addr" ? '<div class="ahp-flag"><span>' + ahpEsc(f.text) + "</span></div>" : '<div class="ahp-flag' + (ack[f.key] ? " done" : "") + (/^Needs a rule/.test(f.text) ? " block" : "") + '"><span>' + (/^Needs a rule/.test(f.text) ? "<b>Needs a rule</b> " + ahpEsc(f.text.replace(/^Needs a rule:\s*/, "")) : ahpEsc(f.text)) +
+        '</span><button type="button" data-ack="' + id + "|" + f.key + '">' + (ack[f.key] ? "Undo" : /^Needs a rule/.test(f.text) ? "Leave out" : "Reviewed") + "</button></div>").join("") + "</div>";
+    res.phases.forEach(p => {
+      h += '<div class="ahp-ph"><span class="n">' + ahpEsc(p.name) + '</span><span class="ahp-chip' + (p.total === p.poTotal ? " ok" : "") + '">' + (p.total === p.poTotal ? "✓ matches PO " : "≠ PO ") + ahpMoney(p.poTotal) + "</span></div>";
+      p.lines.forEach(o => {
+        const fl = res.flags.filter(f => f.key.indexOf(o.id + "-") === 0);
+        h += '<div class="ahp-line' + (fl.some(f => !ack[f.key]) ? " fl" : "") + '"><div class="ahp-qty"><b>' + ahpFmtQty(o.qty) + "</b><span>" + (o.uom === "SqFt" ? "sq ft" : "each") + "</span>" + (o.qty !== o.po.qty ? "<i>PO " + o.po.qty + "</i>" : "") + "</div>" +
+          '<div class="ahp-body"><div class="m">' + ahpEsc(AHP.SHORT[o.item] || o.item) + '</div><div class="a">' + ahpEsc(o.area) + "</div>" +
+          '<div class="po">PO: ' + ahpEsc(o.po.desc) + "</div>" + (o.note ? '<div class="po">' + ahpEsc(o.note) + "</div>" : "") +
+          fl.map(f => '<span class="ahp-chip">⚠️ ' + (ack[f.key] ? "reviewed" : "review") + "</span>").join("") +
+          '<div class="ahp-money"><span>' + ahpUnit(o.unit) + " / " + (o.uom === "SqFt" ? "sq ft" : "ea") + "</span><b>" + ahpMoney(o.total) + "</b></div></div></div>";
+      });
+    });
+    const exp = res.phases.reduce((a, p) => a + p.total, 0), poT = j.pos.reduce((a, p) => a + (p.total || 0), 0);
+    h += '<div class="ahp-tot">' + j.pos.map(p => "<div><span>PO " + ahpEsc(p.no) + " · " + ahpEsc(p.desc || "") + "</span><b>" + ahpMoney(p.total || 0) + "</b></div>").join("") +
+      "<div><span>Export total</span><b>" + ahpMoney(exp) + "</b></div><div><span>All POs</span><b>" + ahpMoney(poT) + "</b></div></div>";
+    h += '<button type="button" class="btn btn-primary btn-block" style="margin-top:12px" data-export="' + id + '"' + (blocking ? " disabled" : "") + ">" + (blocking ? "Export for FieldGroove — " + blocking + " left to review" : "Export for FieldGroove (.xlsx)") + "</button></div>";
+  });
+  if (loose.length) h += '<div class="ahp-maps"><b>Files not matched to a job</b>' + loose.map(d => "<div style='margin-top:8px'>" + ahpEsc(d.label) + (d.kind === "maps" || d.kind === "image" ? '<select data-map="' + d.uid + '" style="width:100%;margin-top:4px"><option value="">Which job?</option>' + ids.map(id => "<option value='" + id + "'>" + ahpEsc(jobs[id].jobName + " #" + id) + "</option>").join("") + "</select>" : "") + "</div>").join("") + "</div>";
+  if (!ids.length && AHPS.docs.length) h += '<p class="cap">No Home Place POs found in these files yet.</p>';
+  out.innerHTML = h;
+  AHPS.lastJobs = jobs;
+}
+function ahpExport(id) {
+  const j = AHPS.lastJobs[id]; if (!j) return;
+  const rows = AHP.fgRows(j, j.res), name = (j.jobName || "AHP").replace(/[\\/:*?"<>|,]+/g, " ").replace(/\s+/g, " ").trim() + " - AHP " + id + " - FieldGroove import.xlsx";
+  const st = document.getElementById("ahpStatus");
+  KPAHP.fgDeliver(KPAHP.fgXlsx(rows), name, name).then(ok => { if (st) st.textContent = ok ? "Exported " + name + " · " + rows.length + " lines" : "Export cancelled."; });
+}
+let ahpUid = 0;
+async function ahpAddFiles(files) {
+  const st = document.getElementById("ahpStatus"); let n = 0;
+  for (const f of files) {
+    if (st) st.textContent = "Reading " + f.name + "… (" + (++n) + "/" + files.length + ")";
+    try { const buf = await f.arrayBuffer(), pages = await AHP.readPdf(buf.slice(0)), d = AHP.classify(pages, f.name);
+      if (d.kind === "image") { if (st) st.textContent = "Reading scanned " + f.name + " (map?)…"; try { const o = await AHP.ocrMap(buf.slice(0)); if (o.addr) { d.kind = "maps"; d.addr = o.addr; d.ocr = true; } d.text = o.text; } catch (e) {} }
+      d.uid = "d" + (++ahpUid); d.label = (d.kind === "po" ? "PO " + d.no : d.kind === "maps" ? "Map: " + (d.addr || "?") : d.kind === "image" ? "Scanned PDF (no text — map?)" : "Plans") + " · " + f.name;
+      if (d.kind === "po" && AHPS.docs.some(o => o.kind === "po" && o.no === d.no)) continue; AHPS.docs.push(d);
+    } catch (e) { if (st) st.textContent = "Couldn't read " + f.name + ": " + e.message; await new Promise(r => setTimeout(r, 1200)); }
+  }
+  const c = k => AHPS.docs.filter(d => d.kind === k).length;
+  if (st) st.textContent = c("po") + " POs · " + c("plans") + " plans · " + (c("maps") + c("image")) + " maps";
+  renderAhp();
+}
+function initAhp() {
+  if (!window.KPAHP || window.KPAHP.edition !== "asher") { const p = document.getElementById("tab-ahp"), b = document.querySelector('.nav-btn[data-tab="ahp"]'); if (p) p.remove(); if (b) b.remove(); return; }
+  document.body.classList.add("has-ahp");
+  const inp = document.getElementById("ahpFiles"); if (!inp) return;
+  inp.onchange = () => { const fs = Array.from(inp.files || []); inp.value = ""; if (fs.length) ahpAddFiles(fs); };
+  document.getElementById("ahpClear").onclick = () => { AHPS.docs = []; AHPS.jobs = {}; AHPS.mapsFor = {}; AHPS.ack = {}; document.getElementById("ahpStatus").textContent = ""; renderAhp(); };
+  const out = document.getElementById("ahpOut");
+  out.addEventListener("click", e => { const a = e.target.closest("[data-ack]"), x = e.target.closest("[data-export]");
+    if (a) { const [id, key] = a.dataset.ack.split("|"), k = key.replace(/-rule$/, "") + (key.endsWith("-rule") ? "-rule" : ""); AHPS.ack[id] = AHPS.ack[id] || {}; AHPS.ack[id][k] = !AHPS.ack[id][k]; renderAhp(); }
+    if (x && !x.disabled) ahpExport(x.dataset.export); });
+  out.addEventListener("change", e => { const t = e.target;
+    if (t.dataset.addr) { (AHPS.jobs[t.dataset.addr] = AHPS.jobs[t.dataset.addr] || {}).addrTyped = t.value.trim(); renderAhp(); }
+    if (t.dataset.cust) { (AHPS.jobs[t.dataset.cust] = AHPS.jobs[t.dataset.cust] || {}).cust = t.value; renderAhp(); }
+    if (t.dataset.map) { AHPS.mapsFor[t.dataset.map] = t.value || null; renderAhp(); } });
+}
+
+document.addEventListener("DOMContentLoaded", initAhp);
 </script>
 </body>
 </html>
