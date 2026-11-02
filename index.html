@@ -2349,8 +2349,7 @@ function twoShareText(o, both) {
 // 31b: Email to Sky = mailto straight into Mail with To/subject/body preset (no share-sheet picker). Files via secondary "Share file…".
 function skyMailBody(text, orders) {
   // 31d: no per-line/SF summary — greeting + job line(s) + signature only. Files go via "Share file…".
-  let me = ""; try { me = (S.woRep || "").trim() || ownerName(); } catch (e) {}
-  return text + "\n\nThanks,\n" + (me || "Asher");
+  return text + "\n\nThanks,\nAsher";
 }
 function skyMailto(title, text, orders) {
   const c = twoWho("walls"), to = (c.email || "").trim();
