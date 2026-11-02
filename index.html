@@ -2198,7 +2198,7 @@ function twoOrder(foamChoice) {
   const ls = twoLines(), ordered = ls.filter(L => twoCatOf(L) === "attic").concat(ls.filter(L => twoCatOf(L) === "walls")); // attic lines first, like KP work orders
   const rows = ordered.map(L => ({ p: twoProductText(TWO_LABELS[fgSection(L.assembly)] || L.area || "", L), d: L.description || L.product, f: wholeQty(L), b: L.bags || "" }));
   const PER = 21, NOTE_ROWS = 6;
-  o.pages = []; o.lineCount = rows.length; o.fpPages = []; o.fpCount = 0;
+  o.rows = rows; o.pages = []; o.lineCount = rows.length; o.fpPages = []; o.fpCount = 0;
   const fpDet = twoFpDetails(), fpLs = twoFpLines();
   // NOTES priority: job site access, then Asher's typed notes, then the fireplace pointer. Nothing is cut — if they don't fit in the
   // 6 note rows (one row goes to "Page k of N" on multi-sheet orders), they continue on the next sheet's NOTES (adding a sheet if needed).
@@ -2346,6 +2346,19 @@ function twoShareText(o, both) {
     text: who + ", attached is the work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + (o.foamLabel ? " — " + o.foamLabel : "") + "." + coordsShareLines() };
 }
 // 29aj: Sky work order = one file; in OC vs CC compare its foam lines read "open cell vs. closed cell" (no export choice needed here).
+// 31b: Email to Sky = mailto straight into Mail with To/subject/body preset (no share-sheet picker). Files via secondary "Share file…".
+function skyMailBody(text, orders) {
+  const lines = [];
+  orders.forEach(o => { if (!o) return; if (orders.length > 1) lines.push("", "== " + o.jobSite + (o.customer ? " (" + o.customer + ")" : "") + " =="); else lines.push("");
+    if (o.line7) lines.push(o.line7);
+    (o.rows || []).forEach(r => lines.push("- " + [r.p, r.d].filter(Boolean).join(" — ") + (r.f !== "" && r.f != null ? ": " + r.f : "") + (r.b ? " (" + r.b + " bags)" : ""))); });
+  return text + "\n" + lines.join("\n") + "\n\nExcel work order file to follow / available on request.";
+}
+function skyMailto(title, text, orders) {
+  const c = twoWho("walls"), to = (c.email || "").trim();
+  let body = skyMailBody(text, orders); if (body.length > 6000) body = body.slice(0, 6000) + "\n…";
+  location.href = "mailto:" + encodeURIComponent(to).replace(/%40/g, "@") + "?subject=" + encodeURIComponent(title) + "&body=" + encodeURIComponent(body);
+}
 function twoOrdersFor() { return [twoOrder()]; }
 function twoRecipient(cat) {
   const c = twoWho(cat), d = el("div", "wo-recip");
@@ -2407,7 +2420,8 @@ function twoPreview(foamChoice, previewOnly) {
     (S.photos.length ? '<p class="status">📷 ' + S.photos.length + " job photo" + (S.photos.length > 1 ? "s" : "") + " will be attached too.</p>" : "") +
     '<button type="button" class="btn btn-secondary btn-block" id="twoXlPrint">🖨 Print / save as PDF</button>' +
     (previewOnly ? '<p class="status" style="text-align:center">Preview — this is what goes to ' + escHtml(twoWho("walls").name) + '. Nothing is sent from here.</p>' : "") +
-    '<button type="button" class="btn btn-primary btn-block' + (previewOnly ? " hidden" : "") + '" id="twoXlShare">Share ' + (orders.length > 1 ? "both work orders" + (S.photos.length ? " + photos" : "") : S.photos.length ? "work order + photos" : "this file") + " to " + escHtml(twoWho("walls").name) + "</button>" +
+    '<button type="button" class="btn btn-primary btn-block' + (previewOnly ? " hidden" : "") + '" id="twoXlMail">✉️ Email ' + escHtml(twoWho("walls").name) + '</button>' +
+    '<button type="button" class="btn btn-secondary btn-block' + (previewOnly ? " hidden" : "") + '" id="twoXlShare" style="margin-top:6px">Share file… ' + ' + (orders.length > 1 ? "both work orders" + (S.photos.length ? " + photos" : "") : S.photos.length ? "work order + photos" : "this file") + " to " + escHtml(twoWho("walls").name) + "</button>" +
     '<div id="twoXlRecip"></div><p class="status" id="twoXlMsg" style="text-align:center"></p></div>';
   document.body.appendChild(m); document.body.classList.add("xl-open", "wo-print");
   if (!previewOnly) $("twoXlRecip").appendChild(twoRecipient("walls"));
@@ -2419,6 +2433,7 @@ function twoPreview(foamChoice, previewOnly) {
   $("twoXlZoom").onclick = () => { fit = !fit; apply(); };
   $("twoXlClose").onclick = twoClose;
   $("twoXlShare").onclick = () => twoExport($("twoXlMsg"), foamChoice);
+  $("twoXlMail").onclick = () => { const t = twoShareText(o, orders.length > 1); skyMailto(t.title, t.text.replace(/attached (is|are)/, "here $1"), orders); };
 }
 function twoClose() { const m = $("twoPreview"); document.body.classList.remove("wo-print"); if (!m) return; if (m._apply) window.removeEventListener("resize", m._apply); m.remove(); document.body.classList.remove("xl-open"); }
 function renderTwo() {
@@ -4572,7 +4587,7 @@ function batchRender(st) {
   if (photos) h += '<div class="seg" id="batchPh" style="margin:6px 0"><button type="button" data-v="1"' + (st.withPhotos ? ' class="active"' : "") + '>With photos</button><button type="button" data-v="0"' + (!st.withPhotos ? ' class="active"' : "") + ">Without photos</button></div>";
   const groups = batchSplit(st.entries, BATCH_LIMIT, st.withPhotos);
   const btn = (g, i, n) => '<button type="button" class="btn ' + (st.sent[i] ? "btn-secondary" : "btn-primary") + ' btn-block" data-g="' + i + '">' +
-    (n > 1 ? (st.sent[i] ? "✓ " : "") + "Email " + (i + 1) + " of " + n + ": " + g.entries.length + " job" + (g.entries.length > 1 ? "s" : "") : "Open share sheet → " + escHtml(who)) + " · " + fmtMB(g.bytes) + "</button>" +
+    (n > 1 ? (st.sent[i] ? "✓ " : "") + "Email " + (i + 1) + " of " + n + ": " + g.entries.length + " job" + (g.entries.length > 1 ? "s" : "") : "Share file… → " + escHtml(who)) + " · " + fmtMB(g.bytes) + "</button>" +
     (g.over ? '<p class="status">⚠ This job alone is over ' + BATCH_LIMIT_MB + " MB — Mail will likely offer Mail Drop for it.</p>" : "");
   if (total <= BATCH_LIMIT || groups.length === 1) h += '<div class="batch-parts">' + btn(groups[0], 0, 1) + "</div>";
   else if (!st.split) {
@@ -4581,10 +4596,12 @@ function batchRender(st) {
       (st.withPhotos && photos ? '<button type="button" class="btn btn-secondary btn-block" style="margin-top:6px" id="batchNoPh">Send without photos · ' + fmtMB(ok.reduce((s, e) => s + batchEntrySize(e, false), 0)) + "</button>" : "") +
       '<button type="button" class="btn btn-secondary btn-block" style="margin-top:6px" id="batchAnyway">Send as one email anyway (Mail Drop)</button>';
   } else h += '<p class="status">Tap each one — each opens its own share sheet. Pick Mail, then Send.</p><div class="batch-parts">' + groups.map((g, i) => btn(g, i, groups.length)).join("") + "</div>";
+  h = '<button type="button" class="btn btn-primary btn-block" id="batchMail">✉️ Email ' + escHtml(who) + (ok.length > 1 ? " all " + ok.length + " jobs" : "") + '</button><p class="cap" style="margin:6px 0">Or attach the files with the share sheet:</p>' + h;
   h += '<p class="status" id="batchMsg" style="text-align:center"></p><div id="batchRecip"></div>' +
     '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px" id="batchZip">Download as .zip instead</button>';
   foot.innerHTML = h;
   $("batchRecip").appendChild(twoRecipient("walls"));
+  $("batchMail").onclick = () => { const t = batchMessage(ok); skyMailto(t.title, t.text.replace(/attached (is|are)/, "here $1"), ok.map(e => e.order)); };
   const msg = $("batchMsg");
   if ($("batchPh")) $("batchPh").querySelectorAll("button").forEach(b => { b.onclick = () => { st.withPhotos = b.dataset.v === "1"; st.split = false; st.sent = {}; batchRender(st); }; });
   if ($("batchSplitBtn")) $("batchSplitBtn").onclick = () => { st.split = true; batchRender(st); };
