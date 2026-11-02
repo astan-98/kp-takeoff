@@ -400,6 +400,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 .ahp-tot div{display:flex;justify-content:space-between;padding:3px 0}
 .ahp-maps{background:var(--bg2);border:1px solid var(--err-border);border-radius:var(--radius);padding:12px;margin-top:10px;font-size:.84rem}
 .ahp-chip.email{background:#e6f0ff;border-color:#5b8def;color:#1f4fa8}
+.ahp-conn{margin-top:10px}.ahp-conn-form{border:1px solid var(--line);border-radius:var(--radius);padding:10px;background:var(--bg2)}
+.ahp-conn-row{display:flex;gap:6px;margin-top:8px}.ahp-conn-row input{flex:1;min-width:0}
+.ahp-conn-msg{margin-top:6px;font-size:.8rem;color:#16702e}.ahp-conn-msg.bad{color:var(--danger);font-weight:600}
+.ahp-conn-ok{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:700;color:#16702e;font-size:.88rem}
 .ahp-saved{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid var(--line);margin-top:6px}.ahp-saved.on{background:var(--accent-soft);border-radius:10px;padding:8px}
 .ahp-saved .sv-l{flex:1;min-width:0}.ahp-saved .m{font-weight:700;font-size:.88rem}
 .sv-b{border:0;border-radius:9px;padding:8px 10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}.sv-b.sv-del{background:var(--bg3);color:var(--danger)}
@@ -863,6 +867,7 @@ body.has-ahp .bottom-nav{grid-template-columns:repeat(6,1fr)}
       <p class="cap">Add every attachment from the Home Place emails at once: POs, plans and the Google Maps page. Jobs group by Job#. Flags must be cleared before export.</p>
       <label class="ahp-drop" for="ahpFiles">＋ Add PDFs (POs, plans, maps)</label>
       <input type="file" id="ahpFiles" accept="application/pdf,.pdf" multiple class="hidden">
+      <div class="ahp-conn" id="ahpConn"></div>
       <p class="cap" id="ahpStatus" style="margin-top:8px"></p>
       <div id="ahpOut"></div>
       <button type="button" class="btn btn-secondary btn-block" id="ahpClear" style="margin-top:12px">Clear all</button>
@@ -8841,12 +8846,32 @@ function ahpExport(id) {
 }
 let ahpUid = 0;
 // 32c: email inbox — the bot uploads each AHP email's PDFs; this pulls new batches once and marks them pulled on the server
-function ahpKey() { const m = location.hash.match(/ahpkey=([\w-]+)/); if (m) { try { localStorage.setItem(AHP_KEYK, m[1]); } catch (e) {} history.replaceState(null, "", location.pathname + location.search); } try { return localStorage.getItem(AHP_KEYK) || ""; } catch (e) { return ""; } }
+function ahpKey() { try { return localStorage.getItem(AHP_KEYK) || ""; } catch (e) { return ""; } }
+function ahpConnUi(msg, bad) {
+  const box = document.getElementById("ahpConn"); if (!box) return;
+  if (ahpKey()) { box.innerHTML = '<div class="ahp-conn-ok"><span>✉ Email inbox connected</span><button type="button" class="sv-b sv-del" id="ahpDisc">Disconnect</button></div>';
+    document.getElementById("ahpDisc").onclick = () => { if (!confirm("Disconnect the AHP email inbox on this phone? New AHP emails won't come in until you connect again.")) return; try { localStorage.removeItem(AHP_KEYK); } catch (e) {} ahpConnUi("Disconnected."); };
+    return; }
+  box.innerHTML = '<div class="ahp-conn-form"><b>Connect email inbox</b><div class="ahp-sub">One time on this phone: type your inbox passphrase so AHP PO emails show up here automatically.</div>' +
+    '<div class="ahp-conn-row"><input type="password" id="ahpPass" autocomplete="current-password" placeholder="Inbox passphrase"><button type="button" class="sv-b" id="ahpConnBtn">Connect</button></div>' +
+    (msg ? '<div class="ahp-conn-msg' + (bad ? " bad" : "") + '">' + ahpEsc(msg) + "</div>" : "") + "</div>";
+  const go = async () => { const inp = document.getElementById("ahpPass"), btn = document.getElementById("ahpConnBtn"), k = (inp.value || "").trim(); if (!k) return;
+    btn.disabled = true; btn.textContent = "Checking…";
+    try { const r = await fetch(AHP_API + "pending", { headers: { "x-ahp-key": k }, cache: "no-store" });
+      if (r.status === 401) return ahpConnUi("That passphrase didn't work. Check it and try again.", true);
+      if (!r.ok) return ahpConnUi("The inbox didn't answer (" + r.status + "). Try again in a minute.", true);
+      try { localStorage.setItem(AHP_KEYK, k); } catch (e) { return ahpConnUi("Couldn't save on this phone (" + e.message + ").", true); }
+      ahpConnUi(); ahpPull();
+    } catch (e) { ahpConnUi("No connection to the inbox — check your signal and try again.", true); } };
+  document.getElementById("ahpConnBtn").onclick = go; document.getElementById("ahpPass").onkeydown = e => { if (e.key === "Enter") go(); };
+}
 let ahpPulling = false;
 async function ahpPull() {
   const key = ahpKey(), st = document.getElementById("ahpStatus"); if (!key || ahpPulling) return; ahpPulling = true;
   try {
-    const r = await fetch(AHP_API + "pending", { headers: { "x-ahp-key": key }, cache: "no-store" }); if (!r.ok) throw new Error("inbox " + r.status);
+    const r = await fetch(AHP_API + "pending", { headers: { "x-ahp-key": key }, cache: "no-store" });
+    if (r.status === 401) { try { localStorage.removeItem(AHP_KEYK); } catch (e) {} ahpPulling = false; ahpConnUi("The saved inbox passphrase stopped working — connect again.", true); return; }
+    if (!r.ok) throw new Error("inbox " + r.status);
     const list = ((await r.json()).batches || []).filter(b => !AHPS.pulled[b.id]).reverse();
     for (const b of list) {
       if (st) st.textContent = "New AHP email: downloading " + b.files.length + " PDFs…";
@@ -8885,7 +8910,8 @@ function initAhp() {
   inp.onchange = () => { const fs = Array.from(inp.files || []); inp.value = ""; if (fs.length) ahpAddFiles(fs); };
   document.getElementById("ahpClear").onclick = () => { if (!confirm("Clear every AHP job saved on this phone?")) return; AHPS.docs = []; AHPS.jobs = {}; AHPS.mapsFor = {}; AHPS.ack = {}; AHPS.exported = {}; AHPS.added = {}; AHPS.view = null; document.getElementById("ahpStatus").textContent = ""; renderAhp(); };
   ahpLoad(); renderAhp(); if (AHPS.docs.length) document.getElementById("ahpStatus").textContent = "Restored saved AHP jobs from this phone.";
-  ahpKey(); ahpPull(); const nb = document.querySelector('.nav-btn[data-tab="ahp"]'); if (nb) nb.addEventListener("click", () => ahpPull());
+  try { if (/ahpkey=/.test(location.hash)) history.replaceState(null, "", location.pathname + location.search); } catch (e) {} // old link format no longer used
+  ahpConnUi(); ahpPull(); const nb = document.querySelector('.nav-btn[data-tab="ahp"]'); if (nb) nb.addEventListener("click", () => ahpPull());
   document.addEventListener("visibilitychange", () => { if (!document.hidden && document.getElementById("tab-ahp").classList.contains("active")) ahpPull(); });
   const out = document.getElementById("ahpOut");
   out.addEventListener("click", e => { const a = e.target.closest("[data-ack]"), x = e.target.closest("[data-export]");
