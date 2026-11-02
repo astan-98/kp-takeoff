@@ -2348,11 +2348,9 @@ function twoShareText(o, both) {
 // 29aj: Sky work order = one file; in OC vs CC compare its foam lines read "open cell vs. closed cell" (no export choice needed here).
 // 31b: Email to Sky = mailto straight into Mail with To/subject/body preset (no share-sheet picker). Files via secondary "Share file…".
 function skyMailBody(text, orders) {
-  const lines = [];
-  orders.forEach(o => { if (!o) return; if (orders.length > 1) lines.push("", "== " + o.jobSite + (o.customer ? " (" + o.customer + ")" : "") + " =="); else lines.push("");
-    if (o.line7) lines.push(o.line7);
-    (o.rows || []).forEach(r => lines.push("- " + [r.p, r.d].filter(Boolean).join(" — ") + (r.f !== "" && r.f != null ? ": " + r.f : "") + (r.b ? " (" + r.b + " bags)" : ""))); });
-  return text + "\n" + lines.join("\n") + "\n\nExcel work order file to follow / available on request.";
+  // 31d: no per-line/SF summary — greeting + job line(s) + signature only. Files go via "Share file…".
+  let me = ""; try { me = (S.woRep || "").trim() || ownerName(); } catch (e) {}
+  return text + "\n\nThanks,\n" + (me || "Asher");
 }
 function skyMailto(title, text, orders) {
   const c = twoWho("walls"), to = (c.email || "").trim();
