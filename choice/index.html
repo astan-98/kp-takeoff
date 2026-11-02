@@ -5523,7 +5523,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02kpcontact";
+const APP_BUILD = "2026-11-02tkosync";
 // 30am: auto-update (the owner + coworker copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -6520,6 +6520,9 @@ function wireCloud() {
     document.addEventListener("visibilitychange", back);
     window.addEventListener("focus", back);
     window.addEventListener("pageshow", back);
+    // tkosync: also pull when the Library tab is opened, and every 45 s while the app is on screen, so a takeoff saved on the phone shows on the Surface within a minute
+    document.querySelectorAll('.nav-btn[data-tab="archive"]').forEach(b => b.addEventListener("click", () => cloudSync({ force: !CLOUD_SYNC_AT || Date.now() - CLOUD_SYNC_AT > 5000 })));
+    setInterval(() => { if (!document.hidden) cloudSync(); }, 45000);
     document.querySelectorAll('.nav-btn[data-tab="archive"]').forEach(b => b.addEventListener("click", () => cloudSync({ force: !CLOUD_SYNC_AT || Date.now() - CLOUD_SYNC_AT > 5000 })));
     setInterval(() => { if (!document.hidden) cloudSync(); }, 45000);
   }
