@@ -5712,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02kpimail";
+const APP_BUILD = "2026-11-02tkosync";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -6301,7 +6301,7 @@ const CLOUD_QUEUE_KEY = CLOUD_COPY + "-cloud-queue-v1", CLOUD_LAST_KEY = CLOUD_C
 const CLOUD_ALL_KEY = CLOUD_COPY + "-cloud-all-v1"; // 30a: set once every Library job on this device has been sent (or queued)
 let CLOUD_CATCHUP_MS = 3000, CLOUD_ALL_BUSY = null;
 const CLOUD_DEL_KEY = CLOUD_COPY + "-cloud-deleted-v1"; // 30b: { jobId: deletedAt } — jobs deleted on this device; auto-sync won't bring them back
-let CLOUD_SYNC_MIN_MS = 120000, CLOUD_SYNC_AT = 0, CLOUD_SYNC_BUSY = null;
+let CLOUD_SYNC_MIN_MS = 15000, CLOUD_SYNC_AT = 0, CLOUD_SYNC_BUSY = null;
 let cloudFetch = (u, o) => fetch(u, o); // swapped in tests
 let CLOUD_BUSY = null, CLOUD_ERR = "";
 function cloudOn() { return !!String(BACKUP_URL || "").trim(); }
@@ -6704,6 +6704,9 @@ function wireCloud() {
     document.addEventListener("visibilitychange", back);
     window.addEventListener("focus", back);
     window.addEventListener("pageshow", back);
+    // tkosync: also pull when the Library tab is opened, and every 45 s while the app is on screen, so a takeoff saved on the phone shows on the Surface within a minute
+    document.querySelectorAll('.nav-btn[data-tab="archive"]').forEach(b => b.addEventListener("click", () => cloudSync({ force: !CLOUD_SYNC_AT || Date.now() - CLOUD_SYNC_AT > 5000 })));
+    setInterval(() => { if (!document.hidden) cloudSync(); }, 45000);
   }
   cloudSync();
   // 30a: one-time catch-up — first open with backup on: send every job already in this device's Library (quietly), once per copy
