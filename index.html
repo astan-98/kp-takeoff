@@ -5707,7 +5707,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02trail";
+const APP_BUILD = "2026-11-02stair";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8714,6 +8714,7 @@ const AHP = (function () {
         if (q === l.qty) add(id + "-furn", "Furnace platform batts are " + l.qty + " SF (not 64 or 128) — set the footage yourself.");
       } else if (/R-?38/.test(D) && /BLOW/.test(D)) r = mk(IT.knauf, "Attic", "blow", l.qty, { rv: "R38" });
       else if (/BAFFLE/.test(D) && /24/.test(D)) r = mk(IT.baf24, "Soffit Locations", "base", l.qty);
+      else if (/R-?13/.test(D) && /STAIR/.test(D)) r = mk(IT.r13, "Stair Shaft Walls", "base", l.qty); // e.g. R-13 BASEMENT STAIRWAY WALL
       else if (/R-?13/.test(D) && /EXTERIOR WALL/.test(D)) { r = mk(IT.r13, "2/4 Exterior Walls", "base", l.qty);
         if (second) add(id + "-2nd", "Plans show a 2nd floor — part of the R-13 walls are R13/15/8' UF. Split the " + l.qty + " SF yourself."); }
       else if (/R-?19/.test(D) && /BASEMENT/.test(D) && /STAIR/.test(D)) r = mk(IT.r19_15, "Stair Shaft Walls", "base", l.qty);
