@@ -5712,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02lotname";
+const APP_BUILD = "2026-11-02crews";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8973,16 +8973,22 @@ function cpExtra(cp, it) { if (it.info || !it.superintendent) return ""; const i
   if (it.confirmed) return h + '<span class="ahp-chip sch">✅ Confirmed · ' + ahpEsc(cpFmt(it.confirmed.date || it.date)) + "</span>";
   if (cpNoCal(it.task)) return h + '<div class="cp-acts"><button class="go" data-cps="' + id + '|c">Confirmed</button><button data-cps="' + id + '|r">Revise</button></div>';
   if (it.scheduled) return h + '<span class="ahp-chip sch">✅ Scheduled · ' + ahpEsc(it.scheduled.crewName) + " · " + ahpEsc(cpFmt(it.scheduled.date)) + "</span>";
-  return h + '<div class="cp-acts"><button class="go" data-cps="' + id + '|s">Confirmed, schedule it</button><button data-cps="' + id + '|r">Revise</button><button data-cps="' + id + '|rs">Revise/Schedule it</button></div>'; }
+  return h + '<div class="cp-acts"><button class="go" data-cps="' + id + '|s">Confirmed, schedule it</button><button data-cps="' + id + '|r">Revise</button><button data-cps="' + id + '|rs">Revise/Schedule it</button><button data-cps="' + id + '|oc">Already on calendar</button></div>'; }
 function cpFmt(d) { const x = new Date(d + "T12:00:00"); return isNaN(x) ? d : x.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" }); }
 async function cpApi(path, body) { const r = await fetch(AHP_API + path, { method: body ? "POST" : "GET", headers: { "x-ahp-key": ahpKey(), "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
   const j = await r.json().catch(() => ({})); j._status = r.status; return j; }
 async function cpOpen(id, mode) { const { cp, it } = cpReg[id] || {}; if (!it) return; if (!ahpKey()) return alert("Connect the AHP inbox first.");
+  if (mode === "oc") { const sib = (cp.items || []).filter(x => x !== it && x.job === it.job && x.date === it.date && !x.scheduled && !x.confirmed && !cpNoCal(x.task) && !cpFP(x));
+    if (!confirm("Mark " + it.job + " " + it.task + (sib.length ? " (+ " + sib.map(x => x.task).join(", ") + ")" : "") + " on " + cpFmt(it.date) + " as already on the Ops calendar?\nNo new crew card is made.")) return;
+    const r = await cpApi("oncal", { key: it.key, date: it.date, job: it.job, also: sib.map(x => x.key) }); if (!r.ok) return alert("Couldn't save: " + (r.error || r._status));
+    const st = document.getElementById("ahpStatus"); if (st) st.textContent = r.linked ? "Linked to the Ops card: " + r.linked : "Marked on calendar (no matching Ops card found to link)."; return ahpCpPull(ahpKey()); }
   if (mode === "so") { const r = await cpApi("so", { key: it.key, on: !it.soTurnedIn }); if (!r.ok) return alert("Couldn't save: " + (r.error || r._status)); return ahpCpPull(ahpKey()); }
   if (mode === "c") { if (!confirm("Mark " + it.job + " " + it.task + " confirmed for " + cpFmt(it.date) + "?\nNo crew card — send it from FieldGroove.")) return; const r = await cpApi("confirm", { key: it.key, date: it.date }); if (!r.ok) return alert("Couldn't save: " + (r.error || r._status)); return ahpCpPull(ahpKey()); }
   const cust = /gainesville/i.test(cp.office || "") ? "Home Place-Gainesville" : "Home Place", orig = it.origDate || it.date;
   const m = document.createElement("div"); m.className = "cpm"; const title = mode === "s" ? "Confirmed, schedule it" : mode === "r" ? "Revise date" : "Revise &amp; schedule";
   let types = cpDetect(it.task), crew = null;
+  const sibs = mode === "r" ? [] : (cp.items || []).filter(x => x !== it && x.key !== it.key && x.job === it.job && x.date === it.date && !x.scheduled && !x.info && !/attic|blow|duct|blower|test|fireplace/i.test(x.task || "") && !/^(attic|test|fireplace)$/.test(x.type || ""));
+  sibs.forEach(x => cpDetect(x.task).forEach(k => { if (!types.includes(k)) types.push(k); }));
   m.innerHTML = '<div class="sh"><h3>' + title + '</h3><div class="ahp-sub">' + ahpEsc(it.job) + " · " + ahpEsc(it.task) + " · PM " + ahpEsc(it.superintendent) + "</div>" +
     '<div class="lb">' + (mode === "s" ? "Date" : "New date (AHP had " + ahpEsc(cpFmt(orig)) + ")") + '</div><input type="date" class="cd" value="' + ahpEsc(mode === "rs" ? "" : it.date) + '">' +
     (mode === "r" ? "" : '<div class="lb">Crew</div><div class="grid cg"><div class="ahp-sub">Loading crews…</div></div><div class="lb">Job type</div><div class="chips ct"></div>' +
@@ -8992,8 +8998,8 @@ async function cpOpen(id, mode) { const { cp, it } = cpReg[id] || {}; if (!it) r
   m.onclick = e => { if (e.target === m || e.target.closest(".cx")) m.remove(); };
   const drawT = () => { const ct = q(".ct"); if (!ct) return; ct.innerHTML = CP_TYPES.map(([k, n]) => '<button class="tc' + (types.includes(k) ? " on" : "") + '" data-t="' + k + '">' + n + "</button>").join("");
     ct.querySelectorAll(".tc").forEach(b => b.onclick = () => { const k = b.dataset.t; types = types.includes(k) ? types.filter(x => x !== k) : types.concat(k); drawT(); }); }; drawT();
-  if (mode !== "r") { try { if (!cpCrews) cpCrews = (await cpApi("crews")).crews || []; } catch (e) { cpCrews = []; }
-    const cg = q(".cg"); cg.innerHTML = cpCrews.map(c => '<button class="cb" data-c="' + ahpEsc(c.id) + '">' + ahpEsc(c.name) + "<small>" + ahpEsc(c.rep) + "</small></button>").join("") || '<div class="err">Couldn\'t load crews.</div>';
+  if (mode !== "r") { try { if (!cpCrews) { const seen = {}; cpCrews = ((await cpApi("crews")).crews || []).filter(c => /^asher_/.test(c.id) && !c.bor && !seen[c.name] && (seen[c.name] = 1)); } } catch (e) { cpCrews = []; }
+    const cg = q(".cg"); cg.innerHTML = cpCrews.map(c => '<button class="cb" data-c="' + ahpEsc(c.id) + '">' + ahpEsc(c.name) + "</button>").join("") || '<div class="err">Couldn\'t load crews.</div>';
     cg.querySelectorAll(".cb").forEach(b => b.onclick = () => { crew = cpCrews.find(c => c.id === b.dataset.c); cg.querySelectorAll(".cb").forEach(x => x.classList.toggle("on", x === b)); }); }
   q(".ok").onclick = async () => { const d = q(".cd").value; err(); if (!d) return err("Pick a date.");
     if (mode !== "s" && d === orig) return err("Pick a different date than AHP's " + cpFmt(orig) + ".");
@@ -9001,8 +9007,9 @@ async function cpOpen(id, mode) { const { cp, it } = cpReg[id] || {}; if (!it) r
     try { let r;
       if (mode === "r") r = await cpApi("revise", { key: it.key, date: d, origDate: orig });
       else { if (!crew) { b.disabled = false; b.textContent = "Put it on the calendar"; return err("Tap a crew."); }
+        if (!types.length) { b.disabled = false; b.textContent = "Put it on the calendar"; return err("Pick at least one job type."); }
         const ja = q(".ca").value.trim(), body = { key: it.key, office: cp.office, job: it.job, task: it.task, date: d, origDate: orig, revise: mode === "rs", crew: crew.id, crewName: crew.name + (crew.bor ? " (" + crew.rep.replace(/^Borrowed · /, "") + ")" : " (" + crew.rep + ")"), cust: q(".cc").value.trim(), addr: ja.includes(" — ") ? ja.split(" — ").slice(1).join(" — ") : (ja !== it.job ? ja : ""), pm: q(".cpn").value.trim(), jtypes: types };
-        r = await cpApi("schedule", body);
+        body.also = sibs.filter(x => cpDetect(x.task).some(k => types.includes(k))).map(x => x.key); r = await cpApi("schedule", body);
         if (r._status === 409) { const s0 = r.sched || {}; if (!confirm(it.job + " " + it.task + " is already scheduled (" + (s0.crewName || "") + ", " + cpFmt(s0.date || "") + ").\nSchedule it again? That adds a second card in Ops.")) { m.remove(); return; } body.force = true; r = await cpApi("schedule", body); } }
       if (!r.ok) throw new Error(r.error || ("HTTP " + r._status));
       m.remove(); await ahpCpPull(ahpKey()); } catch (e) { b.disabled = false; b.textContent = "Try again"; err("Couldn't save: " + e.message); } }; }
