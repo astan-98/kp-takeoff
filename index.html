@@ -404,6 +404,9 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 .ahp-conn-row{display:flex;gap:6px;margin-top:8px}.ahp-conn-row input{flex:1;min-width:0}
 .ahp-conn-msg{margin-top:6px;font-size:.8rem;color:#16702e}.ahp-conn-msg.bad{color:var(--danger);font-weight:600}
 .ahp-conn-ok{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:700;color:#16702e;font-size:.88rem}
+.ahp-qty.cp{min-width:70px}.ahp-qty.cp b{font-size:1.2rem}
+.ahp-sms{display:block;text-align:center;text-decoration:none;margin:4px 0 12px;padding:14px;font-size:1rem}
+.ahp-cphead{margin-top:14px}.ahp-older{margin:6px 0 12px}.ahp-older summary{font-weight:700;color:var(--accent-ink);padding:8px 0}
 .ahp-saved{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid var(--line);margin-top:6px}.ahp-saved.on{background:var(--accent-soft);border-radius:10px;padding:8px}
 .ahp-saved .sv-l{flex:1;min-width:0}.ahp-saved .m{font-weight:700;font-size:.88rem}
 .sv-b{border:0;border-radius:9px;padding:8px 10px;font-weight:700;font-size:.78rem;background:var(--accent);color:#fff}.sv-b.sv-del{background:var(--bg3);color:var(--danger)}
@@ -871,6 +874,11 @@ body.has-ahp .bottom-nav{grid-template-columns:repeat(6,1fr)}
       <p class="cap" id="ahpStatus" style="margin-top:8px"></p>
       <div id="ahpOut"></div>
       <button type="button" class="btn btn-secondary btn-block" id="ahpClear" style="margin-top:12px">Clear all</button>
+    </div>
+    <div class="section" id="sec-ahpcp">
+      <h2>Critical Path</h2>
+      <p class="cap">AHP dates are a heads-up only — confirm with the superintendent before scheduling.</p>
+      <div id="ahpCpOut"><p class="cap">Connect the email inbox above to get AHP critical paths here.</p></div>
     </div>
   </section>
 </main>
@@ -8850,7 +8858,7 @@ function ahpKey() { try { return localStorage.getItem(AHP_KEYK) || ""; } catch (
 function ahpConnUi(msg, bad) {
   const box = document.getElementById("ahpConn"); if (!box) return;
   if (ahpKey()) { box.innerHTML = '<div class="ahp-conn-ok"><span>✉ Email inbox connected</span><button type="button" class="sv-b sv-del" id="ahpDisc">Disconnect</button></div>';
-    document.getElementById("ahpDisc").onclick = () => { if (!confirm("Disconnect the AHP email inbox on this phone? New AHP emails won't come in until you connect again.")) return; try { localStorage.removeItem(AHP_KEYK); } catch (e) {} ahpConnUi("Disconnected."); };
+    document.getElementById("ahpDisc").onclick = () => { if (!confirm("Disconnect the AHP email inbox on this phone? New AHP emails won't come in until you connect again.")) return; try { localStorage.removeItem(AHP_KEYK); } catch (e) {} ahpConnUi("Disconnected."); renderAhpCp(); };
     return; }
   box.innerHTML = '<div class="ahp-conn-form"><b>Connect email inbox</b><div class="ahp-sub">One time on this phone: type your inbox passphrase so AHP PO emails show up here automatically.</div>' +
     '<div class="ahp-conn-row"><input type="password" id="ahpPass" autocomplete="current-password" placeholder="Inbox passphrase"><button type="button" class="sv-b" id="ahpConnBtn">Connect</button></div>' +
@@ -8861,7 +8869,7 @@ function ahpConnUi(msg, bad) {
       if (r.status === 401) return ahpConnUi("That passphrase didn't work. Check it and try again.", true);
       if (!r.ok) return ahpConnUi("The inbox didn't answer (" + r.status + "). Try again in a minute.", true);
       try { localStorage.setItem(AHP_KEYK, k); } catch (e) { return ahpConnUi("Couldn't save on this phone (" + e.message + ").", true); }
-      ahpConnUi(); ahpPull();
+      ahpConnUi(); renderAhpCp(); ahpPull();
     } catch (e) { ahpConnUi("No connection to the inbox — check your signal and try again.", true); } };
   document.getElementById("ahpConnBtn").onclick = go; document.getElementById("ahpPass").onkeydown = e => { if (e.key === "Enter") go(); };
 }
@@ -8869,6 +8877,7 @@ let ahpPulling = false;
 async function ahpPull() {
   const key = ahpKey(), st = document.getElementById("ahpStatus"); if (!key || ahpPulling) return; ahpPulling = true;
   try {
+    ahpCpPull(key);
     const r = await fetch(AHP_API + "pending", { headers: { "x-ahp-key": key }, cache: "no-store" });
     if (r.status === 401) { try { localStorage.removeItem(AHP_KEYK); } catch (e) {} ahpPulling = false; ahpConnUi("The saved inbox passphrase stopped working — connect again.", true); return; }
     if (!r.ok) throw new Error("inbox " + r.status);
@@ -8888,6 +8897,41 @@ async function ahpPull() {
     renderAhp();
   } catch (e) { if (st) st.textContent = "Couldn't check the AHP email inbox (" + e.message + "). Manual upload still works."; }
   ahpPulling = false;
+}
+// 32e: Critical Path — parsed CPs come from the kpi-ops inbox (phones only via the authenticated backend); saved on the phone
+const AHP_CPK = "kp.ahp.cp";
+function ahpCpLoad() { try { return JSON.parse(localStorage.getItem(AHP_CPK) || "[]"); } catch (e) { return []; } }
+async function ahpCpPull(key) {
+  try { const r = await fetch(AHP_API + "cp", { headers: { "x-ahp-key": key }, cache: "no-store" }); if (!r.ok) return;
+    const cps = (await r.json()).cps || []; try { localStorage.setItem(AHP_CPK, JSON.stringify(cps)); } catch (e) {} } catch (e) {}
+  renderAhpCp();
+}
+function ahpCpDate(iso) { const d = new Date(iso); return isNaN(d) ? String(iso || "") : d.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" }) + " " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); }
+function ahpCpCard(cp) {
+  const groups = {}, order = [];
+  (cp.items || []).forEach(it => { const k = it.info || !it.superintendent ? "" : it.superintendent; if (!(k in groups)) { groups[k] = []; order.push(k); } groups[k].push(it); });
+  order.sort((a, b) => (a === "") - (b === ""));
+  let h = "";
+  order.forEach(k => {
+    const its = groups[k], tx = (cp.texts || []).find(t => t.superintendent === k), phone = (tx && tx.phone) || (its[0] && its[0].phone) || "";
+    h += '<div class="ahp-ph"><span class="n">' + (k ? ahpEsc(k) : "Info only") + "</span>" + (k && phone ? '<span class="ahp-sub">' + ahpEsc(phone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3")) + "</span>" : "") + "</div>";
+    its.forEach(it => { h += '<div class="ahp-line' + (it.flag ? " fl" : "") + '"><div class="ahp-qty cp"><b>' + ahpEsc(String(it.dateText || it.date || "").replace(/^~?\w{3}\s+/, m => m.indexOf("~") === 0 ? "~" : "")) + "</b><span>" + ahpEsc((String(it.dateText || "").match(/^~?(\w{3})/) || [])[1] || "") + "</span></div>" +
+      '<div class="ahp-body"><div class="m">' + ahpEsc(it.job || "") + '</div><div class="a">' + ahpEsc(it.task || "") + "</div>" + (it.note ? '<div class="po">' + ahpEsc(it.note) + "</div>" : "") + (it.flag ? '<span class="ahp-chip">⚠️ ' + ahpEsc(it.flag) + "</span>" : "") + "</div></div>"; });
+    if (k && phone && tx && tx.body) h += '<a class="btn btn-primary btn-block ahp-sms" href="sms:' + encodeURIComponent(phone).replace(/%2B/g, "+") + "&body=" + encodeURIComponent(tx.body) + '">Text ' + ahpEsc(k.split(" ")[0]) + "</a>";
+  });
+  return h;
+}
+function renderAhpCp() {
+  const box = document.getElementById("ahpCpOut"); if (!box) return;
+  const cps = ahpCpLoad(); if (!cps.length) { box.innerHTML = '<p class="cap">' + (ahpKey() ? "No critical paths yet." : "Connect the email inbox above to get AHP critical paths here.") + "</p>"; return; }
+  const by = {}; cps.forEach(c => (by[c.office] = by[c.office] || []).push(c));
+  Object.values(by).forEach(a => a.sort((x, y) => String(y.sentAt).localeCompare(String(x.sentAt))));
+  let h = "";
+  ["Athens", "Gainesville"].concat(Object.keys(by).filter(o => o !== "Athens" && o !== "Gainesville")).forEach(o => { const a = by[o]; if (!a) return;
+    h += '<div class="ahp-head ahp-cphead"><div class="t">' + ahpEsc(o) + ' CP</div><div class="ahp-sub">Sent ' + ahpEsc(ahpCpDate(a[0].sentAt)) + (a[0].sender ? " · " + ahpEsc(a[0].sender) : "") + (a[0].weeks ? " · " + ahpEsc(a[0].weeks) : "") + "</div></div>" + ahpCpCard(a[0]);
+    if (a.length > 1) h += '<details class="ahp-older"><summary>Older ' + ahpEsc(o) + " CPs (" + (a.length - 1) + ")</summary>" + a.slice(1).map(c => '<div class="ahp-sub" style="margin:10px 0 4px"><b>Sent ' + ahpEsc(ahpCpDate(c.sentAt)) + "</b></div>" + ahpCpCard(c)).join("") + "</details>";
+  });
+  box.innerHTML = h;
 }
 async function ahpAddFiles(files, batch) {
   const st = document.getElementById("ahpStatus"); let n = 0;
