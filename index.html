@@ -5712,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02addr";
+const APP_BUILD = "2026-11-02chipsel";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8097,7 +8097,7 @@ function renderTyped() {
     var mine = B.tickets.filter(function (t) { return t.item === it; });
     if (!mine.length) c.appendChild(el("div", "callout warn", "No ticket type \u2014 add prehang, fiberglass, or caulk & foam."));
     mine.forEach(function (t) {
-      var why = ticketBlocks(t), o = t.order, on = o && WO.order === o, row = el("div");
+      var why = ticketBlocks(t), o = t.order, on = o && WO.order === o, row = el("div"); t._row = row;
       row.style.cssText = "border-top:1px solid var(--border);margin-top:8px;padding-top:8px";
       var dstr = o ? K.ticketDateStr(o) : (t.date ? K.fmtDate(t.date) : (t.dateText || "no date"));
       row.innerHTML = "<div><b>" + h(tLabel(t.type)) + "</b> \u00b7 " + h(dstr) + " \u00b7 to " + h(who(TT[t.type].to).name) + (why.length ? "" : " \u00b7 \u2705 ready") +
@@ -8121,7 +8121,16 @@ function renderTyped() {
     });
     var add = el("div", "archive-actions"); add.style.marginTop = "8px";
     ["prehang", "cf", "fiberglass", "attic"].forEach(function (type) {
-      var b = el("button", "btn btn-secondary btn-sm", "+ " + h(tLabel(type))); b.type = "button"; b.onclick = function () { addTicket(it, type); }; add.appendChild(b);
+      var have = mine.filter(function (t) { return t.type === type; });
+      if (!have.length) { var b = el("button", "btn btn-secondary btn-sm", "+ " + h(tLabel(type))); b.type = "button"; b.onclick = function () { addTicket(it, type); }; add.appendChild(b); return; }
+      /* chipsel: type already built on this lot -> show selected; tap flashes that ticket, then offers a second one */
+      var sb = el("button", "btn btn-primary btn-sm", "\u2713 " + h(tLabel(type)) + (have.length > 1 ? " \u00d7" + have.length : "")); sb.type = "button";
+      sb.setAttribute("aria-pressed", "true"); sb.title = tLabel(type) + " ticket already built";
+      sb.onclick = function () {
+        var r = have[0]._row; if (r) { r.scrollIntoView({ behavior: "smooth", block: "center" }); r.style.transition = "background .6s"; r.style.background = "rgba(255,200,0,.35)"; setTimeout(function () { r.style.background = ""; }, 900); }
+        setTimeout(function () { if (confirm("This lot already has " + (have.length > 1 ? have.length + " " : "an ") + tLabel(type) + " ticket" + (have.length > 1 ? "s" : "") + ". Add another one?")) addTicket(it, type); }, 700);
+      };
+      add.appendChild(sb);
     });
     var lol = el("button", "btn btn-danger btn-sm", "Leave out lot"); lol.type = "button";
     lol.onclick = function () { B.items = B.items.filter(function (x) { return x !== it; }); B.tickets = B.tickets.filter(function (t) { if (t.item === it && t.order && WO.order === t.order) hideOrder(); return t.item !== it; }); renderBatch(); };
