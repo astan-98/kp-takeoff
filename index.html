@@ -412,6 +412,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 .cpm .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cpm .cb{min-height:56px;border-radius:12px;border:2px solid var(--line);background:var(--bg2);color:inherit;font-weight:800;font-size:1rem;line-height:1.1}.cpm .cb small{display:block;font-weight:500;font-size:.7rem;opacity:.7}.cpm .cb.on{border-color:#c8102e;background:#fcebec;color:#7a0d14}
 .cpm .chips{display:flex;flex-wrap:wrap;gap:6px}.cpm .tc{padding:10px 14px;border-radius:20px;border:2px solid var(--line);background:var(--bg2);color:inherit;font-weight:700}.cpm .tc.on{border-color:#c8102e;background:#c8102e;color:#fff}.cpm .row2{display:flex;gap:8px;margin-top:16px}.cpm .row2 button{flex:1;min-height:50px;border-radius:12px;font-weight:800;font-size:1rem;border:1px solid var(--line)}.cpm .row2 .go{background:#c8102e;color:#fff;border:0}.cpm .err{color:#c8102e;font-size:.85rem;margin-top:8px}
 .cp-ck{display:flex;align-items:center;gap:10px;margin:8px 0 2px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-weight:700;font-size:.9rem;cursor:pointer;background:var(--bg)}.cp-ck input{width:24px;height:24px;accent-color:#c8102e;margin:0}.cp-ck.on{border-color:#c8102e;background:#fcebec;color:#7a0d14}.ahp-sms.off{opacity:.4;pointer-events:none}
+.ahp-chip.nopo{background:#f1f1f3;border-color:#c9c9cf;color:#555}.cp-on-po{margin-top:4px;color:#7a0d14;font-weight:600}
 .ahp-sms{display:block;text-align:center;text-decoration:none;margin:4px 0 12px;padding:14px;font-size:1rem}
 .ahp-cphead{margin-top:14px}.ahp-older{margin:6px 0 12px}.ahp-older summary{font-weight:700;color:var(--accent-ink);padding:8px 0}
 .ahp-saved{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid var(--line);margin-top:6px}.ahp-saved.on{background:var(--accent-soft);border-radius:10px;padding:8px}
@@ -5705,7 +5706,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02sel";
+const APP_BUILD = "2026-11-02po";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8812,7 +8813,7 @@ function renderAhp() {
     const open = res.flags.filter(f => f.block && (!ack[f.key] || f.key === "addr") && !(f.key === "addr" && j.addr) && !(f.key === "office" && cust)).length;
     return AHPS.exported[id] ? { t: "Exported " + AHPS.exported[id], c: "ok" } : open ? { t: open + " flag" + (open > 1 ? "s" : ""), c: "" } : { t: "Ready", c: "ok" }; };
   if (allIds.length) h += '<div class="ahp-flags" id="ahpSaved"><b>Saved jobs (' + allIds.length + ")</b>" + allIds.map(id => { const s = statusOf(id);
-    return '<div class="ahp-saved' + (AHPS.view === id ? " on" : "") + '"><div class="sv-l"><div class="m">' + ahpEsc(jobs[id].jobName || "Job") + " · #" + id + '</div><div class="ahp-sub">Added ' + ahpEsc(AHPS.added[id]) + (AHPS.fromEmail[id] ? ' <span class="ahp-chip email">✉ New from email</span>' : "") + ' <span class="ahp-chip ' + s.c + '">' + ahpEsc(s.t) + "</span></div></div>" +
+    return '<div class="ahp-saved' + (AHPS.view === id ? " on" : "") + '"><div class="sv-l"><div class="m">' + ahpEsc(jobs[id].jobName || "Job") + " · #" + id + '</div><div class="ahp-sub">Added ' + ahpEsc(AHPS.added[id]) + (AHPS.fromEmail[id] ? ' <span class="ahp-chip email">✉ New from email</span>' : "") + ' <span class="ahp-chip ' + s.c + '">' + ahpEsc(s.t) + "</span>" + (() => { AHPS.lastJobs = jobs; const c = cpForPo(id); return c.length ? '<div class="ahp-sub cp-on-po">📅 CP: ' + c.map(it => ahpEsc(it.task) + " " + ahpEsc(it.dateText || it.date) + (it.scheduled ? " ✅" : "")).join(" · ") + "</div>" : '<div class="ahp-sub cp-on-po">📅 Not on a CP yet</div>'; })() + "</div></div>" +
       '<button type="button" class="sv-b" data-open="' + id + '">' + (AHPS.view === id ? "Show all" : "Open") + '</button><button type="button" class="sv-b sv-del" data-del="' + id + '">Delete</button></div>'; }).join("") + "</div>";
   ids.forEach(id => {
     const j = jobs[id], res = AHP.buildJob(j), ack = AHPS.ack[id] || (AHPS.ack[id] = {});
@@ -8850,7 +8851,7 @@ function renderAhp() {
   if (!ids.length && AHPS.docs.length) h += '<p class="cap">No Home Place POs found in these files yet.</p>';
   out.innerHTML = h;
   AHPS.lastJobs = jobs;
-  ahpSave();
+  ahpSave(); try { renderAhpCp(); } catch (e) {}
 }
 function ahpExport(id) {
   const j = AHPS.lastJobs[id]; if (!j) return;
@@ -8950,7 +8951,8 @@ const cpNoCal = t => /attic|blow|duct|blower|test/i.test(String(t || ""));
 const cpFP = it => it.type === "fireplace" || /fire ?place|gas logs?|\binsert\b|\bfp\b|hearth|chimney|mantel/i.test(String(it.task || ""));
 const cpReg = {}; let cpCrews = null;
 function cpExtra(cp, it) { if (it.info || !it.superintendent) return ""; const id = "c" + Object.keys(cpReg).length; cpReg[id] = { cp, it };
-  const on = cpChecked(it); let h = '<label class="cp-ck' + (on ? " on" : "") + '"><input type="checkbox" data-ck="' + id + '" data-grp="' + ahpEsc(cp.id + "|" + it.superintendent) + '"' + (on ? " checked" : "") + '><span>Include in text</span></label>';
+  const pm = cpPoMatch(cp.office, it.job), poChip = pm.length ? '<span class="ahp-chip ok">PO in · #' + pm.map(ahpEsc).join(", #") + "</span>" : '<span class="ahp-chip nopo">No PO yet</span>';
+  const on = cpChecked(it); let h = poChip + '<label class="cp-ck' + (on ? " on" : "") + '"><input type="checkbox" data-ck="' + id + '" data-grp="' + ahpEsc(cp.id + "|" + it.superintendent) + '"' + (on ? " checked" : "") + '><span>Include in text</span></label>';
   if (it.origDate) h += '<div class="cp-was">was ' + ahpEsc(it.origDateText || it.origDate) + "</div>" + '<span class="ahp-chip rev">Revised → ' + ahpEsc(it.dateText || it.date) + "</span>";
   if (cpFP(it)) return h + (it.soTurnedIn ? '<span class="ahp-chip sch">✅ Confirmed with PM / Sales Order turned in</span>' : "") + '<div class="cp-acts"><button class="' + (it.soTurnedIn ? "" : "go") + '" data-cps="' + id + '|so">' + (it.soTurnedIn ? "Undo: Confirmed / SO turned in" : "Confirmed with PM / Sales Order Turned In") + '</button><button data-cps="' + id + '|r">Revise</button></div>';
   if (it.confirmed) return h + '<span class="ahp-chip sch">✅ Confirmed · ' + ahpEsc(cpFmt(it.confirmed.date || it.date)) + "</span>";
@@ -9014,6 +9016,17 @@ function cpRefreshTexts() { document.querySelectorAll("#ahpCpOut a.ahp-sms[data-
 document.addEventListener("change", e => { const c = e.target.closest && e.target.closest("#ahpCpOut input[data-ck]"); if (!c) return; const it = cpReg[c.dataset.ck].it, m = cpCkLoad();
   m[(it.key || "") + "@" + it.date] = c.checked; try { localStorage.setItem(CP_CKK, JSON.stringify(m)); } catch (x) {} c.closest(".cp-ck").classList.toggle("on", c.checked); cpRefreshTexts(); });
 document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a.ahp-sms.off"); if (a) { e.preventDefault(); } }, true);
+
+// 32h: PO ↔ CP linking (phone-side): CP item ↔ saved PO job by office + job-name tokens (surname / lot / job#).
+const CP_STOP = new Set(["the","and","lot","home","place","job","new","phase","gainesville","athens","ga","road","rd","dr","drive","ln","lane","st","street","hwy","ct","way","trail","trl"]);
+function cpToks(t) { return String(t || "").toLowerCase().replace(/[’']/g, "").split(/[^a-z0-9]+/).filter(w => w && (w.length >= 3 || /^\d+$/.test(w)) && !CP_STOP.has(w)); }
+function cpOffOk(a, b) { a = String(a || "").toLowerCase(); b = String(b || "").toLowerCase(); if (!a || !b) return true; return a.includes(b) || b.includes(a) || (/gaines/.test(a) === /gaines/.test(b)); }
+function cpPoMatch(office, job) { const J = AHPS.lastJobs || {}, ct = cpToks(job).filter(w => !/^\d+$/.test(w)); if (!ct.length) return [];
+  return Object.keys(J).filter(id => { const j = J[id]; if (!cpOffOk(j.office, office)) return false; const pt = new Set(cpToks(j.jobName).concat(cpToks(id)));
+    return ct.some(w => pt.has(w) || [...pt].some(p => p.length >= 4 && w.length >= 4 && (p.startsWith(w) || w.startsWith(p)))); }); }
+function cpForPo(id) { const j = (AHPS.lastJobs || {})[id]; if (!j) return []; const out = [];
+  ahpCpLoad().forEach(cp => (cp.items || []).forEach(it => { if (!it.info && it.superintendent && cpPoMatch(cp.office, it.job).includes(id) && !out.some(o => o.key === it.key)) out.push(it); }));
+  return out.sort((a, b) => String(a.date).localeCompare(String(b.date))); }
 async function ahpAddFiles(files, batch) {
   const st = document.getElementById("ahpStatus"); let n = 0;
   for (const f of files) {
