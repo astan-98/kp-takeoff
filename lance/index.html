@@ -7612,5 +7612,13 @@ if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",
 })();
 
 </script>
-</body>
+<style id="kbHide">body.kb-open .bottom-nav,body.kb-open .save-dock{display:none!important}</style><script>/* tkodel: hide the fixed bottom bars while typing (iOS lifts position:fixed bars above the keyboard). They come back on blur. */
+(function(){var vv=window.visualViewport,base=window.innerHeight,t=null;
+function typing(){var a=document.activeElement;return !!(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!/^(file|button|submit|checkbox|radio|range|color)$/.test(a.type||""))||!!(a&&a.isContentEditable);}
+function upd(){var h=vv?vv.height:window.innerHeight;if(!typing()&&h>base)base=h;var shrunk=vv&&base-h>150;document.body.classList.toggle("kb-open",typing()||!!(shrunk&&vv.scale<=1.01));}
+document.addEventListener("focusin",upd,true);
+document.addEventListener("focusout",function(){clearTimeout(t);t=setTimeout(upd,80);},true);
+if(vv)vv.addEventListener("resize",function(){clearTimeout(t);t=setTimeout(upd,50);});
+window.addEventListener("orientationchange",function(){setTimeout(function(){base=vv?vv.height:window.innerHeight;upd();},400);});
+window.addEventListener("pageshow",upd);document.addEventListener("visibilitychange",function(){if(!document.hidden)setTimeout(upd,100);});})();</script></body>
 </html>
