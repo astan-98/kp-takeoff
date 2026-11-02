@@ -5704,7 +5704,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02cps";
+const APP_BUILD = "2026-11-02fp";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8946,10 +8946,12 @@ function cpDetect(t) { t = String(t || "").toLowerCase(); const o = [];
   if (/pre-?hang|behind tub/.test(t)) o.push("prehang"); if (/wall/.test(t)) o.push("wall"); if (/crawl|poly|floor/.test(t)) o.push("crawl");
   if (/caulk|foam/.test(t)) o.push("caulk"); if (/attic|blow/.test(t)) o.push("attic"); if (/test|duct|blower/.test(t)) o.push("test"); if (/remov|tear/.test(t)) o.push("removal"); return o; }
 const cpNoCal = t => /attic|blow|duct|blower|test/i.test(String(t || ""));
+const cpFP = it => it.type === "fireplace" || /fire ?place|gas logs?|\binsert\b|\bfp\b|hearth|chimney|mantel/i.test(String(it.task || ""));
 const cpReg = {}; let cpCrews = null;
 function cpExtra(cp, it) { if (it.info || !it.superintendent) return ""; const id = "c" + Object.keys(cpReg).length; cpReg[id] = { cp, it };
   let h = "";
   if (it.origDate) h += '<div class="cp-was">was ' + ahpEsc(it.origDateText || it.origDate) + "</div>" + '<span class="ahp-chip rev">Revised → ' + ahpEsc(it.dateText || it.date) + "</span>";
+  if (cpFP(it)) return h + (it.soTurnedIn ? '<span class="ahp-chip sch">✅ Confirmed with PM / Sales Order turned in</span>' : "") + '<div class="cp-acts"><button class="' + (it.soTurnedIn ? "" : "go") + '" data-cps="' + id + '|so">' + (it.soTurnedIn ? "Undo: Confirmed / SO turned in" : "Confirmed with PM / Sales Order Turned In") + '</button><button data-cps="' + id + '|r">Revise</button></div>';
   if (it.confirmed) return h + '<span class="ahp-chip sch">✅ Confirmed · ' + ahpEsc(cpFmt(it.confirmed.date || it.date)) + "</span>";
   if (cpNoCal(it.task)) return h + '<div class="cp-acts"><button class="go" data-cps="' + id + '|c">Confirmed</button><button data-cps="' + id + '|r">Revise</button></div>';
   if (it.scheduled) return h + '<span class="ahp-chip sch">✅ Scheduled · ' + ahpEsc(it.scheduled.crewName) + " · " + ahpEsc(cpFmt(it.scheduled.date)) + "</span>";
@@ -8958,6 +8960,7 @@ function cpFmt(d) { const x = new Date(d + "T12:00:00"); return isNaN(x) ? d : x
 async function cpApi(path, body) { const r = await fetch(AHP_API + path, { method: body ? "POST" : "GET", headers: { "x-ahp-key": ahpKey(), "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
   const j = await r.json().catch(() => ({})); j._status = r.status; return j; }
 async function cpOpen(id, mode) { const { cp, it } = cpReg[id] || {}; if (!it) return; if (!ahpKey()) return alert("Connect the AHP inbox first.");
+  if (mode === "so") { const r = await cpApi("so", { key: it.key, on: !it.soTurnedIn }); if (!r.ok) return alert("Couldn't save: " + (r.error || r._status)); return ahpCpPull(ahpKey()); }
   if (mode === "c") { if (!confirm("Mark " + it.job + " " + it.task + " confirmed for " + cpFmt(it.date) + "?\nNo crew card — send it from FieldGroove.")) return; const r = await cpApi("confirm", { key: it.key, date: it.date }); if (!r.ok) return alert("Couldn't save: " + (r.error || r._status)); return ahpCpPull(ahpKey()); }
   const cust = /gainesville/i.test(cp.office || "") ? "Home Place-Gainesville" : "Home Place", orig = it.origDate || it.date;
   const m = document.createElement("div"); m.className = "cpm"; const title = mode === "s" ? "Confirmed, schedule it" : mode === "r" ? "Revise date" : "Revise &amp; schedule";
