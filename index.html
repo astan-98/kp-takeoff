@@ -413,6 +413,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 .cpm .chips{display:flex;flex-wrap:wrap;gap:6px}.cpm .tc{padding:10px 14px;border-radius:20px;border:2px solid var(--line);background:var(--bg2);color:inherit;font-weight:700}.cpm .tc.on{border-color:#c8102e;background:#c8102e;color:#fff}.cpm .row2{display:flex;gap:8px;margin-top:16px}.cpm .row2 button{flex:1;min-height:50px;border-radius:12px;font-weight:800;font-size:1rem;border:1px solid var(--line)}.cpm .row2 .go{background:#c8102e;color:#fff;border:0}.cpm .err{color:#c8102e;font-size:.85rem;margin-top:8px}
 .cp-ck{display:flex;align-items:center;gap:10px;margin:8px 0 2px;padding:10px 12px;border:2px solid var(--line);border-radius:12px;font-weight:700;font-size:.9rem;cursor:pointer;background:var(--bg)}.cp-ck input{width:24px;height:24px;accent-color:#c8102e;margin:0}.cp-ck.on{border-color:#c8102e;background:#fcebec;color:#7a0d14}.ahp-sms.off{opacity:.4;pointer-events:none}
 .ahp-chip.nopo{background:#f1f1f3;border-color:#c9c9cf;color:#555}.cp-on-po{margin-top:4px;color:#7a0d14;font-weight:600}
+.cpt{display:flex;margin:8px 0 2px}.cpt .s{flex:1;text-align:center;position:relative;min-width:0}.cpt .s i{display:block;width:20px;height:20px;margin:0 auto;border-radius:50%;background:#d7dae0;color:#fff;font:800 11px/20px system-ui;font-style:normal;position:relative;z-index:1}.cpt .s.d i{background:#16a34a}.cpt .s.n i{background:#c8102e}.cpt .s:not(:last-child)::after{content:"";position:absolute;top:9px;left:50%;width:100%;height:3px;background:#e3e5ea}.cpt .s.l::after{background:#16a34a}.cpt .s span{display:block;font-size:9px;font-weight:700;line-height:1.1;margin-top:3px;color:#999}.cpt .s.d span,.cpt .s.n span{color:inherit}.cpt-nx{font-size:12px;font-weight:700;color:#c8102e;margin:4px 0 4px}
 .ahp-sms{display:block;text-align:center;text-decoration:none;margin:4px 0 12px;padding:14px;font-size:1rem}
 .ahp-cphead{margin-top:14px}.ahp-older{margin:6px 0 12px}.ahp-older summary{font-weight:700;color:var(--accent-ink);padding:8px 0}
 .ahp-saved{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid var(--line);margin-top:6px}.ahp-saved.on{background:var(--accent-soft);border-radius:10px;padding:8px}
@@ -5706,7 +5707,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02po";
+const APP_BUILD = "2026-11-02trail";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8952,7 +8953,7 @@ const cpFP = it => it.type === "fireplace" || /fire ?place|gas logs?|\binsert\b|
 const cpReg = {}; let cpCrews = null;
 function cpExtra(cp, it) { if (it.info || !it.superintendent) return ""; const id = "c" + Object.keys(cpReg).length; cpReg[id] = { cp, it };
   const pm = cpPoMatch(cp.office, it.job), poChip = pm.length ? '<span class="ahp-chip ok">PO in · #' + pm.map(ahpEsc).join(", #") + "</span>" : '<span class="ahp-chip nopo">No PO yet</span>';
-  const on = cpChecked(it); let h = poChip + '<label class="cp-ck' + (on ? " on" : "") + '"><input type="checkbox" data-ck="' + id + '" data-grp="' + ahpEsc(cp.id + "|" + it.superintendent) + '"' + (on ? " checked" : "") + '><span>Include in text</span></label>';
+  const on = cpChecked(it); let h = cpTrail(it) + poChip + '<label class="cp-ck' + (on ? " on" : "") + '"><input type="checkbox" data-ck="' + id + '" data-grp="' + ahpEsc(cp.id + "|" + it.superintendent) + '"' + (on ? " checked" : "") + '><span>Include in text</span></label>';
   if (it.origDate) h += '<div class="cp-was">was ' + ahpEsc(it.origDateText || it.origDate) + "</div>" + '<span class="ahp-chip rev">Revised → ' + ahpEsc(it.dateText || it.date) + "</span>";
   if (cpFP(it)) return h + (it.soTurnedIn ? '<span class="ahp-chip sch">✅ Confirmed with PM / Sales Order turned in</span>' : "") + '<div class="cp-acts"><button class="' + (it.soTurnedIn ? "" : "go") + '" data-cps="' + id + '|so">' + (it.soTurnedIn ? "Undo: Confirmed / SO turned in" : "Confirmed with PM / Sales Order Turned In") + '</button><button data-cps="' + id + '|r">Revise</button></div>';
   if (it.confirmed) return h + '<span class="ahp-chip sch">✅ Confirmed · ' + ahpEsc(cpFmt(it.confirmed.date || it.date)) + "</span>";
@@ -9027,6 +9028,20 @@ function cpPoMatch(office, job) { const J = AHPS.lastJobs || {}, ct = cpToks(job
 function cpForPo(id) { const j = (AHPS.lastJobs || {})[id]; if (!j) return []; const out = [];
   ahpCpLoad().forEach(cp => (cp.items || []).forEach(it => { if (!it.info && it.superintendent && cpPoMatch(cp.office, it.job).includes(id) && !out.some(o => o.key === it.key)) out.push(it); }));
   return out.sort((a, b) => String(a.date).localeCompare(String(b.date))); }
+
+// 32i: status trail (Style 2 stepper) per CP item. Texted recorded server-side on Text tap; WO/Done from the linked Ops card.
+function cpTrail(it) { const t = it.type || "", fp = cpFP(it), noCal = fp || /attic|test/.test(t) || /attic|blow|duct|blower|test/i.test(it.task || "");
+  const past = it.date && it.date < ahpToday(), conf = !!(it.confirmed || it.scheduled || it.soTurnedIn || (it.revisedDate && it.scheduled));
+  const S = [["CP seen", true], ["Texted", !!it.texted]];
+  if (fp) S.push(["SO turned in", !!it.soTurnedIn], ["Done", !!it.soTurnedIn && past]);
+  else if (noCal) S.push(["PM confirmed", conf], ["Done", conf && past]);
+  else S.push(["PM confirmed", conf], ["Scheduled", !!it.scheduled], ["WO attached", !!(it.ops && it.ops.wo)], ["Done", !!(it.ops && it.ops.done)]);
+  const ni = S.findIndex(x => !x[1]);
+  const nx = ni < 0 ? "All done" : { "Texted": "text " + String(it.superintendent || "the PM").split(" ")[0], "PM confirmed": "waiting on " + String(it.superintendent || "PM").split(" ")[0] + " to confirm", "SO turned in": "confirm with PM + turn in the sales order", "Scheduled": "put it on a crew", "WO attached": (it.ops && it.ops.exists === false) ? "Ops card was removed — reschedule" : "attach the FieldGroove WO in Ops", "Done": fp || noCal ? "after " + (it.dateText || it.date) : "crew marks it complete" }[S[ni][0]];
+  return '<div class="cpt">' + S.map((x, i) => '<div class="s' + (x[1] ? " d" : i === ni ? " n" : "") + (i < S.length - 1 && x[1] && S[i + 1][1] ? " l" : "") + '"><i>' + (x[1] ? "✓" : i + 1) + "</i><span>" + x[0] + "</span></div>").join("") + '</div><div class="cpt-nx">' + (ni < 0 ? "✓ " : "Next: ") + ahpEsc(nx) + "</div>"; }
+document.addEventListener("click", e => { const a = e.target.closest && e.target.closest("a.ahp-sms[data-grp]"); if (!a || a.classList.contains("off")) return;
+  const keys = [...document.querySelectorAll('#ahpCpOut input[data-ck]')].filter(c => c.dataset.grp === a.dataset.grp && c.checked).map(c => cpReg[c.dataset.ck].it.key).filter(Boolean);
+  if (keys.length) try { fetch(AHP_API + "texted", { method: "POST", keepalive: true, headers: { "x-ahp-key": ahpKey(), "content-type": "application/json" }, body: JSON.stringify({ keys }) }).then(() => setTimeout(() => ahpCpPull(ahpKey()), 1500)).catch(() => {}); } catch (x) {} }, true);
 async function ahpAddFiles(files, batch) {
   const st = document.getElementById("ahpStatus"); let n = 0;
   for (const f of files) {
