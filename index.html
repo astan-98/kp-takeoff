@@ -5713,7 +5713,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02skycal";
+const APP_BUILD = "2026-11-02cprem";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -9409,5 +9409,7 @@ document.addEventListener("click",function(e){var m=e.target.closest&&e.target.c
  var nb=e.target.closest&&e.target.closest('.nav-btn[data-tab="workorder"]');if(nb)setTimeout(function(){load();},50);},true);
 window.addEventListener("kpwo-saved",function(){setTimeout(function(){load(true);},400);});
 document.addEventListener("visibilitychange",function(){if(!document.hidden&&document.getElementById("tab-workorder")&&document.getElementById("tab-workorder").classList.contains("active"))load();});
-setTimeout(function(){load(true);},1500);window.kpSkyLoad=load;})();</script></body>
+setTimeout(function(){load(true);},1500);window.kpSkyLoad=load;})();</script><script id="ahpcpHash">/* cprem: #ahpcp (from KPI Ops "Texts to send") opens the AHP tab at the critical-path list */
+(function(){function go(){if(!/^#ahpcp\b/.test(location.hash))return;try{history.replaceState(null,"",location.pathname+location.search);}catch(e){}var b=document.querySelector('.nav-btn[data-tab="ahp"]');if(b)b.click();setTimeout(function(){var o=document.getElementById("ahpCpOut");if(o)o.scrollIntoView({block:"start"});},400);}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(go,300);});else setTimeout(go,300);window.addEventListener("hashchange",go);})();</script></body>
 </html>
