@@ -5712,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02crews";
+const APP_BUILD = "2026-11-02addr";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8987,12 +8987,13 @@ async function cpOpen(id, mode) { const { cp, it } = cpReg[id] || {}; if (!it) r
   const cust = /gainesville/i.test(cp.office || "") ? "Home Place-Gainesville" : "Home Place", orig = it.origDate || it.date;
   const m = document.createElement("div"); m.className = "cpm"; const title = mode === "s" ? "Confirmed, schedule it" : mode === "r" ? "Revise date" : "Revise &amp; schedule";
   let types = cpDetect(it.task), crew = null;
+  const cpAddr = (() => { try { if (!AHPS.lastJobs) ahpJobs && (AHPS.lastJobs = ahpJobs()); } catch (e) {} const J = AHPS.lastJobs || {}; for (const id of cpPoMatch(cp.office, it.job)) { const a = J[id] && J[id].addr; if (a) return a; } return it.addr || it.address || ""; })();
   const sibs = mode === "r" ? [] : (cp.items || []).filter(x => x !== it && x.key !== it.key && x.job === it.job && x.date === it.date && !x.scheduled && !x.info && !/attic|blow|duct|blower|test|fireplace/i.test(x.task || "") && !/^(attic|test|fireplace)$/.test(x.type || ""));
   sibs.forEach(x => cpDetect(x.task).forEach(k => { if (!types.includes(k)) types.push(k); }));
   m.innerHTML = '<div class="sh"><h3>' + title + '</h3><div class="ahp-sub">' + ahpEsc(it.job) + " · " + ahpEsc(it.task) + " · PM " + ahpEsc(it.superintendent) + "</div>" +
     '<div class="lb">' + (mode === "s" ? "Date" : "New date (AHP had " + ahpEsc(cpFmt(orig)) + ")") + '</div><input type="date" class="cd" value="' + ahpEsc(mode === "rs" ? "" : it.date) + '">' +
     (mode === "r" ? "" : '<div class="lb">Crew</div><div class="grid cg"><div class="ahp-sub">Loading crews…</div></div><div class="lb">Job type</div><div class="chips ct"></div>' +
-      '<div class="lb">Customer</div><input class="cc" value="' + ahpEsc(cust) + '"><div class="lb">Job / address</div><input class="ca" value="' + ahpEsc(it.job + (it.addr ? " — " + it.addr : "")) + '" placeholder="Lot / street address"><div class="lb">PM</div><input class="cpn" value="' + ahpEsc(it.superintendent) + '">') +
+      '<div class="lb">Customer</div><input class="cc" value="' + ahpEsc(cust) + '"><div class="lb">Job / address</div><input class="ca" value="' + ahpEsc(it.job + (cpAddr ? " · " + cpAddr : "")) + '" placeholder="Lot / street address">' + (cpAddr ? "" : '<div class="ahp-sub cp-noaddr">No address found — type it in (Ops will also check its own cards)</div>') + '<div class="lb">PM</div><input class="cpn" value="' + ahpEsc(it.superintendent) + '">') +
     '<div class="err"></div><div class="row2"><button class="cx">Cancel</button><button class="go ok">' + (mode === "r" ? "Save new date" : "Put it on the calendar") + "</button></div></div>";
   document.body.appendChild(m); const q = s => m.querySelector(s), err = t => (q(".err").textContent = t || "");
   m.onclick = e => { if (e.target === m || e.target.closest(".cx")) m.remove(); };
@@ -9008,7 +9009,7 @@ async function cpOpen(id, mode) { const { cp, it } = cpReg[id] || {}; if (!it) r
       if (mode === "r") r = await cpApi("revise", { key: it.key, date: d, origDate: orig });
       else { if (!crew) { b.disabled = false; b.textContent = "Put it on the calendar"; return err("Tap a crew."); }
         if (!types.length) { b.disabled = false; b.textContent = "Put it on the calendar"; return err("Pick at least one job type."); }
-        const ja = q(".ca").value.trim(), body = { key: it.key, office: cp.office, job: it.job, task: it.task, date: d, origDate: orig, revise: mode === "rs", crew: crew.id, crewName: crew.name + (crew.bor ? " (" + crew.rep.replace(/^Borrowed · /, "") + ")" : " (" + crew.rep + ")"), cust: q(".cc").value.trim(), addr: ja.includes(" — ") ? ja.split(" — ").slice(1).join(" — ") : (ja !== it.job ? ja : ""), pm: q(".cpn").value.trim(), jtypes: types };
+        const ja = q(".ca").value.trim(), body = { key: it.key, office: cp.office, job: it.job, task: it.task, date: d, origDate: orig, revise: mode === "rs", crew: crew.id, crewName: crew.name + (crew.bor ? " (" + crew.rep.replace(/^Borrowed · /, "") + ")" : " (" + crew.rep + ")"), cust: q(".cc").value.trim(), addr: / [·—] /.test(ja) ? ja.split(/ [·—] /).slice(1).join(", ").trim() : (ja !== it.job ? ja : ""), pm: q(".cpn").value.trim(), jtypes: types };
         body.also = sibs.filter(x => cpDetect(x.task).some(k => types.includes(k))).map(x => x.key); r = await cpApi("schedule", body);
         if (r._status === 409) { const s0 = r.sched || {}; if (!confirm(it.job + " " + it.task + " is already scheduled (" + (s0.crewName || "") + ", " + cpFmt(s0.date || "") + ").\nSchedule it again? That adds a second card in Ops.")) { m.remove(); return; } body.force = true; r = await cpApi("schedule", body); } }
       if (!r.ok) throw new Error(r.error || ("HTTP " + r._status));
