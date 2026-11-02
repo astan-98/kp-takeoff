@@ -5712,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02tkosync";
+const APP_BUILD = "2026-11-02tkodel";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -6402,7 +6402,7 @@ function cloudRender(state) {
 function cloudMergePlan(local, remote) {
   const m = new Map((local || []).map(j => [j.id, j])), r = { puts: [], added: 0, replaced: 0, kept: 0 };
   (remote || []).forEach(j => {
-    if (!j || j.id == null) return;
+    if (!j || j.id == null || j.deleted) return; // tkodel: tombstones never get added
     const cur = m.get(j.id);
     if (!cur) { r.puts.push(j); r.added++; } else if (jobStamp(j) > jobStamp(cur)) { r.puts.push(j); r.replaced++; } else r.kept++;
   });
@@ -6442,14 +6442,18 @@ function cloudDeleted() { try { const d = JSON.parse(lsGet(CLOUD_DEL_KEY) || "{}
 function cloudMarkDeleted(id) {
   if (id == null) return;
   const d = cloudDeleted(); d[id] = new Date().toISOString(); lsSet(CLOUD_DEL_KEY, JSON.stringify(d));
-  cloudSetQueue(cloudQueue().filter(p => p && p.jobId !== id)); // don't upload a job that was just deleted
+  const q = cloudQueue().filter(p => p && p.jobId !== id); // don't upload a job that was just deleted
+  if (cloudOn()) { const at = d[id]; q.push({ copy: CLOUD_COPY, rep: ownerName(), build: APP_BUILD, savedAt: at, jobId: id, jobName: "(deleted) " + id, address: "", package: "", totalSf: "", job: { id: id, savedAt: at, deleted: true } }); } // tkodel: tombstone so other devices remove it too
+  cloudSetQueue(q); if (cloudOn()) cloudFlush();
 }
 function cloudUndelete(id) { const d = cloudDeleted(); if (d[id] !== undefined) { delete d[id]; lsSet(CLOUD_DEL_KEY, JSON.stringify(d)); } }
 function cloudSyncPlan(local, remote, opts) {
   opts = opts || {};
   const del = opts.deleted || {};
   const rem = (remote || []).filter(j => j && j.id != null && j.id !== opts.skipId && !(del[j.id] !== undefined && !(String(j.savedAt || "") > String(del[j.id]))));
-  return cloudMergePlan(local, rem);
+  const r = cloudMergePlan(local, rem), lm = new Map((local || []).map(j => [j.id, j])); r.dels = [];
+  (remote || []).forEach(t => { if (!t || !t.deleted || t.id == null || t.id === opts.skipId) return; const cur = lm.get(t.id); if (cur && String(t.savedAt || "") >= jobStamp(cur)) r.dels.push({ id: t.id, at: String(t.savedAt || "") }); }); // tkodel: newest wins
+  return r;
 }
 let CLOUD_SYNC_WIRED = false;
 /* ---------- 30c: photos + work orders, through script v3 ----------
@@ -6677,9 +6681,10 @@ function cloudSync(opts) {
       if (!d || d.ok !== true || !Array.isArray(d.jobs)) return null;
       return dbReadAll(openDb, STORE).then(local => {
         const plan = cloudSyncPlan(local, d.jobs, { skipId: S.jobId, deleted: cloudDeleted() });
-        if (!plan.puts.length) return plan;
-        return dbWrite(openDb, STORE, os => plan.puts.forEach(j => os.put(j))).then(() => {
-          const k = plan.puts.length;
+        if (!plan.puts.length && !plan.dels.length) return plan;
+        if (plan.dels.length) { const dd = cloudDeleted(); plan.dels.forEach(x => { dd[x.id] = x.at; }); lsSet(CLOUD_DEL_KEY, JSON.stringify(dd)); }
+        return dbWrite(openDb, STORE, os => { plan.puts.forEach(j => os.put(j)); plan.dels.forEach(x => os.delete(x.id)); }).then(() => {
+          const k = plan.puts.length + plan.dels.length;
           refreshArchive();
           cloudRender();
           const el = $("cloudStatus"); if (el) el.textContent = "Synced " + k + " job" + (k === 1 ? "" : "s") + " from cloud";
