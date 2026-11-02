@@ -405,6 +405,12 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 .ahp-conn-msg{margin-top:6px;font-size:.8rem;color:#16702e}.ahp-conn-msg.bad{color:var(--danger);font-weight:600}
 .ahp-conn-ok{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:700;color:#16702e;font-size:.88rem}
 .ahp-qty.cp{min-width:70px}.ahp-qty.cp b{font-size:1.2rem}
+.cp-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.cp-acts button{flex:1;min-height:40px;font-size:.82rem;font-weight:700;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:inherit;padding:6px}.cp-acts .go{background:#c8102e;color:#fff;border:0}
+.cp-was{text-decoration:line-through;opacity:.6;font-size:.72rem}.ahp-chip.sch{background:rgba(48,209,88,.14);border-color:var(--ok);color:#16702e}.ahp-chip.rev{background:#fff4d6;border-color:#d97706;color:#7c2d12}
+.cpm{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end}.cpm .sh{background:var(--bg,#fff);width:100%;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+.cpm h3{margin:0 0 4px}.cpm .lb{font-size:.78rem;font-weight:700;margin:12px 0 6px;opacity:.75}.cpm input{width:100%;font-size:16px;padding:10px;border-radius:10px;border:1px solid var(--line);box-sizing:border-box;background:var(--bg2);color:inherit}
+.cpm .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cpm .cb{min-height:56px;border-radius:12px;border:2px solid var(--line);background:var(--bg2);color:inherit;font-weight:800;font-size:1rem;line-height:1.1}.cpm .cb small{display:block;font-weight:500;font-size:.7rem;opacity:.7}.cpm .cb.on{border-color:#c8102e;background:#fcebec;color:#7a0d14}
+.cpm .chips{display:flex;flex-wrap:wrap;gap:6px}.cpm .tc{padding:10px 14px;border-radius:20px;border:2px solid var(--line);background:var(--bg2);color:inherit;font-weight:700}.cpm .tc.on{border-color:#c8102e;background:#c8102e;color:#fff}.cpm .row2{display:flex;gap:8px;margin-top:16px}.cpm .row2 button{flex:1;min-height:50px;border-radius:12px;font-weight:800;font-size:1rem;border:1px solid var(--line)}.cpm .row2 .go{background:#c8102e;color:#fff;border:0}.cpm .err{color:#c8102e;font-size:.85rem;margin-top:8px}
 .ahp-sms{display:block;text-align:center;text-decoration:none;margin:4px 0 12px;padding:14px;font-size:1rem}
 .ahp-cphead{margin-top:14px}.ahp-older{margin:6px 0 12px}.ahp-older summary{font-weight:700;color:var(--accent-ink);padding:8px 0}
 .ahp-saved{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid var(--line);margin-top:6px}.ahp-saved.on{background:var(--accent-soft);border-radius:10px;padding:8px}
@@ -8916,7 +8922,7 @@ function ahpCpCard(cp) {
     const its = groups[k], tx = (cp.texts || []).find(t => t.superintendent === k), phone = (tx && tx.phone) || (its[0] && its[0].phone) || "";
     h += '<div class="ahp-ph"><span class="n">' + (k ? ahpEsc(k) : "Info only") + "</span>" + (k && phone ? '<span class="ahp-sub">' + ahpEsc(phone.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3")) + "</span>" : "") + "</div>";
     its.forEach(it => { h += '<div class="ahp-line' + (it.flag ? " fl" : "") + '"><div class="ahp-qty cp"><b>' + ahpEsc(String(it.dateText || it.date || "").replace(/^~?\w{3}\s+/, m => m.indexOf("~") === 0 ? "~" : "")) + "</b><span>" + ahpEsc((String(it.dateText || "").match(/^~?(\w{3})/) || [])[1] || "") + "</span></div>" +
-      '<div class="ahp-body"><div class="m">' + ahpEsc(it.job || "") + '</div><div class="a">' + ahpEsc(it.task || "") + "</div>" + (it.note ? '<div class="po">' + ahpEsc(it.note) + "</div>" : "") + (it.flag ? '<span class="ahp-chip">⚠️ ' + ahpEsc(it.flag) + "</span>" : "") + "</div></div>"; });
+      '<div class="ahp-body"><div class="m">' + ahpEsc(it.job || "") + '</div><div class="a">' + ahpEsc(it.task || "") + "</div>" + (it.note ? '<div class="po">' + ahpEsc(it.note) + "</div>" : "") + (it.flag ? '<span class="ahp-chip">⚠️ ' + ahpEsc(it.flag) + "</span>" : "") + cpExtra(cp, it) + "</div></div>"; });
     if (k && phone && tx && tx.body) h += '<a class="btn btn-primary btn-block ahp-sms" href="sms:' + encodeURIComponent(phone).replace(/%2B/g, "+") + "&body=" + encodeURIComponent(tx.body) + '">Text ' + ahpEsc(k.split(" ")[0]) + "</a>";
   });
   return h;
@@ -8933,6 +8939,53 @@ function renderAhpCp() {
   });
   box.innerHTML = h;
 }
+
+// 32f: CP → KPI Ops scheduling. Server (kpi-ops /ahp/schedule, /ahp/revise) keeps state; /ahp/cp returns item.key, effective item.date, origDate, scheduled.
+const CP_TYPES = [["prehang","Pre-hang"],["wall","Walls"],["crawl","Crawl / floor"],["caulk","Caulk & foam"],["attic","Attic blow"],["test","Testing"],["removal","Removal"]];
+function cpDetect(t) { t = String(t || "").toLowerCase(); const o = [];
+  if (/pre-?hang|behind tub/.test(t)) o.push("prehang"); if (/wall/.test(t)) o.push("wall"); if (/crawl|poly|floor/.test(t)) o.push("crawl");
+  if (/caulk|foam/.test(t)) o.push("caulk"); if (/attic|blow/.test(t)) o.push("attic"); if (/test|duct|blower/.test(t)) o.push("test"); if (/remov|tear/.test(t)) o.push("removal"); return o; }
+const cpNoCal = t => /attic|blow|duct|blower|test/i.test(String(t || ""));
+const cpReg = {}; let cpCrews = null;
+function cpExtra(cp, it) { if (it.info || !it.superintendent) return ""; const id = "c" + Object.keys(cpReg).length; cpReg[id] = { cp, it };
+  let h = "";
+  if (it.origDate) h += '<div class="cp-was">was ' + ahpEsc(it.origDateText || it.origDate) + "</div>" + '<span class="ahp-chip rev">Revised → ' + ahpEsc(it.dateText || it.date) + "</span>";
+  if (it.confirmed) return h + '<span class="ahp-chip sch">✅ Confirmed · ' + ahpEsc(cpFmt(it.confirmed.date || it.date)) + "</span>";
+  if (cpNoCal(it.task)) return h + '<div class="cp-acts"><button class="go" data-cps="' + id + '|c">Confirmed</button><button data-cps="' + id + '|r">Revise</button></div>';
+  if (it.scheduled) return h + '<span class="ahp-chip sch">✅ Scheduled · ' + ahpEsc(it.scheduled.crewName) + " · " + ahpEsc(cpFmt(it.scheduled.date)) + "</span>";
+  return h + '<div class="cp-acts"><button class="go" data-cps="' + id + '|s">Confirmed, schedule it</button><button data-cps="' + id + '|r">Revise</button><button data-cps="' + id + '|rs">Revise/Schedule it</button></div>'; }
+function cpFmt(d) { const x = new Date(d + "T12:00:00"); return isNaN(x) ? d : x.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" }); }
+async function cpApi(path, body) { const r = await fetch(AHP_API + path, { method: body ? "POST" : "GET", headers: { "x-ahp-key": ahpKey(), "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+  const j = await r.json().catch(() => ({})); j._status = r.status; return j; }
+async function cpOpen(id, mode) { const { cp, it } = cpReg[id] || {}; if (!it) return; if (!ahpKey()) return alert("Connect the AHP inbox first.");
+  if (mode === "c") { if (!confirm("Mark " + it.job + " " + it.task + " confirmed for " + cpFmt(it.date) + "?\nNo crew card — send it from FieldGroove.")) return; const r = await cpApi("confirm", { key: it.key, date: it.date }); if (!r.ok) return alert("Couldn't save: " + (r.error || r._status)); return ahpCpPull(ahpKey()); }
+  const cust = /gainesville/i.test(cp.office || "") ? "Home Place-Gainesville" : "Home Place", orig = it.origDate || it.date;
+  const m = document.createElement("div"); m.className = "cpm"; const title = mode === "s" ? "Confirmed, schedule it" : mode === "r" ? "Revise date" : "Revise &amp; schedule";
+  let types = cpDetect(it.task), crew = null;
+  m.innerHTML = '<div class="sh"><h3>' + title + '</h3><div class="ahp-sub">' + ahpEsc(it.job) + " · " + ahpEsc(it.task) + " · PM " + ahpEsc(it.superintendent) + "</div>" +
+    '<div class="lb">' + (mode === "s" ? "Date" : "New date (AHP had " + ahpEsc(cpFmt(orig)) + ")") + '</div><input type="date" class="cd" value="' + ahpEsc(mode === "rs" ? "" : it.date) + '">' +
+    (mode === "r" ? "" : '<div class="lb">Crew</div><div class="grid cg"><div class="ahp-sub">Loading crews…</div></div><div class="lb">Job type</div><div class="chips ct"></div>' +
+      '<div class="lb">Customer</div><input class="cc" value="' + ahpEsc(cust) + '"><div class="lb">Job / address</div><input class="ca" value="' + ahpEsc(it.job + (it.addr ? " — " + it.addr : "")) + '" placeholder="Lot / street address"><div class="lb">PM</div><input class="cpn" value="' + ahpEsc(it.superintendent) + '">') +
+    '<div class="err"></div><div class="row2"><button class="cx">Cancel</button><button class="go ok">' + (mode === "r" ? "Save new date" : "Put it on the calendar") + "</button></div></div>";
+  document.body.appendChild(m); const q = s => m.querySelector(s), err = t => (q(".err").textContent = t || "");
+  m.onclick = e => { if (e.target === m || e.target.closest(".cx")) m.remove(); };
+  const drawT = () => { const ct = q(".ct"); if (!ct) return; ct.innerHTML = CP_TYPES.map(([k, n]) => '<button class="tc' + (types.includes(k) ? " on" : "") + '" data-t="' + k + '">' + n + "</button>").join("");
+    ct.querySelectorAll(".tc").forEach(b => b.onclick = () => { const k = b.dataset.t; types = types.includes(k) ? types.filter(x => x !== k) : types.concat(k); drawT(); }); }; drawT();
+  if (mode !== "r") { try { if (!cpCrews) cpCrews = (await cpApi("crews")).crews || []; } catch (e) { cpCrews = []; }
+    const cg = q(".cg"); cg.innerHTML = cpCrews.map(c => '<button class="cb" data-c="' + ahpEsc(c.id) + '">' + ahpEsc(c.name) + "<small>" + ahpEsc(c.rep) + "</small></button>").join("") || '<div class="err">Couldn\'t load crews.</div>';
+    cg.querySelectorAll(".cb").forEach(b => b.onclick = () => { crew = cpCrews.find(c => c.id === b.dataset.c); cg.querySelectorAll(".cb").forEach(x => x.classList.toggle("on", x === b)); }); }
+  q(".ok").onclick = async () => { const d = q(".cd").value; err(); if (!d) return err("Pick a date.");
+    if (mode !== "s" && d === orig) return err("Pick a different date than AHP's " + cpFmt(orig) + ".");
+    const b = q(".ok"); b.disabled = true; b.textContent = "Saving…";
+    try { let r;
+      if (mode === "r") r = await cpApi("revise", { key: it.key, date: d, origDate: orig });
+      else { if (!crew) { b.disabled = false; b.textContent = "Put it on the calendar"; return err("Tap a crew."); }
+        const ja = q(".ca").value.trim(), body = { key: it.key, office: cp.office, job: it.job, task: it.task, date: d, origDate: orig, revise: mode === "rs", crew: crew.id, crewName: crew.name + (crew.bor ? " (" + crew.rep.replace(/^Borrowed · /, "") + ")" : " (" + crew.rep + ")"), cust: q(".cc").value.trim(), addr: ja.includes(" — ") ? ja.split(" — ").slice(1).join(" — ") : (ja !== it.job ? ja : ""), pm: q(".cpn").value.trim(), jtypes: types };
+        r = await cpApi("schedule", body);
+        if (r._status === 409) { const s0 = r.sched || {}; if (!confirm(it.job + " " + it.task + " is already scheduled (" + (s0.crewName || "") + ", " + cpFmt(s0.date || "") + ").\nSchedule it again? That adds a second card in Ops.")) { m.remove(); return; } body.force = true; r = await cpApi("schedule", body); } }
+      if (!r.ok) throw new Error(r.error || ("HTTP " + r._status));
+      m.remove(); await ahpCpPull(ahpKey()); } catch (e) { b.disabled = false; b.textContent = "Try again"; err("Couldn't save: " + e.message); } }; }
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-cps]"); if (!b) return; e.preventDefault(); const [id, mode] = b.dataset.cps.split("|"); cpOpen(id, mode); });
 async function ahpAddFiles(files, batch) {
   const st = document.getElementById("ahpStatus"); let n = 0;
   for (const f of files) {
