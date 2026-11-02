@@ -5712,7 +5712,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02pdfshare3";
+const APP_BUILD = "2026-11-02kpimail";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8285,6 +8285,21 @@ function exportTyped(to) {
   // pdfshare: xlsx (iPhone) -> octet-stream xlsx -> PDF copies (Windows) -> download + mailto prefilled. Files only (no title/text).
   if (!canShareFiles(files)) { var alt = files.map(function (f) { return new File([f], f.name, { type: "application/octet-stream" }); }); if (canShareFiles(alt)) files = alt; }
   function mailFallback(fs, lead) {
+    // kpimail: Windows helper (KPI-Mail.ps1) attaches the downloaded PDFs to a classic Outlook email. ?mailhelper=0 disables.
+    var c0 = who(to) || {}, helper = /Windows/i.test(navigator.userAgent) && localStorage.getItem("kpMailHelper") !== "0";
+    if (helper) {
+      var pf = list.map(function (x) { var b = null; try { b = K.buildPdf(x.o, x.cat); } catch (e) {} return b ? new File([b], x.name.replace(/\.xlsx$/i, "") + ".pdf", { type: "application/pdf" }) : null; });
+      if (pf.every(Boolean)) {
+        download(pf);
+        var u = "kpimail:?to=" + encodeURIComponent(c0.email || "") + "&subject=" + encodeURIComponent(mp.title) + "&body=" + encodeURIComponent(mp.text) + "&files=" + encodeURIComponent(pf.map(function (f) { return f.name; }).join("|"));
+        setTimeout(function () { location.href = u; }, 600 * pf.length + 400);
+        done(lead + "Downloaded " + pf.length + " PDF" + (pf.length > 1 ? "s" : "") + " \u2014 an Outlook email to " + (c0.name || "") + " opens with them attached (if Chrome asks to open Windows PowerShell, tick Always allow and Open). ");
+        var b2 = document.createElement("button"); b2.textContent = "No Outlook email? Use plain email"; b2.className = "btn";
+        b2.onclick = function () { location.href = "mailto:" + encodeURIComponent(c0.email || "").replace(/%40/g, "@") + "?subject=" + encodeURIComponent(mp.title) + "&body=" + encodeURIComponent(mp.text + "\n\n(Attachments downloaded \u2014 drag them in: " + pf.map(function (f) { return f.name; }).join(", ") + ")"); };
+        if (m) m.appendChild(b2);
+        return;
+      }
+    }
     download(fs);
     var c = who(to) || {}; 
     var body = mp.text + "\n\n(Attachments downloaded \u2014 drag them in: " + fs.map(function (f) { return f.name; }).join(", ") + ")";
@@ -8294,6 +8309,7 @@ function exportTyped(to) {
   shareFilesOr(files, list, done, mailFallback, tpl ? mp : null);
 }
 /* ---- ?wo=<text> link (Apple Shortcut "Send to KP Takeoff"): fill the box and run Find. Never sends. ---- */
+try { var _mh = new URL(location.href).searchParams.get("mailhelper"); if (_mh === "0" || _mh === "1") localStorage.setItem("kpMailHelper", _mh); } catch (e) {}
 function takeUrlRequest() {
   var q = null;
   try {
