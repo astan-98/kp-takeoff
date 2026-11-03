@@ -1734,7 +1734,9 @@ function metalFoamSync() {
   if (S.jobMode !== "metal") return;
   const areas = [["Roof", "hasMetalRoof", "roof"], ["Gable", "hasMetalGables", "gable"], ["Wall", "hasMetalWalls", "wall"]].filter(([, h, k]) => S[h] && metalAreaUsesFoam(k));
   const f = ["oc", "cc", "both"].includes(S.metalFoam) ? S.metalFoam : "oc"; // 30z: one metal foam choice (flat footprint bubble) for every foam area
-  ["Roof", "Gable", "Wall"].forEach(k => { S["metal" + k + "Foam"] = f; S["metal" + k + "Cc"] = S.metalCc || ""; });
+  ["Roof", "Gable", "Wall"].forEach(k => { S["metal" + k + "Foam"] = f; }); // metaldepth: separate roofline / wall cc depths
+  ["Roof", "Wall"].forEach(k => { if (!METAL_CC_DEPTHS.includes(String(S["metal" + k + "Cc"]))) S["metal" + k + "Cc"] = METAL_CC_DEPTHS.includes(String(S.metalCc)) ? String(S.metalCc) : "1.5"; });
+  S.metalGableCc = S.metalRoofCc; S.metalCc = S.metalRoofCc;
   S.foamType = f === "both" && areas.length ? "both" : "oc";
 }
 function METAL_KEEP_LINE(L) { return /^Metal building/.test(L.assembly || "") || L.assembly === "Gable wrap" || L.assembly === "Extra labor" || L.assembly === "Miscellaneous" || L.assembly === "Air seal (caulk & foam)"; }
@@ -3580,7 +3582,9 @@ function renderAssemblyEditors() {
     const mat = (card, key, title, battOpts) => {
       const k = key[0].toUpperCase() + key.slice(1);
       if (metalAreaUsesFoam(key)) {
-        card.appendChild(el("p", "cap", title + ": spray foam — " + ({ oc: "open cell", cc: "closed cell " + (S.metalCc ? S.metalCc + '"' : "(pick depth)"), both: "show both" }[S.metalFoam] || "open cell") + " (set in Flat footprint)."));
+        card.appendChild(el("p", "cap", title + ": spray foam — " + ({ oc: "open cell", cc: "closed cell", both: "show both" }[S.metalFoam] || "open cell") + " (type set in Flat footprint)."));
+        const dk2 = "metal" + k + "Cc";
+        if (S.metalFoam === "cc" || S.metalFoam === "both") { const fs = fieldSelect(title + " closed-cell depth", String(S[dk2]), METAL_CC_DEPTHS.map(d => [d, d + '"']), v => { S[dk2] = v; if (k === "Roof") { S.metalCc = v; S.metalGableCc = v; } render(); }); fs.id = "metal" + k + "CcSel"; card.appendChild(fs); }
         return;
         const tk = "metal" + k + "Foam", dk = "metal" + k + "Cc", cur = ["oc", "cc", "both"].includes(S[tk]) ? S[tk] : "oc";
         card.appendChild(fieldSelect(title + " spray foam", cur, [["oc", "Open cell"], ["cc", "Closed cell"], ["both", "Show both (compare)"]], v => { S[tk] = v; metalFoamSync(); render(); }));
@@ -3608,8 +3612,7 @@ function renderAssemblyEditors() {
     if (["roof", "gable", "wall"].some(k => S["hasMetal" + (k === "roof" ? "Roof" : k === "gable" ? "Gables" : "Walls")] && metalAreaUsesFoam(k))) { // 30z: one foam type for the building
       const cur = ["oc", "cc", "both"].includes(S.metalFoam) ? S.metalFoam : "oc";
       card.appendChild(fieldSelect("Spray foam type", cur, [["oc", "Open cell"], ["cc", "Closed cell"], ["both", "Show both (compare)"]], v => { S.metalFoam = v; metalFoamSync(); render(); }));
-      if (cur !== "oc") { card.appendChild(fieldSelect("Closed-cell depth", METAL_CC_DEPTHS.includes(String(S.metalCc)) ? String(S.metalCc) : "", [["", "Pick depth…"]].concat(METAL_CC_DEPTHS.map(d => [d, d + '"'])), v => { S.metalCc = v; metalFoamSync(); render(); }));
-        if (!METAL_CC_DEPTHS.includes(String(S.metalCc))) card.appendChild(ccPickWarn("Pick the closed-cell depth.")); }
+      if (cur !== "oc") card.appendChild(el("p", "cap", "Closed-cell depth: set separately under Roofline and Walls."));
     }
     box.appendChild(card);
     if (S.hasMetalWalls) {
@@ -5525,7 +5528,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02tkosync";
+const APP_BUILD = "2026-11-03metaldepth";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
