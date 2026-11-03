@@ -380,6 +380,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 .ahp-head{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:10px}
 .ahp-head .t{font-weight:700;font-size:1.02rem}.ahp-sub{color:var(--text2);font-size:.8rem;margin-top:2px}
 .ahp-head select,.ahp-head input{width:100%;margin-top:6px}
+#tab-ahp input:not([type=checkbox]):not([type=radio]):not([type=file]),#tab-ahp select,#tab-ahp textarea,.ahp-head input,.ahp-head select,.ahp-conn-row input,#ahpCpOut input:not([type=checkbox]){background:var(--bg);color:var(--text);-webkit-text-fill-color:var(--text);color-scheme:light dark;border:1px solid var(--border);border-radius:10px;padding:9px 10px;font:inherit;font-size:16px}
+#tab-ahp input::placeholder,.ahp-head input::placeholder,#ahpCpOut input::placeholder{color:var(--text2);-webkit-text-fill-color:var(--text2);opacity:1}
+#tab-ahp input:-webkit-autofill,.ahp-head input:-webkit-autofill{-webkit-box-shadow:0 0 0 1000px var(--bg) inset;-webkit-text-fill-color:var(--text);caret-color:var(--text)}
+input[data-addr]:placeholder-shown{border:1.5px solid var(--danger)}
 .ahp-flags{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:10px}
 .ahp-flag{background:var(--err-bg);border:1px solid var(--err-border);color:var(--err-ink);border-radius:10px;padding:8px 10px;margin-top:6px;font-size:.84rem;display:flex;gap:8px;align-items:center;justify-content:space-between}
 .ahp-flag.done{background:var(--bg3);border-color:var(--line);color:var(--text2);text-decoration:line-through}
@@ -5714,7 +5718,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-03fgaddr";
+const APP_BUILD = "2026-11-03addrcolor";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
