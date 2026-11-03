@@ -5714,7 +5714,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-02tkopush";
+const APP_BUILD = "2026-11-03ahpvault";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -8856,7 +8856,7 @@ const AHP = (function () {
   }
   // FieldGroove exact names (FG_ITEM_NAMES / FG_WORK_AREAS)
   const IT = { r13: "R13/15/9' UF (Owens Corning)", r19_15: "R19/15 UF (Owens Corning)", r19_16: "R19/16 UF (Owens Corning)", r19_19: "R19/19 UF (Owens Corning)",
-    r38_24: "R38/24 UF (Owens Corning)", knauf: "Knauf Jet Stream Ultra Blowing Wool (Owens Corning)", baf24: 'Baffles - 24"', poly: "6 Mil Poly",
+    r38_24: "R38/24 UF (Owens Corning)", r30_24: "R30/24 UF (Owens Corning)", pv24: '24" Poly-Vent', pv16: '16" Poly-Vent', knauf: "Knauf Jet Stream Ultra Blowing Wool (Owens Corning)", baf24: 'Baffles - 24"', poly: "6 Mil Poly",
     tub: "Pre Hang Tubs/FP - House Wrap", air: "Standard Caulk & Foam Air Package", bdt: "Blower Door Test", dbt: "Duct Blaster Test" };
   const SHORT = { [IT.r13]: "R13/15/9 UF", [IT.r19_15]: "R19/15 UF", [IT.r19_16]: "R19/16 UF", [IT.r19_19]: "R19/19 UF", [IT.r38_24]: "R38/24 UF", [IT.knauf]: "Knauf Jet Stream R38" };
   const PH = { base: "Base Estimate", crawl: "Crawlspace", bsmt: "Basement Ceiling", blow: "Blow Phase", hpt: "Home Performance Testing" };
@@ -8867,7 +8867,10 @@ const AHP = (function () {
     job.pos.forEach(p => p.lines.forEach(l => lines.push(Object.assign({ poDesc: p.desc }, l))));
     const plansT = job.plans.map(d => U(d.text)).join("\n").replace(/SECOND FLOOR OPERABLE WINDOWS?/g, "").replace(/\(?BASEMENTS OR CONDITIONED CRAWL ?SPACES?( ONLY)?\)?/g, "");
     const add = (key, text, block = true) => flags.push({ key, text, block });
-    const bsmtPo = lines.some(l => /BASEMENT/.test(U(l.desc))), bsmtPlans = /\bBASEMENT\b/.test(plansT), poly = lines.some(l => /POLY/.test(U(l.desc)));
+    const bsmtPo = lines.some(l => /BASEMENT/.test(U(l.desc))), bsmtPlans = /\bBASEMENT\b/.test(plansT), poly = lines.some(l => /POLY(?!\s*-?VENT)/.test(U(l.desc)));
+    // ahpvault: AHP vaults — R-38 slope/vault batts = open vault, R-30 = closed vault; poly vents follow the job's vault batts
+    const VLT = /VAULT|SLOPE|CATHEDRAL/, isGable = D => /R-?19/.test(D) && /VAULT/.test(D) && /GABLE/.test(D);
+    const vOpen = lines.some(l => /R-?38/.test(U(l.desc)) && VLT.test(U(l.desc)) && !/BLOW/.test(U(l.desc))), vClosed = lines.some(l => /R-?30/.test(U(l.desc)) && VLT.test(U(l.desc)));
     const basement = (bsmtPo || bsmtPlans) && !poly ? true : false;
     if ((bsmtPo || bsmtPlans) && poly) add("bsmt-poly", "Job has a poly line (crawlspace) AND basement " + (bsmtPo ? "wall lines" : "on the plans") + " — check which it is. Floor batts treated as crawl.");
     const second = /(SECOND|2ND|UPPER)\s+FLOOR/.test(plansT);
@@ -8894,18 +8897,28 @@ const AHP = (function () {
         if (basement) { r = mk(IT.r19_19, "Basement Ceiling", "bsmt", l.qty); add(id + "-1919", "Basement ceiling batts set to R19/19 UF — AHP has changed this width before. Confirm."); }
         else r = mk(IT.r19_16, "Crawl Space Subfloor", "crawl", l.qty);
         if (joists.length) add(id + "-joist", "Plans show floor joists at " + joists.join("/") + "\" O.C. (not 16\") — check the batt width.");
-      } else if (/POLY/.test(D)) r = mk(IT.poly, "Crawl Floor", "crawl", l.qty);
+      } else if (isGable(D)) r = mk(IT.r19_15, "2/6 Exterior Walls", "base", l.qty, { merge26: true });
+      else if (/R-?38/.test(D) && VLT.test(D)) r = mk(IT.r38_24, "Open Vaulted Ceiling", "base", l.qty);
+      else if (/R-?30/.test(D) && VLT.test(D)) r = mk(IT.r30_24, "Closed Vaulted Ceiling", "base", l.qty);
+      else if (/POLY\s*-?VENT/.test(D)) { if (vOpen !== vClosed) r = mk(IT.pv24, vOpen ? "Open Vaulted Ceiling" : "Closed Vaulted Ceiling", "base", l.qty, { uom: "Ea." });
+        else add(id + "-pv", "“" + l.desc + "” — job has " + (vOpen ? "both R-38 and R-30" : "no R-38/R-30") + " vault batts, so open vs closed vault poly vents can't be picked. Review."); }
+      else if (/POLY/.test(D)) r = mk(IT.poly, "Crawl Floor", "crawl", l.qty);
       else if (/TUB/.test(D)) { r = mk(IT.tub, "Pre Hang Tubs", "base", 1, { uom: "Ea." }); }
       else if (/FOAM/.test(D) && /CAULK/.test(D)) r = mk(IT.air, "Air Infiltration", "base", 1, { uom: "Ea." });
       else if (/BLOWER\s*DOOR/.test(D)) r = mk(IT.bdt, "Blower Door Test", "hpt", 1, { uom: "Ea." });
       else if (/DUCT\s*BLAST/.test(D)) r = mk(IT.dbt, "Duct Blaster Test", "hpt", 1, { uom: "Ea." });
       if (/INTERIOR WALL|INT\.? WALL|GARAGE|SOUND/.test(D)) add(id + "-int", "“" + l.desc + "” — interior / garage / sound line. Review.");
-      if (/VAULT|SLOPE|CATHEDRAL/.test(D)) add(id + "-vault", "“" + l.desc + "” — vaulted/sloped: open or closed vault? Review.");
+      if (VLT.test(D) && !r && !/POLY\s*-?VENT/.test(D)) add(id + "-vault", "“" + l.desc + "” — vaulted/sloped: open or closed vault? Review.");
       if (!r) { add(id + "-rule", "Needs a rule: “" + l.desc + "” (" + l.qty + " " + l.uom + ", $" + l.ext.toFixed(2) + ", PO " + l.po + "). Not exported."); out.push({ id, po: l, rule: false }); return; }
       r.unit = unitFor(r.qty, l.ext); r.total = r2(r.unit * r.qty);
       if (r2(l.qty * l.price) !== r2(l.ext) && r.qty === l.qty) add(id + "-math", "PO math is off on “" + l.desc + "”: " + l.qty + " × $" + l.price + " ≠ $" + l.ext.toFixed(2) + ". Using the extended price.");
       out.push(Object.assign(r, { id, po: l, rule: true, flagged: flags.some(f => f.key.indexOf(id + "-") === 0) }));
     });
+    // ahpvault: R-19 vault gable end batts fold into an existing 2x6 exterior walls line (SF + price added together)
+    out.filter(o => o.merge26).forEach(g => { const t = out.find(o => o.rule && !o.merge26 && o.item === g.item && o.area === g.area && o.phase === g.phase); if (!t) return;
+      const ext = r2(t.po.ext + g.po.ext); t.po = Object.assign({}, t.po, { qty: t.po.qty + g.po.qty, ext, desc: t.po.desc + " + " + g.po.desc });
+      t.qty = t.qty + g.qty; t.unit = unitFor(t.qty, ext); t.total = r2(t.unit * t.qty); t.note = (t.note ? t.note + "; " : "") + "includes " + g.po.desc + " (" + g.qty + " SF)";
+      out.splice(out.indexOf(g), 1); });
     if (!job.addr) add("addr", "No address — add the Google Maps PDF or type the address.");
     job.pos.forEach(p => { const s = r2(p.lines.reduce((a, l) => a + l.ext, 0)); if (p.total != null && s !== r2(p.total)) add("pot-" + p.no, "PO " + p.no + " lines add to $" + s.toFixed(2) + " but its Grand Total is $" + p.total.toFixed(2) + " — a line may not have read. Check the PDF."); });
     const phases = [];
