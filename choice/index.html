@@ -1734,7 +1734,7 @@ function metalFoamSync() {
   const f = ["oc", "cc", "both"].includes(S.metalFoam) ? S.metalFoam : "oc"; // 30z: one metal foam choice (flat footprint bubble) for every foam area
   ["Roof", "Gable", "Wall"].forEach(k => { S["metal" + k + "Foam"] = f; }); // metaldepth: separate roofline / wall cc depths
   ["Roof", "Wall"].forEach(k => { if (!METAL_CC_DEPTHS.includes(String(S["metal" + k + "Cc"]))) S["metal" + k + "Cc"] = METAL_CC_DEPTHS.includes(String(S.metalCc)) ? String(S.metalCc) : "1.5"; });
-  S.metalGableCc = S.metalRoofCc; S.metalCc = S.metalRoofCc;
+  S.metalGableCc = S.metalWallCc; S.metalCc = S.metalRoofCc; // gablewall: gables follow walls
   S.foamType = f === "both" && areas.length ? "both" : "oc";
 }
 function METAL_KEEP_LINE(L) { return /^Metal building/.test(L.assembly || "") || L.assembly === "Gable wrap" || L.assembly === "Extra labor" || L.assembly === "Miscellaneous" || L.assembly === "Air seal (caulk & foam)"; }
@@ -2719,7 +2719,7 @@ function buildLinesForPackage(p, tag) {
       if (metalAreaUsesFoam("gable")) {
         push(lines, { area: "Metal building", assembly: "Metal building gables", product: "Open-cell spray foam", description: '3.5" open cell', footage: round2(sf), unit: "SF", notes: noteTag + "Gable #" + (i + 1) + " " + note });
         const bf = ["oc", "cc", "both"].includes(S.metalFoam) ? S.metalFoam : "oc", f = g.foam === "oc" || g.foam === "cc" ? g.foam : (bf === "both" ? "" : bf);
-        applyFoamType(lines[lines.length - 1], { foamType: f, ccDepth: METAL_CC_DEPTHS.includes(String(g.cc)) ? g.cc : S.metalCc }, "metal gable");
+        applyFoamType(lines[lines.length - 1], { foamType: f, ccDepth: METAL_CC_DEPTHS.includes(String(g.cc)) ? g.cc : S.metalWallCc }, "metal gable");
       } else {
         const r = String(S.metalGableBattR || "r13").replace(/\D/g, "") || "13";
         push(lines, { area: "Metal building", assembly: "Metal building gables", product: "R-" + r + " fiberglass batts", description: "R" + r + "/" + battW(S.metalGableOc, "16"), priceKey: "R-" + r + " fiberglass batts", footage: round2(sf), unit: "SF", notes: noteTag + "Gable #" + (i + 1) + " " + note });
@@ -3582,7 +3582,7 @@ function renderAssemblyEditors() {
       if (metalAreaUsesFoam(key)) {
         card.appendChild(el("p", "cap", title + ": spray foam — " + ({ oc: "open cell", cc: "closed cell", both: "show both" }[S.metalFoam] || "open cell") + " (type set in Flat footprint)."));
         const dk2 = "metal" + k + "Cc";
-        if (S.metalFoam === "cc" || S.metalFoam === "both") { const fs = fieldSelect(title + " closed-cell depth", String(S[dk2]), METAL_CC_DEPTHS.map(d => [d, d + '"']), v => { S[dk2] = v; if (k === "Roof") { S.metalCc = v; S.metalGableCc = v; } render(); }); fs.id = "metal" + k + "CcSel"; card.appendChild(fs); }
+        if (S.metalFoam === "cc" || S.metalFoam === "both") { const fs = fieldSelect(title + " closed-cell depth", String(S[dk2]), METAL_CC_DEPTHS.map(d => [d, d + '"']), v => { S[dk2] = v; if (k === "Roof") S.metalCc = v; if (k === "Wall") S.metalGableCc = v; render(); }); fs.id = "metal" + k + "CcSel"; card.appendChild(fs); }
         return;
         const tk = "metal" + k + "Foam", dk = "metal" + k + "Cc", cur = ["oc", "cc", "both"].includes(S[tk]) ? S[tk] : "oc";
         card.appendChild(fieldSelect(title + " spray foam", cur, [["oc", "Open cell"], ["cc", "Closed cell"], ["both", "Show both (compare)"]], v => { S[tk] = v; metalFoamSync(); render(); }));
@@ -3633,7 +3633,7 @@ function renderAssemblyEditors() {
     if (S.hasMetalGables) {
       SEC = 1.3; card = el("div", "row-card");
       if (!Array.isArray(S.metalGables) || !S.metalGables.length) S.metalGables = [newMetalGable()];
-      const bf = ["oc", "cc", "both"].includes(S.metalFoam) ? S.metalFoam : "oc", bfTxt = { oc: "Open cell", cc: "Closed cell" + (S.metalCc ? " " + S.metalCc + '"' : ""), both: "Show both" }[bf];
+      const bf = ["oc", "cc", "both"].includes(S.metalFoam) ? S.metalFoam : "oc", bfTxt = { oc: "Open cell", cc: "Closed cell" + (S.metalWallCc ? " " + S.metalWallCc + '"' : ""), both: "Show both" }[bf];
       const foamOn = metalAreaUsesFoam("gable");
       S.metalGables.forEach((g, i) => {
         card.appendChild(el("div", "row-title", "Gable #" + (i + 1)));
@@ -3645,8 +3645,8 @@ function renderAssemblyEditors() {
         prop(card, "Gable #" + (i + 1) + " SF", fmt(round2(metalGableSfOf(g))) + " SF");
         if (foamOn) {
           card.appendChild(fieldSelect("Gable #" + (i + 1) + " foam", g.foam === "oc" || g.foam === "cc" ? g.foam : "", [["", "Same as building — " + bfTxt], ["oc", "Open cell"], ["cc", "Closed cell"]], v => { g.foam = v; render(); }));
-          if (g.foam === "cc") card.appendChild(fieldSelect("Gable #" + (i + 1) + " closed-cell depth", METAL_CC_DEPTHS.includes(String(g.cc)) ? String(g.cc) : "", [["", S.metalCc ? "Building depth " + S.metalCc + '"' : "Pick depth…"]].concat(METAL_CC_DEPTHS.map(d => [d, d + '"'])), v => { g.cc = v; render(); }));
-          if (!g.foam && bf === "both") card.appendChild(el("p", "cap", "Show both: this gable is priced open cell and closed cell" + (S.metalCc ? " (" + S.metalCc + '")' : "") + "."));
+          if (g.foam === "cc") card.appendChild(fieldSelect("Gable #" + (i + 1) + " closed-cell depth", METAL_CC_DEPTHS.includes(String(g.cc)) ? String(g.cc) : "", [["", S.metalWallCc ? "Wall depth " + S.metalWallCc + '"' : "Pick depth…"]].concat(METAL_CC_DEPTHS.map(d => [d, d + '"'])), v => { g.cc = v; render(); }));
+          if (!g.foam && bf === "both") card.appendChild(el("p", "cap", "Show both: this gable is priced open cell and closed cell" + (S.metalWallCc ? " (" + S.metalWallCc + '")' : "") + "."));
         }
         { const tr = el("div", "toggle-row"); tr.appendChild(el("span", null, "House wrap on gable #" + (i + 1) + "?")); const sw = el("button", "switch" + (g.wrap ? " on" : "")); sw.type = "button"; sw.onclick = () => { g.wrap = !g.wrap; render(); }; tr.appendChild(sw); card.appendChild(tr); } // 30ad: off by default
       });
@@ -5526,7 +5526,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-03metaldepth";
+const APP_BUILD = "2026-11-03gablewall";
 // 30am: auto-update (the owner + coworker copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
