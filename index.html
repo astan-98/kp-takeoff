@@ -1373,8 +1373,8 @@ function applyPkgDefaults() {
     S.hasDeadAir = true; S.hasKnees = true; S.hasVaults = true; S.hasBaffles = true; S.airSealed = true; S.hasWalls = true;
   }
   if (pr.foamRoof) { S.hasGables = true; S.hasWalls = true; }
-  const nm = defaultWallMode(S.pkg);
-  (S.walls || []).forEach(w => { if (!/int/i.test(w.kind || "")) w.materialMode = w.kind === "concrete" ? defaultWallMode(S.pkg, "concrete") : nm; });
+  // Exterior walls follow the active top-level material (foam/cellulose/spider/batts) unless user overrode
+  syncWallMaterialsFromPkg();
 }
 function todayISO() {
   const d = new Date();
@@ -1563,14 +1563,47 @@ function miscUnit(r) { return r.unit === "custom" ? ((r.customUnit || "").trim()
 function miscFilled() {
   return (Array.isArray(S.misc) ? S.misc : []).filter(r => (r.material || "").trim() !== "");
 }
-function defaultWallMode(pkg, kind) {
-  // 29as: basement concrete walls — 1" closed cell foam only on Total Foam; R-13 fiberglass on every other package
+// Top-level package → exterior wall material default. Dropdown stays editable; applyPkgDefaults
+// only writes this when the row is not user-overridden (matUserSet).
+function packageWallMode(pkg, kind) {
+  // 29as: basement concrete — 1" closed cell only on Total Foam; R-13 fiberglass otherwise
   if (kind === "concrete") return pkgProfile(pkg).totalFoam ? "foam" : "batt";
-  if (pkg === "custom") return customWallList()[0];
-  if (pkg === "total_foam") return "foam";
-  if (pkg === "foam_cellulose") return "cellulose";
-  if (pkg === "foam_spider") return "spider";
-  return "batt";
+  if (kind === "interior") return "batt";
+  if (pkg === "custom") return customWallList()[0] || "batt";
+  // Universal top-level → wall material matching (Total Foam / cellulose / spider / batts / standard)
+  let mode = "batt";
+  if (pkg === "total_foam") mode = "foam";
+  else if (pkg === "foam_cellulose") mode = "cellulose";
+  else if (pkg === "foam_spider") mode = "spider";
+  else if (pkg === "hybrid_foam_batts" || pkg === "standard" || pkg === "total_bat" || pkg === "crawl_encap") mode = "batt";
+  else {
+    // Fall back to profile wallOverride when a new package key is added with the same pattern
+    const w = pkgProfile(pkg).wallOverride;
+    if (w === "foam" || w === "cellulose" || w === "spider" || w === "batt") mode = w;
+  }
+  // Existing rule: cellulose/spider packages keep garage exterior walls on batts
+  if ((mode === "cellulose" || mode === "spider") && kind === "garage_ext") return "batt";
+  return mode;
+}
+function defaultWallMode(pkg, kind) { return packageWallMode(pkg, kind); }
+function activePkgForWalls() {
+  if (optionsOn()) {
+    const ks = optionPkgs();
+    return ks[Math.min(Math.max(0, S.optionView | 0), Math.max(0, ks.length - 1))] || S.pkg;
+  }
+  return S.pkg;
+}
+function isExteriorWallRow(w) {
+  const k = w && w.kind || "";
+  return k && !/^int/i.test(k) && k !== "interior";
+}
+function syncWallMaterialsFromPkg() {
+  const pkg = activePkgForWalls();
+  (S.walls || []).forEach(w => {
+    if (!isExteriorWallRow(w)) return;
+    if (w.matUserSet) return; // preserve explicit override
+    w.materialMode = packageWallMode(pkg, w.kind);
+  });
 }
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
@@ -2862,13 +2895,10 @@ function buildLinesForPackage(p, tag) {
       const factor = wallFactor(r);
       const sf = lfMode ? n(r.lf) * n(r.lfHeight) : factor * cavities; if (sf <= 0) return;
       let mode = lfMode ? "foam" : r.materialMode;
-      // Options mode: each option uses its own wall material (special rock-wool picks and interior rows stay as entered).
-      if (optionsOn() && !lfMode && r.kind !== "interior" && mode !== "comfortbat" && mode !== "acoustical") mode = PR.custom && r.kind !== "concrete" ? customWallList()[0] : "batt";
-      if (mode === "batt") {
-        if (totalFoam) mode = "foam";
-        // 29as: basement concrete walls stay R-13 fiberglass on every non-Total-Foam package (never cellulose/spider)
-        else if (PR.wallOverride === "cellulose" && r.kind !== "garage_ext" && r.kind !== "concrete") mode = "cellulose";
-        else if (PR.wallOverride === "spider" && r.kind !== "garage_ext" && r.kind !== "concrete") mode = "spider";
+      // Walls follow the package being priced. ComfortBat/Acoustical and explicit user overrides stay as entered.
+      // Options mode always uses that option's wall default (shared row can't represent every option).
+      if (!lfMode && r.kind !== "interior" && mode !== "comfortbat" && mode !== "acoustical") {
+        if (optionsOn() || !r.matUserSet) mode = packageWallMode(p, r.kind);
       }
       push(lines, {
         area: WALL_KIND_LABELS[r.kind] || "Wall",
@@ -3659,7 +3689,7 @@ function renderAssemblyEditors() {
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
       card.appendChild(fieldInput("Cavities", r.cavities, v => { r.cavities = v; schedule(); }, "number"));
-      card.appendChild(fieldSelect("Material mode", r.materialMode, wallModeOptions(), v => { r.materialMode = v; render(); }));
+      card.appendChild(fieldSelect("Material mode", r.materialMode || packageWallMode(activePkgForWalls(), r.kind), wallModeOptions(), v => { r.materialMode = v; r.matUserSet = true; render(); }));
       if ((r.materialMode || "batt") === "batt" && r.kind !== "interior") {
         const kr = el("div", "toggle-row"); kr.appendChild(el("span", null, "Kraft faced (default unfaced)"));
         const ks = el("button", "switch" + (r.kraft ? " on" : "")); ks.type = "button";
@@ -4301,7 +4331,7 @@ function renderOptionBar() {
   ks.forEach((k, i) => {
     const b = el("button", i === S.optionView ? "active" : ""); b.type = "button";
     b.textContent = optionLetter(i) + " · " + pkgLabel(k);
-    b.onclick = () => { S.optionView = i; render(); };
+    b.onclick = () => { S.optionView = i; syncWallMaterialsFromPkg(); render(); };
     sw.appendChild(b);
   });
   const priced = S.priceLibrary.some(p => n(p.unitPrice40) > 0);
@@ -5165,6 +5195,13 @@ function migrateState(d) {
   if (!Array.isArray(d.customRoofs)) S.customRoofs = [CUSTOM_ROOF_LABELS[d.customRoof] ? d.customRoof : "blow"];
   if (!Array.isArray(d.customWallList)) S.customWallList = [CUSTOM_WALL_LABELS[d.customWalls] ? d.customWalls : "batt"];
   S.customRoofs = customRoofs(); S.customWallList = customWallList();
+  // Mark exterior walls whose saved material differs from the package default as user overrides
+  (S.walls || []).forEach(w => {
+    if (!isExteriorWallRow(w)) return;
+    const def = packageWallMode(S.pkg, w.kind);
+    const cur = w.materialMode || "batt";
+    if (w.matUserSet == null) w.matUserSet = cur !== def;
+  });
   ["customBlowSf", "customBattSf"].forEach(k => { if (typeof S[k] !== "string") S[k] = ""; });
   if (!/^R-(19|30|38|49)$/.test(S.customBlowR || "")) S.customBlowR = "R-38";
   if (!/^R-(19|30|38|49)$/.test(S.customAtticBattR || "")) S.customAtticBattR = "R-38";
