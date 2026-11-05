@@ -1126,10 +1126,19 @@ const CRAWL_RETRO_LABELS = {
 const WALL_KIND_LABELS = {
   ext_2x4: "2x4 exterior (R-13)", ext_2x6: "2x6 exterior (R-19)",
   daylight: "Daylight basement (R-19)", concrete: "Concrete basement (R-13)",
-  garage_ext: "Garage exterior", interior: "Interior",
+  garage_ext: "Garage exterior", garage_common: "Garage common wall", interior: "Interior",
   sep_2x4: "Basement separation wall 2x4 (R-13)", sep_2x6: "Basement separation wall 2x6 (R-19)", // 30n: finished basement only
 };
 const isSepKind = k => k === "sep_2x4" || k === "sep_2x6";
+// gcw: garage exterior + garage common wall carry their own 2x4/2x6 stud (missing = 2x6 / R-19, the old garage default)
+const isGarageWall = k => k === "garage_ext" || k === "garage_common";
+const garageStud = r => (r && r.stud === "2x4") ? "2x4" : "2x6";
+const wallIs2x4 = r => { const k = r && r.kind; return k === "ext_2x4" || k === "concrete" || k === "sep_2x4" || (isGarageWall(k) && garageStud(r) === "2x4"); };
+function wallAssembly(r) {
+  if (r.kind === "garage_common") return "Wall — Garage common wall " + garageStud(r);
+  if (r.kind === "garage_ext" && garageStud(r) === "2x4") return "Wall — Garage exterior 2x4";
+  return "Wall — " + (WALL_KIND_LABELS[r.kind] || r.kind);
+}
 
 function uid() { return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8); }
 function n(v) { const x = parseFloat(v); return Number.isFinite(x) ? x : 0; }
@@ -1361,29 +1370,29 @@ function wallExcelDesc(row, mode) {
   const hLabel = h + "'";
   if (mode === "foam") return '3.5" OC'; // 29ap: spray foam — no batt width/height; 29ar: no trailing "foam"
   if (mode === "cellulose" || mode === "spider") {
-    const depth = (row.kind === "ext_2x6" || row.kind === "daylight" || row.kind === "sep_2x6") ? '5.5"' : '3.5"';
+    const depth = (row.kind === "ext_2x6" || row.kind === "daylight" || row.kind === "sep_2x6" || (isGarageWall(row.kind) && garageStud(row) === "2x6")) ? '5.5"' : '3.5"';
     return (mode === "spider" ? "Spider" : "Cellulose") + " " + depth + " / " + inside + " / " + hLabel;
   }
   if (mode === "comfortbat") return "ComfortBat / " + inside + " / " + hLabel;
   if (mode === "acoustical") return 'AcousticalBat 3" / ' + inside + " / " + hLabel;
   const kf = row.kraft ? " Kraft" : "";
-  if (row.kind === "ext_2x4" || row.kind === "concrete" || row.kind === "sep_2x4") return "R13/" + inside + kf + "/" + hLabel;
+  if (wallIs2x4(row)) return "R13/" + inside + kf + "/" + hLabel;
   if (row.kind === "interior") return "Batts / " + inside + " / " + hLabel;
   return "R19/" + inside + kf + "/" + hLabel;
 }
 // Height only splits R-13 batt walls (pre-cut lengths). Everything else merges across heights within its wall type.
-function wallHeightSplits(kind, mode) {
-  return (mode === "batt" || !mode) && (kind === "ext_2x4" || kind === "concrete" || kind === "interior" || kind === "sep_2x4");
+function wallHeightSplits(kind, mode, row) {
+  return (mode === "batt" || !mode) && (kind === "ext_2x4" || kind === "concrete" || kind === "interior" || kind === "sep_2x4" || (row && isGarageWall(kind) && garageStud(row) === "2x4"));
 }
 // R-13 batt walls merge in two height bands: 8' and under, and over 8' (9'+). The bands never combine.
 function r13Band(desc, h) { return dropHeight(desc) + (n(h) > 8 ? "/9'+" : "/8'"); }
 function dropHeight(desc) { return String(desc).replace(/\s*\/\s*[\d.]+'$/, ""); }
-function wallProduct(mode, kind) {
+function wallProduct(mode, kind, row) {
   if (mode === "foam") return "Open-cell spray foam";
   if (mode === "cellulose") return "Cellulose";
   if (mode === "spider") return "Spider";
   if (mode === "comfortbat" || mode === "acoustical") return "Rock wool";
-  if (kind === "ext_2x4" || kind === "concrete" || kind === "sep_2x4") return "R-13 fiberglass batts";
+  if (kind === "ext_2x4" || kind === "concrete" || kind === "sep_2x4" || (row && isGarageWall(kind) && garageStud(row) === "2x4")) return "R-13 fiberglass batts";
   if (kind === "interior") return "Fiberglass batts";
   return "R-19 fiberglass batts";
 }
@@ -1826,14 +1835,14 @@ const FG_AREA_BY_SECTION = {
   "Wall — Daylight basement (R-19)": "2/6 Daylight Walls", "Wall — Concrete basement (R-13)": "2/4 Concrete Wall",
   "Wall — Basement separation wall 2x4 (R-13)": "2/4 Basement Seperation Wall", "Wall — Basement separation wall 2x6 (R-19)": "2/6 Basement Seperation Wall", /* 30n: FG spelling */
   "Basement band": "Basement Bands", /* 30n */
-  "Wall — Garage exterior": "2/4 Garage Walls", "Wall — Interior": "2/4 Interior Walls", "Interior walls": "2/4 Interior Walls",
+  "Wall — Garage exterior": "2/6 Garage Walls", "Wall — Garage exterior 2x4": "2/4 Garage Walls", "Wall — Garage common wall 2x4": "2/4 Garage Common Wall", "Wall — Garage common wall 2x6": "2/6 Garage Common Wall", "Garage common wrap 2x4": "2/4 Garage Common Wall", "Garage common wrap 2x6": "2/6 Garage Common Wall", "Wall — Interior": "2/4 Interior Walls", "Interior walls": "2/4 Interior Walls",
   "Between floors (sound)": "Between Floors", "Gable": "Gables", "Gable wrap": "Open Gables", /* 30i: the owner — never Attic Gables */ "Cantilever": "Cantilever",
   "Garage roof foam": "Garage Roofline", "Garage ceiling": "Garage Ceiling", "Metal building roof": "Roofline", "Metal building walls": "Exterior Walls", "Metal building gables": "Gables", "Floor dense-pack": "Bonus Room Subfloor",
   "Air seal (caulk & foam)": "Air Infiltration", "Air seal add-on": "Air Infiltration", "Extra labor": "Labor", "Miscellaneous": "Entire House",
 };
 const FG_NET_AREA = { "Interior": "2/4 Interior Walls", "Interior walls": "2/4 Interior Walls", "Between floors": "Between Floors", "Dense-pack": "Bonus Room Subfloor" };
 const OC = " (Owens Corning)";
-const WALL_SECS = ["Wall — 2x4 exterior (R-13)", "Wall — 2x6 exterior (R-19)", "Wall — Daylight basement (R-19)", "Wall — Concrete basement (R-13)", "Wall — Garage exterior", "Wall — Basement separation wall 2x4 (R-13)", "Wall — Basement separation wall 2x6 (R-19)"];
+const WALL_SECS = ["Wall — 2x4 exterior (R-13)", "Wall — 2x6 exterior (R-19)", "Wall — Daylight basement (R-19)", "Wall — Concrete basement (R-13)", "Wall — Garage exterior", "Wall — Garage exterior 2x4", "Wall — Garage common wall 2x4", "Wall — Garage common wall 2x6", "Wall — Basement separation wall 2x4 (R-13)", "Wall — Basement separation wall 2x6 (R-19)"];
 const INT_SECS = ["Wall — Interior", "Interior walls"];
 const FG_RULES = [
   // —— blown ——
@@ -2135,7 +2144,7 @@ function twoWho(cat) { return TWO_CONTACTS[cat] || TWO_DEFAULT_CONTACTS[cat]; }
 const TWO_ATTIC_SECS = ["Attic blow", "Attic batts", "Attic prep", "Roof foam", "Porch roof foam", "Garage roof foam"];
 const TWO_LABELS = {
   "Wall — 2x4 exterior (R-13)": "Ext Walls", "Wall — 2x6 exterior (R-19)": "Ext Walls 2x6", "Wall — Daylight basement (R-19)": "Daylight Walls",
-  "Wall — Concrete basement (R-13)": "Basement Walls", "Wall — Basement separation wall 2x4 (R-13)": "Separation Walls 2x4", "Wall — Basement separation wall 2x6 (R-19)": "Separation Walls 2x6", "Basement band": "Basement Bands", "Wall — Garage exterior": "Garage Walls", "Wall — Interior": "Interior Walls", "Interior walls": "Interior Walls",
+  "Wall — Concrete basement (R-13)": "Basement Walls", "Wall — Basement separation wall 2x4 (R-13)": "Separation Walls 2x4", "Wall — Basement separation wall 2x6 (R-19)": "Separation Walls 2x6", "Basement band": "Basement Bands", "Wall — Garage exterior": "Garage Walls", "Wall — Garage exterior 2x4": "Garage Walls 2x4", "Wall — Garage common wall 2x4": "Garage Common Wall 2x4", "Wall — Garage common wall 2x6": "Garage Common Wall 2x6", "Garage common wrap 2x4": "Garage Common Wrap", "Garage common wrap 2x6": "Garage Common Wrap", "Wall — Interior": "Interior Walls", "Interior walls": "Interior Walls",
   "Knee wall": "Knee Walls", "Knee wrap": "Knee Wrap", "Dead air": "Dead Air", "Open vault": "Open Vault", "Closed vault": "Closed Vault", "Poly vent": "Poly Vents",
   "Garage ceiling": "Garage Ceiling", "Baffles": "Baffles", "Band / rim": "Bands", "Between floors (sound)": "Between Floors", "Cantilever": "Cantilever",
   "Gable": "Gables", "Gable wrap": "Gable Wrap", "Crawl subfloor": "Crawl", "Crawl touch-up": "Crawl Touch-up", "Crawl prep": "Crawl Removal", "Poly": "Crawl Poly",
@@ -2640,6 +2649,7 @@ function buildLinesForPackage(p, tag) {
     S.walls.forEach(r => {
       if ((r.kind === "daylight" || r.kind === "concrete") && !F.basementWalls) return;
       if (isSepKind(r.kind) && !F.sepWalls) return; // 30n
+      if (r.kind === "garage_common" && !(S.hasGarage && F.canAskGarage)) return; // gcw: only with a garage
       // 29as: unframed concrete walls can be measured LF × wall height (closed cell foam line); default = cavity counting
       const lfMode = r.kind === "concrete" && !!r.measureLf;
       const cavities = n(r.cavities); if (!lfMode && cavities <= 0) return;
@@ -2653,14 +2663,16 @@ function buildLinesForPackage(p, tag) {
       }
       push(lines, {
         area: WALL_KIND_LABELS[r.kind] || "Wall",
-        assembly: "Wall — " + (WALL_KIND_LABELS[r.kind] || r.kind),
-        product: wallProduct(mode, r.kind), description: wallExcelDesc(r, mode),
-        _mergeDesc: wallHeightSplits(r.kind, mode) ? r13Band(wallExcelDesc(r, mode), wallHeightFt(r)) : dropHeight(wallExcelDesc(r, mode)),
+        assembly: wallAssembly(r),
+        product: wallProduct(mode, r.kind, r), description: wallExcelDesc(r, mode),
+        _mergeDesc: wallHeightSplits(r.kind, mode, r) ? r13Band(wallExcelDesc(r, mode), wallHeightFt(r)) : dropHeight(wallExcelDesc(r, mode)),
         footage: round2(sf), unit: "SF", notes: noteTag + (lfMode ? fmt(n(r.lf)) + " LF × " + fmt(n(r.lfHeight)) + "' (unframed)" : cavities + " cav × " + round2(factor) + " @ " + wallHeightFt(r) + "'")
       });
       // concrete (basement) walls: spray foam is always closed cell; 1" default ONLY on Total Foam (29as) — otherwise the row picks a depth
       applyFoamType(lines[lines.length - 1], r, "wall", r.kind === "concrete", r.kind === "concrete" && totalFoam ? "1" : "");
       if ((mode === "cellulose" || mode === "spider") && r.kind === "interior") nettingTotal += sf;
+      // gcw: optional house wrap on the garage common wall (any material) — same House wrap line as gable wrap, wall SF
+      if (r.kind === "garage_common" && r.wrap) push(lines, { area: "Garage common wall", assembly: "Garage common wrap " + garageStud(r), product: "House wrap", description: "House Wrap", footage: round2(sf), unit: "SF", notes: noteTag + "Garage common wall wrap" });
     });
     if (nettingTotal > 0) push(lines, { area: "Interior", assembly: "Netting", product: "Netting", description: "Matches interior SF", footage: round2(nettingTotal), unit: "SF", notes: noteTag });
   }
@@ -3068,7 +3080,7 @@ const WORK_AREA_LABELS = {
   "Wall — 2x4 exterior (R-13)": "Exterior walls (2x4)", "Wall — 2x6 exterior (R-19)": "Exterior walls (2x6)",
   "Wall — Daylight basement (R-19)": "Daylight basement walls", "Wall — Concrete basement (R-13)": "Concrete basement walls",
   "Wall — Basement separation wall 2x4 (R-13)": "Basement separation walls (2x4)", "Wall — Basement separation wall 2x6 (R-19)": "Basement separation walls (2x6)", "Basement band": "Basement band / rim",
-  "Wall — Garage exterior": "Garage walls", "Wall — Interior": "Interior walls", "Interior walls": "Interior walls",
+  "Wall — Garage exterior": "Garage walls", "Wall — Garage exterior 2x4": "Garage walls (2x4)", "Wall — Garage common wall 2x4": "Garage common wall (2x4)", "Wall — Garage common wall 2x6": "Garage common wall (2x6)", "Garage common wrap 2x4": "Garage common wall (wrap)", "Garage common wrap 2x6": "Garage common wall (wrap)", "Wall — Interior": "Interior walls", "Interior walls": "Interior walls",
   "Knee wall": "Knee walls", "Knee wrap": "Knee walls (wrap)", "Dead air": "Dead air", "Open vault": "Open vaults", "Closed vault": "Closed vaults",
   "Poly vent": "Closed vaults (vents)", "Garage ceiling": "Garage ceiling", "Garage roof foam": "Garage roofline", "Metal building roof": "Metal building roof", "Metal building walls": "Metal building walls", "Metal building gables": "Metal building gables", "Baffles": "Eaves (baffles)",
   "Band / rim": "Rim / band", "Between floors (sound)": "Between floors", "Cantilever": "Cantilevers", "Gable": "Gables", "Gable wrap": "Gables (wrap)",
@@ -3194,7 +3206,7 @@ function pitchSelectHtml(selected) {
 
 // 30ag: wall reassignment helpers
 const wallCat = k => /^ext_/.test(k) ? "exterior" : isSepKind(k) ? "sep" : k;
-const wallStud = r => r.kind === undefined ? (r.stud === "2x6" ? "2x6" : "2x4") : /2x6/.test(r.kind) ? "2x6" : /2x4/.test(r.kind) ? "2x4" : (r.stud === "2x6" || (!r.stud && r.kind === "daylight") ? "2x6" : "2x4");
+const wallStud = r => r.kind === undefined ? (r.stud === "2x6" ? "2x6" : "2x4") : isGarageWall(r.kind) ? garageStud(r) : /2x6/.test(r.kind) ? "2x6" : /2x4/.test(r.kind) ? "2x4" : (r.stud === "2x6" || (!r.stud && r.kind === "daylight") ? "2x6" : "2x4");
 function reassignWallTo(r, from, cat) {
   const stud = wallStud(from === "interior" ? { stud: r.stud } : r);
   const spec = { oc: r.oc || "16", height: r.height || "8", customHeight: r.customHeight || "", cavities: r.cavities || "", materialMode: r.materialMode || "batt" };
@@ -3249,6 +3261,7 @@ function renderAssemblyEditors() {
     if (APP_EDITION !== "asher") return;
     const cur = from === "interior" ? "interior" : wallCat(r.kind);
     const cats = [["exterior", "Exterior walls"], ["interior", "Interior walls"], ["garage_ext", "Garage exterior walls"], ["daylight", "Daylight basement walls"], ["concrete", "Concrete basement walls"]];
+    if (S.hasGarage && F.canAskGarage) cats.splice(3, 0, ["garage_common", "Garage common walls"]);
     if (F.sepWalls) cats.push(["sep", "Basement separation walls"]);
     const opts = [["", "— Move to… —"]].concat(cats.filter(c => c[0] !== cur));
     const f = fieldSelect("Reassign to", "", opts, v => { if (v) reassignWallTo(r, from, v); });
@@ -3400,13 +3413,13 @@ function renderAssemblyEditors() {
     const isBase = k => k === "daylight" || k === "concrete";
     const ownBase = F.basementSections;
     const hideBaseRows = ownBase || F.noBasementKinds || (F.foundation === "unfinished" && !F.basementWalls);
-    const genKinds = Object.keys(WALL_KIND_LABELS).filter(k => k !== "interior" && !isSepKind(k) && (!isBase(k) || !(ownBase || F.noBasementKinds))); // 29at: interior has its own bubble
+    const genKinds = Object.keys(WALL_KIND_LABELS).filter(k => k !== "interior" && !isSepKind(k) && (k !== "garage_common" || (S.hasGarage && F.canAskGarage)) && (!isBase(k) || !(ownBase || F.noBasementKinds))); // 29at: interior has its own bubble
     const wallCard = (r, title, kinds) => {
       const card = el("div", "row-card");
       const lfMode = r.kind === "concrete" && !!r.measureLf; // 29as: unframed concrete measured LF × wall height
       const sf = lfMode ? round2(n(r.lf) * n(r.lfHeight)) : round2(wallFactor(r) * n(r.cavities));
       const cDflt = r.kind === "concrete" && anyTotalFoam ? "1" : "";
-      const tl = applyFoamType({ product: wallProduct(lfMode ? "foam" : r.materialMode, r.kind), description: wallExcelDesc(r, lfMode ? "foam" : r.materialMode) }, r, "wall", r.kind === "concrete", cDflt);
+      const tl = applyFoamType({ product: wallProduct(lfMode ? "foam" : r.materialMode, r.kind, r), description: wallExcelDesc(r, lfMode ? "foam" : r.materialMode) }, r, "wall", r.kind === "concrete", cDflt);
       card.innerHTML = '<div class="row-title">' + title + ' · ' + foamWordsLine(tl).description + ' → ' + fmt(sf) + ' SF</div>';
       if (kinds) card.appendChild(fieldSelect("Type", r.kind, kinds.concat(kinds.includes(r.kind) ? [] : [r.kind]).map(k => [k, WALL_KIND_LABELS[k] || k]), v => {
         r.kind = v;
@@ -3428,6 +3441,7 @@ function renderAssemblyEditors() {
         foamTypeControls(card, r, "foamType", "ccDepth", true, cDflt);
         box.appendChild(card); return;
       }
+      if (isGarageWall(r.kind)) card.appendChild(fieldSelect("Stud size", garageStud(r), [["2x4", "2x4 (R-13)"], ["2x6", "2x6 (R-19)"]], v => { r.stud = v; render(); }));
       card.appendChild(fieldSelect("Stud spacing", r.oc, WALL_W_CHOICES, v => { r.oc = v; render(); }));
       card.appendChild(fieldSelect("Height", r.height, [["8","8'"],["9","9'"],["10","10'"],["12","12'"],["custom","Custom"]], v => { r.height = v; render(); }));
       if (r.height === "custom") card.appendChild(fieldInput("Custom height ft", r.customHeight, v => { r.customHeight = v; schedule(); }, "number"));
@@ -3440,6 +3454,12 @@ function renderAssemblyEditors() {
         kr.appendChild(ks); card.appendChild(kr);
       }
       if (r.materialMode === "foam" || ((r.materialMode || "batt") === "batt" && anyTotalFoam)) foamTypeControls(card, r, "foamType", "ccDepth", r.kind === "concrete", cDflt);
+      if (r.kind === "garage_common") { // gcw: house wrap toggle on every material (foam, fiberglass, cellulose, spider…)
+        const wr = el("div", "toggle-row"); wr.appendChild(el("span", null, "House wrap on garage common wall?"));
+        const ws = el("button", "switch" + (r.wrap ? " on" : "")); ws.type = "button";
+        ws.onclick = () => { r.wrap = !r.wrap; render(); };
+        wr.appendChild(ws); card.appendChild(wr);
+      }
       reassignWall(card, r, "wall");
       box.appendChild(card);
     };
@@ -5563,7 +5583,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-03gableall";
+const APP_BUILD = "2026-11-05gcwall";
 // 30am: auto-update (the owner + coworker copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
