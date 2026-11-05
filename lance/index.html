@@ -1157,7 +1157,7 @@ const BATT_W_CHOICES = [["16", '16"'], ["19", '19"'], ["24", '24"']];
 const WALL_W_CHOICES = [["16", '16 OC (15" batts)'], ["19", '19 OC (19" batts)'], ["24", '24 OC (24" batts)']];
 function battW(v, def) { v = String(v == null ? "" : v); return v === "16" || v === "19" || v === "24" ? v : def; }
 const BATT_W_DEFAULTS = { deadAir: "24", vault: "16", rim: "16", cant: "16", betweenFloors: "16", gable: "16",
-  garageCeilOc: "16", porchCeilOc: "16", crawlSubOc: "16", ufbcOc: "16", touchupOc: "16", customAtticBattOc: "24" };
+  garageCeilOc: "16", porchCeilOc: "16", crawlSubOc: "16", ufbcOc: "16", touchupOc: "16", customAtticBattOc: "24", totalBatOc: "24" };
 function wallHeightFt(row) { return row.height === "custom" ? n(row.customHeight) : n(row.height); }
 function wallFactor(row) {
   const h = wallHeightFt(row);
@@ -1539,7 +1539,7 @@ const S = {
   pkg: "standard",
   foundation: "", basementCrawl: false, // 29as: foundation type ("" = unanswered) + basement house that also has a crawl space
   compareOn: false, optionPkgs: ["standard", "hybrid_foam_batts"], optionView: 0,
-  customRoofs: ["blow"], customWallList: ["batt"], customBlowSf: "", customBlowR: "R-38", customBattSf: "", customAtticBattR: "R-38", customAtticBattOc: "24",
+  customRoofs: ["blow"], customWallList: ["batt"], customBlowSf: "", customBlowR: "R-38", customBattSf: "", customAtticBattR: "R-38", customAtticBattOc: "24", totalBatOc: "24",
   airSealed: false, airSealAddon: "", extraLabor: "", extraLaborNote: "", ccDepth: "1.5",
   flatSf: "",
   housePitch: "6",
@@ -1973,9 +1973,16 @@ function fgBuildRows(foamChoice) {
     else if (L.assembly === "Air seal (caulk & foam)") { const u = priceMap.get("Air seal"); price = u > 0 ? u : 0.15; } // 30s: always send $/SF so FG never falls back to its $0 inventory price
     else if (fgPricesOn()) { const pk = priceKeyFor(L); let u = priceMap.get(pk); if (u === undefined) u = priceMap.get(roofFoamBaseKey(pk)); if (u > 0) price = Math.round(u * (L.fixed ? 1 : scale) * 10000) / 10000; }
     const qty = n(L.footage);
-    rows.push(fgc.matchOnly ? [company, "", "", "", "", "", "", "", ""] : [company, first, last, (S.custEmail || "").trim(), (S.custPhone || "").trim(), bill[0], bill[1], bill[2], bill[3],
-      project, site, city, st, zip, (S.subdivision || "").trim(), "", projType, E.name, E.type, "", "", "", // 30i: Phase blank — FG already makes a "Base Estimate" phase; naming it again added a 2nd (empty) one
-      r.item, r.area, qty, r.uom, r.depth, r.rv, "No", "", price, "", ""]);
+    // 2026-11-05: FieldGroove requires ProjectName/EstimateName/EstimateType/ItemName/Quantity on every data row.
+    const projName = String(project || site || company || "Job").trim() || "Job";
+    const estName = String(E.name || (projName + " - Estimate")).trim() || (projName + " - Estimate");
+    const estType = String(E.type || "Fiberglass").trim() || "Fiberglass";
+    const itemName = String(r.item || "").trim();
+    if (!itemName) { skipped.add(L.product + (L.description ? " — " + L.description : "") + " (no FG ItemName)"); return; }
+    const custCols = fgc.matchOnly ? [company || projName, "", "", "", "", "", "", "", ""] : [company, first, last, (S.custEmail || "").trim(), (S.custPhone || "").trim(), bill[0], bill[1], bill[2], bill[3]];
+    rows.push(custCols.concat([
+      projName, site || projName, city, st, zip, (S.subdivision || "").trim(), "", projType || "Residential", estName, estType, "", "", "", // 30i: Phase blank — FG already makes a "Base Estimate" phase; naming it again added a 2nd (empty) one
+      itemName, r.area || "", qty, r.uom || "SqFt", r.depth, r.rv, "No", "", price, "", ""]));
   }));
   return { rows, skipped: Array.from(skipped), flags: Array.from(flags), estimates: ests.map(e => e.name) };
 }
@@ -1989,7 +1996,13 @@ function fgXlsx(rows) {
   const out = ['<row r="1">' + FG_HEADERS.map((h, i) => cell(colL(i) + "1", h, 1)).join("") + "</row>"];
   rows.forEach((R, k) => {
     const r = k + 2;
-    out.push('<row r="' + r + '">' + R.map((v, i) => (v === "" || v == null) ? "" : cell(colL(i) + r, v)).join("") + "</row>");
+    // 2026-11-05: always emit all 33 cells (empty string OK). Omitting blanks made FieldGroove treat ProjectName/ItemName/Quantity as missing on import.
+    const cells = [];
+    for (let i = 0; i < FG_HEADERS.length; i++) {
+      const v = R[i];
+      cells.push(cell(colL(i) + r, (v == null || v === "") ? "" : v));
+    }
+    out.push('<row r="' + r + '">' + cells.join("") + "</row>");
   });
   const widths = FG_HEADERS.map((h, i) => '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + (i === 0 ? 25 : i === 22 ? 30 : i === 23 ? 20 : 18) + '" customWidth="1"/>').join("");
   const last = colL(FG_HEADERS.length - 1);
@@ -2456,7 +2469,7 @@ function buildLinesForPackage(p, tag) {
   const totalBat = totalBatOn(p);
   if (totalBat && !foamRoof && derived > 0) {
     // 29ao Total Bat: the would-be blow area (footprint − dead air rows − vaults) is all dead air → same R38 dead-air line/Sky item/price/FieldGroove as the Dead air rows
-    push(lines, { area: "Dead air", assembly: "Dead air", product: "R-38 fiberglass batts", description: "R38/24", footage: round2(derived), unit: "SF", notes: noteTag + "Total Batt: " + derivedCalc });
+    push(lines, { area: "Dead air", assembly: "Dead air", product: "R-38 fiberglass batts", description: "R38/" + battW(S.totalBatOc, "24"), footage: round2(derived), unit: "SF", notes: noteTag + "Total Batt: " + derivedCalc });
   }
   if ((newUsesBlow || F.atticIsBlow) && !foamRoof && !totalBat) {
     const blow = derived;
@@ -3291,6 +3304,14 @@ function renderAssemblyEditors() {
     box.appendChild(card);
   }
   SEC = 12;
+  // 2026-11-05: Total Batt derived attic floor (flat−dead−vault) gets its own joist-width picker (was hardcoded R38/24).
+  if (F.canAskDeadVaultKnees && totalBatOn(optionsOn() ? optionPkgs()[S.optionView | 0] : S.pkg)) {
+    const card = el("div", "row-card");
+    card.innerHTML = '<div class="row-title">Total Batt attic floor</div>';
+    card.appendChild(el("p", "cap", "Joist width for the R38 dead-air batts that replace attic blow (flat − dead air − vaults)."));
+    card.appendChild(fieldSelect("Batt width (R38)", battW(S.totalBatOc, "24"), BATT_W_CHOICES, v => { S.totalBatOc = v; saveDraft(); render(); }));
+    box.appendChild(card);
+  }
   if (F.canAskDeadVaultKnees && S.hasDeadAir) {
     S.deadAir.forEach((r, idx) => {
       const card = el("div", "row-card");
@@ -4920,7 +4941,7 @@ function migrateState(d) {
   const W = BATT_W_DEFAULTS;
   [["deadAir", W.deadAir], ["vaults", W.vault], ["rims", W.rim], ["cants", W.cant], ["betweenFloors", W.betweenFloors], ["gables", W.gable]]
     .forEach(([k, def]) => { if (Array.isArray(S[k])) S[k].forEach(r => { if (r) r.oc = battW(r.oc, def); }); });
-  ["garageCeilOc", "porchCeilOc", "crawlSubOc", "ufbcOc", "touchupOc", "customAtticBattOc"].forEach(k => { S[k] = battW(S[k], W[k]); });
+  ["garageCeilOc", "porchCeilOc", "crawlSubOc", "ufbcOc", "touchupOc", "customAtticBattOc", "totalBatOc"].forEach(k => { S[k] = battW(S[k], W[k] || "24"); });
   if (Array.isArray(S.knees)) S.knees.forEach(k => { if (k.shape !== "triangle") k.shape = "rectangle"; if (k.oc !== "24" && k.oc !== "19") k.oc = "16"; });
 }
 
@@ -5528,7 +5549,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-03gableall";
+const APP_BUILD = "2026-11-05fgdeadair";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
