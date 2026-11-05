@@ -2442,15 +2442,97 @@ function twoShareText(o, both) {
     text: who + ", attached is the work order for " + where + (o.customer ? " (" + o.customer + ")" : "") + (o.foamLabel ? " — " + o.foamLabel : "") + "." + coordsShareLines() };
 }
 // 29aj: Sky work order = one file; in OC vs CC compare its foam lines read "open cell vs. closed cell" (no export choice needed here).
-// 31b: Email to Sky = mailto straight into Mail with To/subject/body preset (no share-sheet picker). Files via secondary "Share file…".
-function skyMailBody(text, orders) {
-  // 31d: no per-line/SF summary — greeting + job line(s) + signature only. Files go via "Share file…".
-  return text + "\n\nThanks,\nAsher";
+// 31e: mailto cannot attach files. Email → share sheet with the WO file on iOS (pick Mail), else download WO then open draft with a clear attach instruction. Never auto-sends.
+function skyCanShareFiles(fs) {
+  try { return !!(fs && fs.length && navigator.canShare && navigator.share && navigator.canShare({ files: fs })); }
+  catch (e) { return false; }
 }
-function skyMailto(title, text, orders) {
+function skyDownloadFiles(files) {
+  (files || []).forEach(f => {
+    const url = URL.createObjectURL(f);
+    const a = document.createElement("a"); a.href = url; a.download = f.name || "work-order.xlsx";
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000);
+  });
+}
+function skyMailBody(text, attachNote) {
+  // greeting + job line(s) + optional attach reminder + signature. No auto-send.
+  let body = String(text || "");
+  if (attachNote) body += "\n\n" + attachNote;
+  return body + "\n\nThanks,\nAsher";
+}
+function skyMailto(title, text, attachNote) {
   const c = twoWho("walls"), to = (c.email || "").trim();
-  let body = skyMailBody(text, orders); if (body.length > 6000) body = body.slice(0, 6000) + "\n…";
+  let body = skyMailBody(text, attachNote); if (body.length > 6000) body = body.slice(0, 6000) + "\n…";
   location.href = "mailto:" + encodeURIComponent(to).replace(/%40/g, "@") + "?subject=" + encodeURIComponent(title) + "&body=" + encodeURIComponent(body);
+}
+function skyCloseHandoff() { const m = $("skyHandoff"); if (m) m.remove(); }
+function skyEmailHandoff(title, textHere, files, msgEl) {
+  const who = twoWho("walls").name;
+  const list = (files || []).filter(Boolean);
+  const names = list.map(f => f.name).filter(Boolean);
+  const shareOk = skyCanShareFiles(list);
+  const attachNote = names.length
+    ? "Attach downloaded work order to this email: " + names.join(", ")
+    : "Attach the work order file to this email (download it from KP Takeoff first).";
+  const shareText = skyMailBody(String(textHere || "").replace(/here (is|are)/, "attached $1"));
+  skyCloseHandoff();
+  const m = el("div", "xl-modal"); m.id = "skyHandoff"; m.style.zIndex = "10050";
+  m.innerHTML = '<div class="xl-bar"><button type="button" class="btn btn-secondary btn-sm" id="skyHoX">Close</button>' +
+    '<div class="xl-title">Email ' + escHtml(who) + '</div><span style="width:60px"></span></div>' +
+    '<div class="batch-body" style="padding:12px">' +
+    '<div class="callout warn"><strong>Mail links can\'t attach files</strong>' +
+    (shareOk
+      ? 'On iPhone, tap <b>Share → Mail</b> so the work order rides along. Or download it and attach it yourself in the draft.'
+      : 'This device can\'t put the file into Mail for you. Download the work order, then open the draft and attach it.') +
+    '</div>' +
+    (names.length
+      ? '<p class="status">File' + (names.length > 1 ? "s" : "") + ': <b>' + escHtml(names.join(", ")) + '</b></p>'
+      : '<p class="status">No work-order file ready yet.</p>') +
+    (shareOk ? '<button type="button" class="btn btn-primary btn-block" id="skyHoShare">Share → Mail (includes work order)</button>' : "") +
+    '<button type="button" class="btn ' + (shareOk ? "btn-secondary" : "btn-primary") + ' btn-block" id="skyHoDl" style="margin-top:6px">Download work order, then open draft</button>' +
+    '<button type="button" class="btn btn-secondary btn-block" id="skyHoDraft" style="margin-top:6px">Open draft only (no file)</button>' +
+    '<p class="cap" style="margin-top:8px">Nothing sends automatically — you review the draft or share sheet and send.</p>' +
+    '<div id="skyHoRecip"></div><p class="status" id="skyHoMsg" style="text-align:center"></p></div>';
+  document.body.appendChild(m);
+  try { $("skyHoRecip").appendChild(twoRecipient("walls")); } catch (e) {}
+  $("skyHoX").onclick = skyCloseHandoff;
+  const say = t => { const s = $("skyHoMsg"); if (s) s.textContent = t; if (msgEl) msgEl.textContent = t; };
+  if ($("skyHoShare")) $("skyHoShare").onclick = () => {
+    if (!list.length) return say("No work-order file to share.");
+    navigator.share({ files: list, title: title, text: shareText }).then(
+      () => { say("Share sheet opened — pick Mail to send with the work order attached."); },
+      e => {
+        if (e && e.name === "AbortError") { say("Share canceled."); return; }
+        skyDownloadFiles(list);
+        skyMailto(title, textHere, attachNote);
+        say("Share didn't open — downloaded the work order and opened a draft. Attach: " + names.join(", "));
+      });
+  };
+  $("skyHoDl").onclick = () => {
+    if (list.length) skyDownloadFiles(list);
+    skyMailto(title, textHere, attachNote);
+    say(list.length
+      ? "Downloaded " + names.join(", ") + ". Draft opened — attach that file before sending."
+      : "Draft opened (no file was ready to download).");
+  };
+  $("skyHoDraft").onclick = () => {
+    skyMailto(title, textHere, null);
+    say("Draft opened — no file attached (mailto can't carry files).");
+  };
+}
+function twoMailFiles(foamChoice) {
+  const orders = twoOrdersFor(foamChoice);
+  if (!orders || !orders[0] || !orders[0].pages.length) return null;
+  const XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const built = orders.map(x => ({ o: x, bytes: KPWO.buildXlsx(x, x.pages), name: twoFileName(x) }));
+  const mains = built.map(b => { try { return new File([b.bytes], b.name, { type: XT }); } catch (e) { return null; } }).filter(Boolean);
+  const o = orders[0];
+  const ph = photoFilesForShare(o.jobSite), extras = ph.files.slice();
+  if (o.fpPages.length) { try { extras.unshift(new File([twoFpText(o)], photoFileBase(o.jobSite) + " - fireplace.txt", { type: "text/plain" })); } catch (e) {} }
+  const all = mains.concat(extras);
+  const files = skyCanShareFiles(all) ? all : mains;
+  return { orders, o, built, mains, files: files.length ? files : mains, t: twoShareText(o, orders.length > 1), missing: ph.missing };
 }
 function twoOrdersFor() { return [twoOrder()]; }
 function twoRecipient(cat) {
@@ -2526,7 +2608,12 @@ function twoPreview(foamChoice, previewOnly) {
   $("twoXlZoom").onclick = () => { fit = !fit; apply(); };
   $("twoXlClose").onclick = twoClose;
   $("twoXlShare").onclick = () => twoExport($("twoXlMsg"), foamChoice);
-  $("twoXlMail").onclick = () => { const t = twoShareText(o, orders.length > 1); skyMailto(t.title, t.text.replace(/attached (is|are)/, "here $1"), orders); };
+  $("twoXlMail").onclick = () => {
+    const pack = twoMailFiles(foamChoice);
+    if (!pack) { const st = $("twoXlMsg"); if (st) st.textContent = "Couldn't build the work order file."; return; }
+    const text = pack.t.text.replace(/attached (is|are)/, "here $1");
+    skyEmailHandoff(pack.t.title, text, pack.files, $("twoXlMsg"));
+  };
 }
 function twoClose() { const m = $("twoPreview"); document.body.classList.remove("wo-print"); if (!m) return; if (m._apply) window.removeEventListener("resize", m._apply); m.remove(); document.body.classList.remove("xl-open"); }
 function renderTwo() {
@@ -4703,7 +4790,11 @@ function batchRender(st) {
     '<button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px" id="batchZip">Download as .zip instead</button>';
   foot.innerHTML = h;
   $("batchRecip").appendChild(twoRecipient("walls"));
-  $("batchMail").onclick = () => { const t = batchMessage(ok); skyMailto(t.title, t.text.replace(/attached (is|are)/, "here $1"), ok.map(e => e.order)); };
+  $("batchMail").onclick = () => {
+    const t = batchMessage(ok);
+    let files = []; try { files = batchFiles(ok, st.withPhotos); } catch (e) {}
+    skyEmailHandoff(t.title, t.text.replace(/attached (is|are)/, "here $1"), files, msg);
+  };
   const msg = $("batchMsg");
   if ($("batchPh")) $("batchPh").querySelectorAll("button").forEach(b => { b.onclick = () => { st.withPhotos = b.dataset.v === "1"; st.split = false; st.sent = {}; batchRender(st); }; });
   if ($("batchSplitBtn")) $("batchSplitBtn").onclick = () => { st.split = true; batchRender(st); };
@@ -5742,7 +5833,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-05fgdeadair";
+const APP_BUILD = "2026-11-05woattach";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
