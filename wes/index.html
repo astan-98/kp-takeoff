@@ -385,7 +385,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 <main>
   <section id="tab-wizard" class="tabs-panel active">
     <button type="button" class="train-launch" id="btnTraining"><svg class="train-ico" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 9 12 4 2 9l10 5 10-5Z"/><path d="M6 11.2V16c0 1.1 2.7 3 6 3s6-1.9 6-3v-4.8"/><path d="M22 9v6"/></svg><span class="tl-txt"><b>Training</b><small>New here? Step-by-step walkthrough. Nothing gets saved.</small></span><span class="tl-chev" aria-hidden="true">›</span></button>
-    <!-- Wes: no Job header card (owner/whose-job N/A). Stubs for lockOwner/bindSeg. -->
+    <!-- Wes: no owner/whose-job card. Stubs for lockOwner/bindSeg. -->
     <div class="hidden" hidden aria-hidden="true" style="display:none!important">
       <div class="seg" id="seg-owner"></div>
       <div class="callout" id="ownerHint"></div>
@@ -5326,7 +5326,7 @@ function trainSteps() {
   const fld = (label, inner) => '<div class="field"><label>' + escHtml(label) + "</label>" + inner + "</div>";
   const inp = ph => '<input tabindex="-1" placeholder="' + escHtml(ph || "") + '">';
   const sel = t => '<select tabindex="-1"><option>' + escHtml(t) + "</option></select>";
-  const M = "Measure", MJ = "Measure · Job header", MT = "Measure · Job type";
+  const M = "Measure", MJ = "Measure", MT = "Measure · Job type";
   return [
     { sec: "Start", title: "Welcome to training",
       html: "<p>This walks a brand-new rep through measuring a whole house in the app, in the order you'll do it on site, then the Summary, Library and Pricing tabs. A short fireplace part comes near the end.</p>" +
@@ -5340,7 +5340,7 @@ function trainSteps() {
         trainDemo('<button type="button" tabindex="-1" class="btn btn-primary btn-block">＋ New job</button>') },
     { sec: MJ, title: "The Measure page, top to bottom",
       html: "<p>The top of Measure always goes in this order:</p>" +
-        ul(["<b>Job header</b> — whose job it is, at the very top.", "<b>Customer</b> — who and where.", "<b>Job type</b> — New construction, Retro or Metal building.", "<b>Package type</b>, then <b>Foundation</b>."]) +
+        ul(["<b>Customer</b> — who and where.", "<b>Job type</b> — New construction, Retro or Metal building.", "<b>Package type</b>, then <b>Foundation</b>."]) +
         "<p>Then the house areas below. Fill it in top to bottom.</p>" },
     { sec: "Measure · Customer / builder", title: "Customer / builder",
       html: "<p>Fill in <b>Builder / company</b>, <b>City</b>, <b>Job site address</b>, <b>State</b>, <b>Zip</b> and <b>Subdivision (optional)</b>.</p>" +
@@ -5496,7 +5496,7 @@ function trainSteps() {
       html: "<p>Every fireplace job shows this yellow notice. Saving, sending, or opening " + escHtml(trainSheet()) + " on a fireplace job pops it up first — tap <b>I'll check the manual</b> to go on, or <b>Go back</b>.</p>" +
         trainDemo(trainNotice()) },
     { sec: "Done", title: "You're ready",
-      html: "<p>That's a whole job: <b>＋ New job</b> → Job header → Customer → Job type → Package → Foundation → What's on this house? → measure each section → <b>Save to Library</b> → Summary.</p>" +
+      html: "<p>That's a whole job: <b>＋ New job</b> → Customer → Job type → Package → Foundation → What's on this house? → measure each section → <b>Save to Library</b> → Summary.</p>" +
         "<p>After you tap <b>Finish</b>, open training again anytime from the <b>Training</b> button at the top of the <b>Pricing</b> tab.</p>" }
   ];
 }
@@ -5577,7 +5577,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-06wes2";
+const APP_BUILD = "2026-11-06wes3";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
