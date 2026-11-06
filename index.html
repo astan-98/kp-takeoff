@@ -205,12 +205,14 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .batch-row .m { color: var(--text2); font-size: .78rem; margin-top: 2px; }
 .batch-parts .btn { margin-top: 6px; }
 .bottom-nav {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  /* 2026-11-06tabbar: always pinned — never hide for keyboard/viewport quirks */
+  position: fixed !important; left: 0; right: 0; bottom: 0 !important; z-index: 90;
   height: calc(var(--nav-h) + var(--safe-b)); padding-bottom: var(--safe-b);
   background: color-mix(in srgb, var(--bg2) 92%, transparent);
   backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-  border-top: 1px solid var(--border); display: grid; grid-template-columns: repeat(5, 1fr);
-  transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform;
+  border-top: 1px solid var(--border); display: grid !important; grid-template-columns: repeat(5, 1fr);
+  visibility: visible !important; opacity: 1 !important; pointer-events: auto;
+  transform: none !important; -webkit-transform: none !important;
 }
 .nav-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -226,9 +228,9 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .fg-cust-note:empty { display: none; }
 /* 29as: Save to archive pinned above the bottom nav on the Wizard + Excel tabs (safe-area aware; body gets matching padding) */
 .save-dock {
-  position: fixed; left: 0; right: 0; bottom: calc(var(--nav-h) + var(--safe-b)); z-index: 49; padding: 8px 16px;
+  position: fixed; left: 0; right: 0; bottom: calc(var(--nav-h) + var(--safe-b)); z-index: 89; padding: 8px 16px;
   background: color-mix(in srgb, var(--bg2) 92%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-  border-top: 1px solid var(--border); transform: translateZ(0); -webkit-transform: translateZ(0); will-change: transform;
+  border-top: 1px solid var(--border); transform: none; -webkit-transform: none;
 }
 /* 29ay: fireplace verification notice — yellow error style, big + bold, icon */
 .fp-verify { display: flex; gap: 12px; align-items: flex-start; background: var(--err-bg); color: var(--err-ink); border: 4px solid var(--err-border);
@@ -6085,7 +6087,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-06retroareas";
+const APP_BUILD = "2026-11-06tabbar";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -6214,13 +6216,18 @@ function fgCustWire() {
   // pin() only clears any stale transform and keeps the bar/dock as direct children of <body>.
   const pin = () => {
     raf = 0; if (!nav) return;
+    // 2026-11-06tabbar: never leave the bar display:none'd (old kb-open / self-heal paths)
+    document.body.classList.remove("kb-open");
     if (nav.parentElement !== document.body) document.body.appendChild(nav);
-    nav.style.transform = "";
+    nav.style.cssText = ""; // clear any inline transform/display/bottom left by older builds
+    nav.style.position = "fixed"; nav.style.left = "0"; nav.style.right = "0"; nav.style.bottom = "0"; nav.style.zIndex = "90";
+    nav.style.display = "grid"; nav.style.visibility = "visible"; nav.style.opacity = "1"; nav.style.transform = "none";
     const dock = document.getElementById("saveDock");
-    if (dock) { if (dock.parentElement !== document.body) document.body.insertBefore(dock, nav); dock.style.transform = ""; }
-    // 30ab: self-heal — if iOS left the fixed bar painted away from the bottom (bar "floats up" while scrolling), force a re-layout
-    if (!typing()) { const vh = window.innerHeight, off = Math.abs(nav.getBoundingClientRect().bottom - vh);
-      if (off > 24) { [nav, dock].forEach(e => { if (!e || e.classList.contains("hidden")) return; e.style.display = "none"; void e.offsetHeight; e.style.display = ""; }); } }
+    if (dock) {
+      if (dock.parentElement !== document.body) document.body.insertBefore(dock, nav);
+      dock.style.transform = ""; dock.style.bottom = ""; // CSS handles bottom above nav
+      if (dock.style.display === "none" && !dock.classList.contains("hidden")) dock.style.display = "";
+    }
     // 30d: scroll-lock restore: xl-open only while an .xl-modal is actually on screen
     if (document.body.classList.contains("xl-open") && !document.querySelector(".xl-modal")) document.body.classList.remove("xl-open");
   };
@@ -9723,15 +9730,7 @@ function initAhp() {
 
 document.addEventListener("DOMContentLoaded", initAhp);
 </script>
-<style id="kbHide">body.kb-open .bottom-nav,body.kb-open .save-dock{display:none!important}</style><script>/* tkodel: hide the fixed bottom bars while typing (iOS lifts position:fixed bars above the keyboard). They come back on blur. */
-(function(){var vv=window.visualViewport,base=window.innerHeight,t=null;
-function typing(){var a=document.activeElement;return !!(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&!/^(file|button|submit|checkbox|radio|range|color)$/.test(a.type||""))||!!(a&&a.isContentEditable);}
-function upd(){var h=vv?vv.height:window.innerHeight;if(!typing()&&h>base)base=h;var shrunk=vv&&base-h>150;document.body.classList.toggle("kb-open",typing()||!!(shrunk&&vv.scale<=1.01));}
-document.addEventListener("focusin",upd,true);
-document.addEventListener("focusout",function(){clearTimeout(t);t=setTimeout(upd,80);},true);
-if(vv)vv.addEventListener("resize",function(){clearTimeout(t);t=setTimeout(upd,50);});
-window.addEventListener("orientationchange",function(){setTimeout(function(){base=vv?vv.height:window.innerHeight;upd();},400);});
-window.addEventListener("pageshow",upd);document.addEventListener("visibilitychange",function(){if(!document.hidden)setTimeout(upd,100);});})();</script><style id="kpcStyle">.kpc-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;display:flex;align-items:flex-end;justify-content:center}.kpc{background:var(--bg,#fff);color:inherit;width:100%;max-width:560px;max-height:85vh;border-radius:16px 16px 0 0;padding:12px;display:flex;flex-direction:column}.kpc input{font-size:16px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--line,#ccc)}.kpc-l{overflow:auto;margin-top:8px;flex:1}.kpc-i{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line,#ddd);background:none;color:inherit;padding:10px 4px;font:inherit}.kpc-i b{display:block}.kpc-i span{font-size:12px;opacity:.7}</style><script>/* contacts: Select from contacts — native picker (Android Chrome) or the KPI Ops contact list (/api/contacts, read with kpOpsKey) */
+<!-- 2026-11-06tabbar: removed kbHide (body.kb-open { display:none } on .bottom-nav). iOS often left the viewport shrunk after the keyboard closed, so kb-open stuck and the tab bar never came back. Bar now always stays pinned. --><style id="kpcStyle">.kpc-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;display:flex;align-items:flex-end;justify-content:center}.kpc{background:var(--bg,#fff);color:inherit;width:100%;max-width:560px;max-height:85vh;border-radius:16px 16px 0 0;padding:12px;display:flex;flex-direction:column}.kpc input{font-size:16px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--line,#ccc)}.kpc-l{overflow:auto;margin-top:8px;flex:1}.kpc-i{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line,#ddd);background:none;color:inherit;padding:10px 4px;font:inherit}.kpc-i b{display:block}.kpc-i span{font-size:12px;opacity:.7}</style><script>/* contacts: Select from contacts — native picker (Android Chrome) or the KPI Ops contact list (/api/contacts, read with kpOpsKey) */
 (function(){var btn=document.getElementById("btnPickContact");if(!btn)return;var cache=null;
 function key(){try{return localStorage.getItem("kpOpsKey")||"";}catch(e){return "";}}
 function set(id,v){var e=document.getElementById(id);if(!e||v==null||v==="")return;e.value=v;e.dispatchEvent(new Event("input",{bubbles:true}));e.dispatchEvent(new Event("change",{bubbles:true}));}
