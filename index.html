@@ -592,6 +592,16 @@ body.has-ahp .bottom-nav{grid-template-columns:repeat(6,1fr)}
         <div class="callout warn hidden" id="foundationAsk"><strong>Pick the foundation</strong>Nothing is hidden until you do — slab hides basement + crawl cards, crawl hides basement cards.</div>
         <div class="toggle-row hidden" id="basementCrawlRow"><span>House also has a crawl space</span><button type="button" class="switch" id="basementCrawl"></button></div>
       </div>
+      <div class="field hidden" id="crawlHeightField"><label>Crawl height</label>
+        <select id="crawlHeight">
+          <option value="">— Pick crawl height —</option>
+          <option value="under2">Under 2 ft (belly crawl)</option>
+          <option value="2to3">2–3 ft (hands &amp; knees)</option>
+          <option value="3to4">3–4 ft (stooped)</option>
+          <option value="4plus">4 ft+ (can stand)</option>
+        </select>
+        <p class="cap">Required on crawl jobs so the crew knows belly crawl vs stand-up.</p>
+      </div>
       <div id="optionsBlock">
         <div class="toggle-row"><span>Compare packages (2–3 options)?</span><button type="button" class="switch" id="compareOn"></button></div>
         <div id="optionChipsWrap" class="hidden">
@@ -1281,6 +1291,36 @@ const ATTIC_RETRO_LABELS = {
   suck_foam: "Suck out + foam", suck_blow: "Suck out + blow",
   batt_blow: "Batt removal + blow", batt_foam: "Batt removal + foam", topup_blow: "Add Attic Blow",
 };
+const CRAWL_HEIGHT_LABELS = {
+  under2: "Under 2 ft (belly crawl)",
+  "2to3": "2–3 ft (hands & knees)",
+  "3to4": "3–4 ft (stooped)",
+  "4plus": "4 ft+ (can stand)"
+};
+function crawlHeightLabel() {
+  const k = S.crawlHeight;
+  return (k && CRAWL_HEIGHT_LABELS[k]) ? CRAWL_HEIGHT_LABELS[k] : "";
+}
+function crawlSpaceJobOn() {
+  const F = flags();
+  if (F.isCrawlRetro) return true;
+  if (F.isMetal) return false;
+  if (!(F.isNew || S.jobMode === "detached")) return false;
+  if (F.canAskCrawlEncap) return true;
+  if (S.pkg === "crawl_encap" || (optionsOn() && optionPkgs().includes("crawl_encap"))) return true;
+  const fdn = foundationOf();
+  if (fdn === "crawl") return true;
+  if (F.showCrawl && !!S.basementCrawl) return true;
+  if (F.canAskSubfloor && S.hasSubfloor) return true;
+  return false;
+}
+function withCrawlHeight(desc) {
+  const h = crawlHeightLabel();
+  if (!h) return desc || "";
+  const tag = "Crawl height: " + h;
+  const d = String(desc || "");
+  return d ? (d.indexOf(tag) >= 0 ? d : d + " · " + tag) : tag;
+}
 const CRAWL_RETRO_LABELS = {
   remove_replace: "Remove + replace", touchup: "Touch-up (tuck / patch)", remove_encap: "Remove + encapsulation",
   new_batts: "Crawl – new batts (no removal)",
@@ -1631,7 +1671,7 @@ function interiorWallLine(r, idx, count, noteTag) {
     notes: noteTag + cav + " cav × " + round2(wallFactor(r)) + " @ " + hLabel + (n(r.cavities) > 0 ? "" : " (from " + fmt(n(r.lf)) + " LF)") };
 }
 const MISC_UNITS = [["SF","SF"],["LF","LF"],["Each","Each"],["Bags","Bags"],["Rolls","Rolls"],["Sheets","Sheets"],["Hours","Hours"],["custom","Custom…"]];
-function newMiscItem() { return { id: uid(), material: "", notes: "", qty: "", unit: "SF", customUnit: "" }; }
+function newMiscItem() { return { id: uid(), material: "", workArea: "", notes: "", qty: "", unit: "SF", customUnit: "" }; }
 function miscUnit(r) { return r.unit === "custom" ? ((r.customUnit || "").trim() || "custom") : (r.unit || "SF"); }
 function miscFilled() {
   return (Array.isArray(S.misc) ? S.misc : []).filter(r => (r.material || "").trim() !== "");
@@ -1778,6 +1818,7 @@ const S = {
   atticRemoval: "suck", // 2026-11-06retrocompare: shared suck|batt when comparing reblow vs foam
   crawlRetro: "remove_replace",
   crawlEncapRemove: true, // 2026-11-06retrocompare: default ON — encap previously always included removal
+  crawlHeight: "", // 2026-11-06crawlheight: required under2|2to3|3to4|4plus on crawl jobs
   blowR: "R-38",
   pkg: "standard",
   foundation: "", basementCrawl: false, // 29as: foundation type ("" = unanswered) + basement house that also has a crawl space
@@ -2248,7 +2289,11 @@ function fgBuildRows(foamChoice) {
     const itemName = String(r.item || "").trim();
     if (!itemName) { skipped.add(L.product + (L.description ? " — " + L.description : "") + " (no FG ItemName)"); return; }
     const custCols = fgc.matchOnly ? [company || projName, "", "", "", "", "", "", "", ""] : [company, first, last, (S.custEmail || "").trim(), (S.custPhone || "").trim(), bill[0], bill[1], bill[2], bill[3]];
-    const covNote = (L.product === "Attic suck-out" && L.description) ? String(L.description) : ""; // 2026-11-06retroareas: suck material on FG CoverageNote
+    let covNote = "";
+    if (L.product === "Attic suck-out" && L.description) covNote = String(L.description); // 2026-11-06retroareas: suck material on FG CoverageNote
+    else if (L.assembly === "Miscellaneous") covNote = String(L.description || L.product || "").trim(); // 2026-11-06crawlheight: misc material (+ notes)
+    else if (/^Crawl\b|Encap poly|Seam taping|Dehumidifier|Poly$/i.test(String(L.assembly || "")) && crawlHeightLabel())
+      covNote = "Crawl height: " + crawlHeightLabel(); // 2026-11-06crawlheight
     rows.push(custCols.concat([
       projName, site || projName, city, st, zip, (S.subdivision || "").trim(), "", projType || "Residential", estName, estType, "", "", "", // 30i: Phase blank — FG already makes a "Base Estimate" phase; naming it again added a 2nd (empty) one
       itemName, r.area || "", qty, r.uom || "SqFt", r.depth, r.rv, "No", covNote, price, "", ""]));
@@ -2426,14 +2471,23 @@ function twoOrder(foamChoice) {
   };
   // Order: walls/batts lines first, then attic/roof lines; 21 rows per sheet, extra lines continue on more sheets (tabs) — nothing dropped.
   const ls = twoLines(), ordered = ls.filter(L => twoCatOf(L) === "attic").concat(ls.filter(L => twoCatOf(L) === "walls")); // attic lines first, like KP work orders
-  const rows = ordered.map(L => ({ p: twoProductText(TWO_LABELS[fgSection(L.assembly)] || L.area || "", L), d: L.description || L.product, f: wholeQty(L), b: L.bags || "" }));
+  const rows = ordered.map(L => {
+    // 2026-11-06crawlheight: misc left = typed work area (fallback Misc), middle = material (product)
+    if (L.assembly === "Miscellaneous") {
+      const area = String(L.area || "").trim() || "Misc";
+      const mat = String(L.product || "").trim() || String(L.description || "").trim() || "Misc";
+      return { p: area, d: mat, f: wholeQty(L), b: L.bags || "" };
+    }
+    return { p: twoProductText(TWO_LABELS[fgSection(L.assembly)] || L.area || "", L), d: L.description || L.product, f: wholeQty(L), b: L.bags || "" };
+  });
   const PER = 21, NOTE_ROWS = 6;
   o.rows = rows; o.pages = []; o.lineCount = rows.length; o.fpPages = []; o.fpCount = 0;
   const fpDet = twoFpDetails(), fpLs = twoFpLines();
   // NOTES priority: job site access, then Asher's typed notes, then the fireplace pointer. Nothing is cut — if they don't fit in the
   // 6 note rows (one row goes to "Page k of N" on multi-sheet orders), they continue on the next sheet's NOTES (adding a sheet if needed).
   const pin = parseCoords(S.siteCoords); // 30ah: site pin first in Sky's NOTES
-  const pri = (pin ? ["SITE PIN: " + pin.text + " — " + pin.url] : []).concat(accessLines(),(S.woNotes || "").split(/\n/).map(x => x.trim()).filter(Boolean),
+  const crawlHNote = crawlHeightLabel() ? ["Crawl height: " + crawlHeightLabel()] : [];
+  const pri = (pin ? ["SITE PIN: " + pin.text + " — " + pin.url] : []).concat(accessLines(), crawlHNote, (S.woNotes || "").split(/\n/).map(x => x.trim()).filter(Boolean),
     fpDet.length ? ["FIREPLACE: see the Fireplace sheet (and fireplace .txt) for every fireplace detail."] : []);
   let pages = Math.max(1, Math.ceil(rows.length / PER));
   while (pages * (NOTE_ROWS - (pages > 1 ? 1 : 0)) < pri.length) pages++;
@@ -2870,16 +2924,16 @@ function buildLinesForPackage(p, tag) {
   // 2026-11-06retrocompare: encapsulation removal is optional (default on — matches prior always-remove behavior)
   if (F.crawlIsReplace || (F.crawlIsEncap && S.crawlEncapRemove !== false)) {
     const crawlSf = S.subfloorOverride.trim() !== "" ? n(S.subfloorOverride) : flat;
-    push(lines, { area: "Crawl", assembly: "Crawl prep", product: "Crawl insulation removal", description: "Remove existing crawl insulation", footage: round2(crawlSf), unit: "SF", notes: noteTag + "Crawl SF" });
+    push(lines, { area: "Crawl", assembly: "Crawl prep", product: "Crawl insulation removal", description: withCrawlHeight("Remove existing crawl insulation"), footage: round2(crawlSf), unit: "SF", notes: noteTag + "Crawl SF" });
   }
   if (F.crawlIsTouchup && n(S.touchupPatchSf) > 0) {
-    push(lines, { area: site, assembly: "Crawl touch-up", product: "R-19 fiberglass batts", description: "R19/" + battW(S.touchupOc, "16") + " touch-up / patch", footage: round2(n(S.touchupPatchSf)), unit: "SF", notes: noteTag + "Patched zone SF" });
+    push(lines, { area: site, assembly: "Crawl touch-up", product: "R-19 fiberglass batts", description: withCrawlHeight("R19/" + battW(S.touchupOc, "16") + " touch-up / patch"), footage: round2(n(S.touchupPatchSf)), unit: "SF", notes: noteTag + "Patched zone SF" });
   }
 
   if (F.crawlIsNewBatts) {
     const sub = S.crawlNewSf.trim() !== "" ? n(S.crawlNewSf) : flat;
     const r = S.crawlNewR || "R-19", oc = S.crawlNewOc || "16";
-    if (sub > 0) push(lines, { area: "Crawl", assembly: "Crawl subfloor", product: r + " fiberglass batts", description: r.replace("R-", "R") + "/" + battW(oc, "16") + " crawl subfloor",
+    if (sub > 0) push(lines, { area: "Crawl", assembly: "Crawl subfloor", product: r + " fiberglass batts", description: withCrawlHeight(r.replace("R-", "R") + "/" + battW(oc, "16") + " crawl subfloor"),
       footage: round2(sub), unit: "SF", notes: noteTag + "New batts — no removal" });
     if (S.crawlNewPoly) {
       const ps = S.crawlNewPolySf.trim() !== "" ? n(S.crawlNewPolySf) : sub;
@@ -3014,11 +3068,11 @@ function buildLinesForPackage(p, tag) {
   if (S.hasSubfloor && F.canAskSubfloor && subfloorSf > 0) {
     const cr = S.crawlSubR || "R-19";
     if (cr === "foam") { // 29as: Crawl Space Subfloor spray foam — default 5.5" open cell, per-area foam type
-      push(lines, { area: "Crawl space subfloor", assembly: "Crawl subfloor", product: "Open-cell spray foam", priceKey: 'Open-cell foam (roofline) 5.5"', description: '5.5" OC', footage: round2(subfloorSf), unit: "SF", notes: noteTag });
+      push(lines, { area: "Crawl space subfloor", assembly: "Crawl subfloor", product: "Open-cell spray foam", priceKey: 'Open-cell foam (roofline) 5.5"', description: withCrawlHeight('5.5" OC'), footage: round2(subfloorSf), unit: "SF", notes: noteTag });
       applyFoamType(lines[lines.length - 1], { foamType: S.crawlSubFoam, ccDepth: S.crawlSubCc }, "crawl subfloor");
     } else
-    push(lines, { area: "Crawl", assembly: "Crawl subfloor", product: cr + " fiberglass batts", description: cr.replace("R-", "R") + "/" + battW(S.crawlSubOc, "16") + " crawl subfloor", footage: round2(subfloorSf), unit: "SF", notes: noteTag });
-    push(lines, { area: "Crawl floor", assembly: "Poly", product: "6 mil poly", description: "Matches crawl subfloor SF", footage: round2(subfloorSf), unit: "SF", notes: noteTag });
+    push(lines, { area: "Crawl", assembly: "Crawl subfloor", product: cr + " fiberglass batts", description: withCrawlHeight(cr.replace("R-", "R") + "/" + battW(S.crawlSubOc, "16") + " crawl subfloor"), footage: round2(subfloorSf), unit: "SF", notes: noteTag });
+    push(lines, { area: "Crawl floor", assembly: "Poly", product: "6 mil poly", description: withCrawlHeight("Matches crawl subfloor SF"), footage: round2(subfloorSf), unit: "SF", notes: noteTag });
   }
 
   if (S.hasUfbc && F.canAskUfbc && n(S.ufbcSf) > 0) {
@@ -3028,16 +3082,16 @@ function buildLinesForPackage(p, tag) {
 
   if (F.canAskCrawlEncap) {
     if (!S.pouredFloor && flat > 0) {
-      push(lines, { area: "Crawl floor", assembly: "Encap poly", product: "10 mil poly", description: "Seams taped", footage: round2(flat), unit: "SF", notes: noteTag });
+      push(lines, { area: "Crawl floor", assembly: "Encap poly", product: "10 mil poly", description: withCrawlHeight("Seams taped"), footage: round2(flat), unit: "SF", notes: noteTag });
     }
     if (S.hasCrawlWalls) {
       S.crawlWalls.forEach(r => {
         const sf = n(r.length) * n(r.height); if (sf <= 0) return;
         const dep = ccValid(S.ccDepth) ? String(S.ccDepth) : "1.5";
-        push(lines, { area: "Crawl wall", assembly: "Crawl wall foam", product: "Closed-cell spray foam", priceKey: 'Closed-cell foam ' + dep + '"', description: dep + '" CC', footage: round2(sf), unit: "SF", notes: noteTag, _foam: "locked" });
+        push(lines, { area: "Crawl wall", assembly: "Crawl wall foam", product: "Closed-cell spray foam", priceKey: 'Closed-cell foam ' + dep + '"', description: withCrawlHeight(dep + '" CC'), footage: round2(sf), unit: "SF", notes: noteTag, _foam: "locked" });
       });
     }
-    push(lines, { area: "Crawl", assembly: "Dehumidifier", product: "Dehumidifier", description: "Install included", footage: 1, unit: "ea", notes: noteTag });
+    push(lines, { area: "Crawl", assembly: "Dehumidifier", product: "Dehumidifier", description: withCrawlHeight("Install included"), footage: 1, unit: "ea", notes: noteTag });
   }
 
   if (S.hasRim && F.canAskRim) {
@@ -3200,9 +3254,11 @@ function buildLinesForPackage(p, tag) {
   if (S.hasMisc) {
     miscFilled().forEach(r => {
       const u = miscUnit(r);
+      const mat = r.material.trim();
       const notes = (r.notes || "").trim();
-      push(lines, { area: String(r.workArea || "").trim() || "Misc", assembly: "Miscellaneous", product: r.material.trim(),
-        description: notes ? notes + " (" + u + ")" : u, footage: round2(n(r.qty)), unit: u, notes: noteTag + "Manual entry" });
+      // 2026-11-06crawlheight: WO left = work area, middle description = material (notes appended); UOM stays on unit/qty
+      push(lines, { area: String(r.workArea || "").trim() || "Misc", assembly: "Miscellaneous", product: mat,
+        description: notes ? mat + " — " + notes : mat, footage: round2(n(r.qty)), unit: u, notes: noteTag + "Manual entry" });
     });
   }
 
@@ -3222,7 +3278,7 @@ function buildLinesForPackage(p, tag) {
   // 10 mil poly always gets seam taping at the same SF
   lines.slice().forEach(L => {
     if (L.product === "10 mil poly" && n(L.footage) > 0)
-      lines.splice(lines.indexOf(L) + 1, 0, Object.assign({ bags: "" }, { area: L.area, assembly: "Seam taping", product: "Seam taping (10 mil)", description: "Tape 10 mil poly seams", footage: L.footage, unit: "SF", notes: noteTag }));
+      lines.splice(lines.indexOf(L) + 1, 0, Object.assign({ bags: "" }, { area: L.area, assembly: "Seam taping", product: "Seam taping (10 mil)", description: withCrawlHeight("Tape 10 mil poly seams"), footage: L.footage, unit: "SF", notes: noteTag }));
   });
   if (S.includeFp) appendFpLines(lines, noteTag);
   // 29ar: no foam work-area description ends in "foam" (3.5" OC = open cell, 1" CC = closed cell) — material tables left as-is, stripped here
@@ -4874,6 +4930,8 @@ function missingFields() {
   if (((F.isNew || S.jobMode === "detached") && !F.customAttic) || F.isAtticRetro) if (blank(S.flatSf)) add("House", "Flat footprint SF", null, null, "flatSf");
   if (F.isAtticRetro && (S.atticRetro === "suck_foam" || S.atticRetro === "suck_blow") && S.atticSuckMat !== "fiberglass" && S.atticSuckMat !== "cellulose")
     add("Attic suck-out", "What's being sucked out", null, "Fiberglass or cellulose", "atticSuckMat");
+  if (crawlSpaceJobOn() && !crawlHeightLabel())
+    add("Crawl", "Crawl height", null, "Pick crawl height (belly crawl vs stand-up)", "crawlHeight");
   if (F.bafflesOn && blank(S.baffles)) add("Baffles", "Count (required)", null, "Baffle count");
   if (F.canAskDeadVaultKnees && S.hasVaults) (S.vaults || []).forEach((r, i) => { if (blank(r.flatSf)) add("Vault #" + (i + 1), "Flat SF", "Vault #" + (i + 1)); });
   if (F.canAskDeadVaultKnees && S.hasKnees) (S.knees || []).forEach((r, i) => { if (blank(r.lf)) add("Knee #" + (i + 1), "LF", "Knee #" + (i + 1)); else if (blank(r.height)) add("Knee #" + (i + 1), "Height ft", "Knee #" + (i + 1)); });
@@ -5371,6 +5429,8 @@ function render() {
   toggleField("crawlEncapRemoveRow", encapOn);
   toggleField("crawlEncapRemoveNote", encapOn);
   setSwitch($("crawlEncapRemove"), S.crawlEncapRemove !== false);
+  toggleField("crawlHeightField", crawlSpaceJobOn());
+  if ($("crawlHeight")) $("crawlHeight").value = CRAWL_HEIGHT_LABELS[S.crawlHeight] ? S.crawlHeight : "";
   toggleField("pitchBlock", F.showFoamRoofPath && S.jobMode !== "detached");
   // blow SF live when blow is in play (including attic reblow vs foam compare)
   toggleField("blowLiveBlock", F.atticIsBlow || (!F.showFoamRoofPath && S.jobMode !== "metal"));
@@ -5449,6 +5509,7 @@ function migrateState(d) {
   // 2026-11-06retrocompare
   if (S.atticRemoval !== "suck" && S.atticRemoval !== "batt") S.atticRemoval = (/^batt_/.test(S.atticRetro || "") ? "batt" : "suck");
   if (typeof S.crawlEncapRemove !== "boolean") S.crawlEncapRemove = true; // preserve prior always-remove behavior
+  if (!("crawlHeight" in d) || !CRAWL_HEIGHT_LABELS[S.crawlHeight]) S.crawlHeight = "";
   S.photos = S.photos.filter(x => x && x.id).map(x => ({ id: String(x.id), caption: typeof x.caption === "string" ? x.caption : "" }));
   ["woRep", "woDate", "woNotes"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
   // 29av: created stamp never inherited from the previous job; a date typed before 29av counts as Asher's edit
@@ -5741,7 +5802,7 @@ function newJob() {
   photoForget(S.photos.map(x => x.id)); S.photos = [];
   S.accessScaffold = "no"; S.accessScaffoldNote = ""; S.accessDriveway = ""; S.accessDrivewayNote = ""; S.accessGate = ""; S.accessGateCode = "";
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard"; S.foundation = ""; S.basementCrawl = false;
-  S.atticSuckMat = ""; S.atticRemoval = "suck"; S.crawlEncapRemove = true;
+  S.atticSuckMat = ""; S.atticRemoval = "suck"; S.crawlEncapRemove = true; S.crawlHeight = "";
   S.compareOn = false; S.optionPkgs = ["standard", "hybrid_foam_batts"]; S.optionView = 0;
   S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38"; S.customAtticBattOc = "24"; S.garageCeilOc = "16"; S.porchCeilOc = "16"; S.touchupOc = "16";
   S.porchFlat = ""; S.includePorchCeiling = true; S.porchCeilMat = "batt_r19"; S.porchRoofPitch = "6";
@@ -5840,7 +5901,7 @@ function wireInputs() {
   const map = {
     builder: "builder", city: "city", address: "address", dateMeasured: "dateMeasured",
     keywords: "keywords", gasType: "gasType", pkg: "pkg",
-    atticRetro: "atticRetro", atticRemoval: "atticRemoval", atticSuckMat: "atticSuckMat", crawlRetro: "crawlRetro", blowR: "blowR",
+    atticRetro: "atticRetro", atticRemoval: "atticRemoval", atticSuckMat: "atticSuckMat", crawlRetro: "crawlRetro", crawlHeight: "crawlHeight", blowR: "blowR",
     flatSf: "flatSf", housePitch: "housePitch", houseCustomRise: "houseCustomRise",
     touchupPatchSf: "touchupPatchSf", marginCustom: "marginCustom",
     siteState: "siteState", siteZip: "siteZip", siteCounty: "siteCounty", siteCoords: "siteCoords", subdivision: "subdivision", custFirst: "custFirst", custLast: "custLast",
@@ -5859,7 +5920,7 @@ function wireInputs() {
       if (pkgChange) applyPkgDefaults();
       if (id === "siteCoords") renderCoordsOut(); // 30ah
       if (id === "city" || id === "siteState" || id === "siteZip" || id === "siteCounty") { clearTimeout(wireInputs._rt); wireInputs._rt = setTimeout(() => { if (!e.matches(":focus")) render(); }, 50); }
-      if (id === "gasType" || id === "pkg" || id === "atticRetro" || id === "atticRemoval" || id === "atticSuckMat" || id === "crawlRetro" || id === "housePitch" || id === "blowR" || id.indexOf("filter") === 0) {
+      if (id === "gasType" || id === "pkg" || id === "atticRetro" || id === "atticRemoval" || id === "atticSuckMat" || id === "crawlRetro" || id === "crawlHeight" || id === "housePitch" || id === "blowR" || id.indexOf("filter") === 0) {
         if (id === "atticRemoval") { S.atticRemoval = e.value; syncAtticRetroFromCompare(); }
         render();
       }
@@ -6243,7 +6304,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-06retrocompare";
+const APP_BUILD = "2026-11-06crawlheight";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
