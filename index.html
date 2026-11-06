@@ -2665,15 +2665,12 @@ function twoWorkOrderPdf(o) {
   return out;
 }
 function twoShareBundle(foamChoice) {
+  // 2026-11-06skyshare: no PDF "export sheet" in the Mail share. Sky gets the Excel WO template + FieldGroove import + photos/notes.
   const orders = twoOrdersFor(foamChoice);
   if (!orders || !orders[0] || !orders[0].pages.length) return null;
   const o = orders[0], XT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", files = [];
-  let pdfOk = false, fgOk = false, fgChoice;
-  try {
-    const pdf = twoWorkOrderPdf(o);
-    if (pdf && pdf.length > 400) { files.push(new File([pdf], twoFileName(o).replace(/\.xlsx$/i, "") + ".pdf", { type: "application/pdf" })); pdfOk = true; }
-  } catch (e) {}
-  if (!pdfOk) { try { orders.forEach(x => { files.push(new File([KPWO.buildXlsx(x, x.pages)], twoFileName(x), { type: XT })); }); } catch (e) {} }
+  let woOk = false, fgOk = false, fgChoice;
+  try { orders.forEach(x => { files.push(new File([KPWO.buildXlsx(x, x.pages)], twoFileName(x), { type: XT })); }); woOk = files.length > 0; } catch (e) {}
   try {
     let res = fgBuildRows();
     if (res && res.needChoice) { res = fgBuildRows("both"); fgChoice = "both"; }
@@ -2682,11 +2679,12 @@ function twoShareBundle(foamChoice) {
   const ph = photoFilesForShare(o.jobSite);
   if (o.fpPages && o.fpPages.length) { try { files.push(new File([twoFpText(o)], photoFileBase(o.jobSite) + " - fireplace.txt", { type: "text/plain" })); } catch (e) {} }
   (ph.files || []).forEach(f => files.push(f));
-  const bits = [pdfOk ? "work order PDF" : "work order"];
+  const bits = [];
+  if (woOk) bits.push("work order");
   if (fgOk) bits.push("FieldGroove");
   if (ph.files.length) bits.push(ph.files.length === 1 ? "1 photo" : ph.files.length + " photos");
   if (o.fpPages && o.fpPages.length) bits.push("fireplace details");
-  return { files, pdfOk, fgOk, photos: ph.files.length, missing: ph.missing || 0, label: "Share file… " + bits.join(" + ") + " to " + twoWho("walls").name, o };
+  return { files, woOk, fgOk, photos: ph.files.length, missing: ph.missing || 0, label: "Share file… " + bits.join(" + ") + " to " + twoWho("walls").name, o };
 }
 function twoExport(msgEl, foamChoice) {
   const m = msgEl || $("twoStatus");
@@ -6070,7 +6068,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-06chafinplans";
+const APP_BUILD = "2026-11-06skyshare";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
