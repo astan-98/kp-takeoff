@@ -535,6 +535,13 @@ body.has-ahp .bottom-nav{grid-template-columns:repeat(6,1fr)}
               <option value="topup_blow">Add Attic Blow</option>
             </select>
           </div>
+          <div class="field" id="atticSuckMatField"><label>What's being sucked out?</label>
+            <select id="atticSuckMat">
+              <option value="">— Pick fiberglass or cellulose —</option>
+              <option value="fiberglass">Fiberglass</option>
+              <option value="cellulose">Cellulose</option>
+            </select>
+          </div>
           <div class="field" id="blowRField"><label>Blow R-value</label>
             <select id="blowR">
               <option>R-19</option><option>R-30</option><option selected>R-38</option><option>R-49</option>
@@ -1715,7 +1722,7 @@ const S = {
   outputView: "excel",
   jobMode: "new",
   retroScope: "attic",
-  atticRetro: "suck_blow",
+  atticRetro: "suck_blow", atticSuckMat: "", // 2026-11-06retroareas: suck-out material (fiberglass|cellulose); blank until picked
   crawlRetro: "remove_replace",
   blowR: "R-38",
   pkg: "standard",
@@ -1819,19 +1826,20 @@ function flags(pkgArg) {
     canAskBaffles: isNewLike || isAtticRetro,
     bafflesOn: !!S.hasBaffles && (isNewLike || isAtticRetro),
     showGarageRoof: showFoamRoofPath || isDetached,
-    canAskWalls: isNewLike,
+    // 2026-11-06retroareas: attic removal retros (suck/batt + foam/blow) can opt into walls & related areas via What's on this house
+    canAskWalls: isNewLike || atticNeedsRemoval,
     canAskGables: showFoamRoofPath || isDetached,
     canAskCants: isNew,
     canAskGarage: isNewLike || showFoamRoofPath,
     canAskPorch: showFoamRoofPath,
     canAskSubfloor: (isNew && !PR.crawlEncap && showCrawl) || crawlIsReplace,
     customAttic: isNew && PR.custom,
-    canAskBetweenFloors: isNewLike,
+    canAskBetweenFloors: isNewLike || atticNeedsRemoval,
     canAskUfbc: isNew && showBasement,
     canAskSepWalls: isNew && fdn === "finished", sepWalls: isNew && fdn === "finished" && !!S.hasSepWalls, // 30n
     canAskTouchup: crawlIsTouchup,
     canAskCrawlEncap: !isMetal && ((PR.crawlEncap && (!isNew || showCrawl)) || crawlIsEncap),
-    canAskRim: !isMetal && (isNewLike || crawlIsReplace || crawlIsEncap || PR.crawlEncap || crawlIsNewBatts), isMetal,
+    canAskRim: !isMetal && (isNewLike || atticNeedsRemoval || crawlIsReplace || crawlIsEncap || PR.crawlEncap || crawlIsNewBatts), isMetal,
     canAskDense: isNew && PR.dense,
   };
 }
@@ -2165,9 +2173,10 @@ function fgBuildRows(foamChoice) {
     const itemName = String(r.item || "").trim();
     if (!itemName) { skipped.add(L.product + (L.description ? " — " + L.description : "") + " (no FG ItemName)"); return; }
     const custCols = fgc.matchOnly ? [company || projName, "", "", "", "", "", "", "", ""] : [company, first, last, (S.custEmail || "").trim(), (S.custPhone || "").trim(), bill[0], bill[1], bill[2], bill[3]];
+    const covNote = (L.product === "Attic suck-out" && L.description) ? String(L.description) : ""; // 2026-11-06retroareas: suck material on FG CoverageNote
     rows.push(custCols.concat([
       projName, site || projName, city, st, zip, (S.subdivision || "").trim(), "", projType || "Residential", estName, estType, "", "", "", // 30i: Phase blank — FG already makes a "Base Estimate" phase; naming it again added a 2nd (empty) one
-      itemName, r.area || "", qty, r.uom || "SqFt", r.depth, r.rv, "No", "", price, "", ""]));
+      itemName, r.area || "", qty, r.uom || "SqFt", r.depth, r.rv, "No", covNote, price, "", ""]));
   }));
   return { rows, skipped: Array.from(skipped), flags: Array.from(flags), estimates: ests.map(e => e.name) };
 }
@@ -2777,8 +2786,9 @@ function buildLinesForPackage(p, tag) {
 
   if (F.atticNeedsRemoval) {
     const suck = S.atticRetro === "suck_foam" || S.atticRetro === "suck_blow";
+    const suckMat = S.atticSuckMat === "cellulose" ? "cellulose" : S.atticSuckMat === "fiberglass" ? "fiberglass" : "";
     push(lines, { area: "Attic", assembly: "Attic prep", product: suck ? "Attic suck-out" : "Attic batt removal",
-      description: suck ? "Suck-out existing attic" : "Batt removal (attic)",
+      description: suck ? (suckMat ? ("Suck out — " + suckMat) : "Suck-out existing attic") : "Batt removal (attic)",
       footage: round2(flat), unit: "SF", notes: noteTag + "Attic flat SF" });
   }
   if (F.crawlIsReplace || F.crawlIsEncap) {
@@ -4773,6 +4783,8 @@ function missingFields() {
   const add = (area, field, card, label, id) => out.push({ area, field, card: card || null, label: label || field, id: id || null });
   const blank = v => !(n(v) > 0);
   if (((F.isNew || S.jobMode === "detached") && !F.customAttic) || F.isAtticRetro) if (blank(S.flatSf)) add("House", "Flat footprint SF", null, null, "flatSf");
+  if (F.isAtticRetro && (S.atticRetro === "suck_foam" || S.atticRetro === "suck_blow") && S.atticSuckMat !== "fiberglass" && S.atticSuckMat !== "cellulose")
+    add("Attic suck-out", "What's being sucked out", null, "Fiberglass or cellulose", "atticSuckMat");
   if (F.bafflesOn && blank(S.baffles)) add("Baffles", "Count (required)", null, "Baffle count");
   if (F.canAskDeadVaultKnees && S.hasVaults) (S.vaults || []).forEach((r, i) => { if (blank(r.flatSf)) add("Vault #" + (i + 1), "Flat SF", "Vault #" + (i + 1)); });
   if (F.canAskDeadVaultKnees && S.hasKnees) (S.knees || []).forEach((r, i) => { if (blank(r.lf)) add("Knee #" + (i + 1), "LF", "Knee #" + (i + 1)); else if (blank(r.height)) add("Knee #" + (i + 1), "Height ft", "Knee #" + (i + 1)); });
@@ -5169,6 +5181,7 @@ function render() {
   chips("customRoofChips", customRoofs(), v => { S.customRoofs = v; }, CUSTOM_ROOF_KEYS);
   chips("customWallChips", customWallList(), v => { S.customWallList = v; }, CUSTOM_WALL_KEYS);
   $("atticRetro").value = S.atticRetro;
+  if ($("atticSuckMat")) $("atticSuckMat").value = (S.atticSuckMat === "fiberglass" || S.atticSuckMat === "cellulose") ? S.atticSuckMat : "";
   $("crawlRetro").value = S.crawlRetro;
   $("blowR").value = S.blowR;
   $("flatSf").value = S.flatSf;
@@ -5176,7 +5189,7 @@ function render() {
   $("marginCustom").value = S.marginCustom;
 
   bindSeg("seg-owner", () => S.owner, v => { if (!ALLOW_OWNER_SWITCH) { S.owner = HOME_OWNER; return; } S.owner = v; S.outputView = v === "sky" ? "excel" : "fg"; render(); });
-  bindSeg("seg-mode", () => S.jobMode, v => { S.hasMetal = v === "metal"; if (v === "metal" && S.jobMode !== "metal") { S.airSealed = false; S.hasMisc = false; if (!METAL_PKGS.includes(S.pkg)) S.pkg = "total_foam"; } if (v === "retro" && S.jobMode !== "retro") S.hasBaffles = false; const toDetached = v === "detached" && S.jobMode !== "detached"; const toNew = v === "new" && S.jobMode !== "new"; S.jobMode = v; if (toDetached) applyDetachedDefaults(); if (toNew && !S.bafflesSet) S.hasBaffles = true; if (toNew && fpApplyNcDefault() && S.includeFp) loadFpSpecs(); render(); }); // 29an: retro baffles default off; 29az: choosing New construction → NC fireplace
+  bindSeg("seg-mode", () => S.jobMode, v => { S.hasMetal = v === "metal"; if (v === "metal" && S.jobMode !== "metal") { S.airSealed = false; S.hasMisc = false; if (!METAL_PKGS.includes(S.pkg)) S.pkg = "total_foam"; } if (v === "retro" && S.jobMode !== "retro") { S.hasBaffles = false; S.hasWalls = false; S.hasInteriorWalls = false; S.hasBetweenFloors = false; } const toDetached = v === "detached" && S.jobMode !== "detached"; const toNew = v === "new" && S.jobMode !== "new"; S.jobMode = v; if (toDetached) applyDetachedDefaults(); if (toNew) { if (!S.bafflesSet) S.hasBaffles = true; S.hasWalls = true; } if (toNew && fpApplyNcDefault() && S.includeFp) loadFpSpecs(); render(); }); // 29an: retro baffles default off; 29az: NC fireplace; 2026-11-06retroareas: walls opt-in on attic retro
   bindSeg("seg-retroScope", () => S.retroScope, v => { S.retroScope = v; render(); });
   bindSeg("seg-outputView", () => S.outputView, v => { S.outputView = v; render(); });
 
@@ -5219,6 +5232,7 @@ function render() {
   toggleField("customMixFields", (S.jobMode === "new" || S.jobMode === "detached") && (S.compareOn ? optionPkgs().includes("custom") : S.pkg === "custom"));
   toggleField("atticRetroFields", S.jobMode === "retro" && S.retroScope === "attic");
   toggleField("crawlRetroFields", S.jobMode === "retro" && S.retroScope === "crawl");
+  toggleField("atticSuckMatField", S.jobMode === "retro" && S.retroScope === "attic" && (S.atticRetro === "suck_foam" || S.atticRetro === "suck_blow"));
   toggleField("blowRField", F.atticIsBlow);
   toggleField("pitchBlock", F.showFoamRoofPath && S.jobMode !== "detached");
   toggleField("blowLiveBlock", !F.showFoamRoofPath);
@@ -5292,6 +5306,8 @@ function migrateState(d) {
   // 29aq: gate / lockbox — old jobs load unanswered + blank code
   if (!("accessGate" in d) || (S.accessGate !== "yes" && S.accessGate !== "no")) S.accessGate = "";
   if (typeof S.accessGateCode !== "string" || !("accessGateCode" in d)) S.accessGateCode = "";
+  // 2026-11-06retroareas: old jobs load with suck material unanswered
+  if (!("atticSuckMat" in d) || (S.atticSuckMat !== "fiberglass" && S.atticSuckMat !== "cellulose")) S.atticSuckMat = "";
   S.photos = S.photos.filter(x => x && x.id).map(x => ({ id: String(x.id), caption: typeof x.caption === "string" ? x.caption : "" }));
   ["woRep", "woDate", "woNotes"].forEach(k => { if (typeof S[k] !== "string" || !(k in d)) S[k] = ""; });
   // 29av: created stamp never inherited from the previous job; a date typed before 29av counts as Asher's edit
@@ -5584,6 +5600,7 @@ function newJob() {
   photoForget(S.photos.map(x => x.id)); S.photos = [];
   S.accessScaffold = "no"; S.accessScaffoldNote = ""; S.accessDriveway = ""; S.accessDrivewayNote = ""; S.accessGate = ""; S.accessGateCode = "";
   S.gasType = "natural"; S.jobMode = "new"; S.pkg = "standard"; S.foundation = ""; S.basementCrawl = false;
+  S.atticSuckMat = "";
   S.compareOn = false; S.optionPkgs = ["standard", "hybrid_foam_batts"]; S.optionView = 0;
   S.customRoofs = ["blow"]; S.customWallList = ["batt"]; S.customBlowSf = ""; S.customBlowR = "R-38"; S.customBattSf = ""; S.customAtticBattR = "R-38"; S.customAtticBattOc = "24"; S.garageCeilOc = "16"; S.porchCeilOc = "16"; S.touchupOc = "16";
   S.porchFlat = ""; S.includePorchCeiling = true; S.porchCeilMat = "batt_r19"; S.porchRoofPitch = "6";
@@ -5682,7 +5699,7 @@ function wireInputs() {
   const map = {
     builder: "builder", city: "city", address: "address", dateMeasured: "dateMeasured",
     keywords: "keywords", gasType: "gasType", pkg: "pkg",
-    atticRetro: "atticRetro", crawlRetro: "crawlRetro", blowR: "blowR",
+    atticRetro: "atticRetro", atticSuckMat: "atticSuckMat", crawlRetro: "crawlRetro", blowR: "blowR",
     flatSf: "flatSf", housePitch: "housePitch", houseCustomRise: "houseCustomRise",
     touchupPatchSf: "touchupPatchSf", marginCustom: "marginCustom",
     siteState: "siteState", siteZip: "siteZip", siteCounty: "siteCounty", siteCoords: "siteCoords", subdivision: "subdivision", custFirst: "custFirst", custLast: "custLast",
@@ -5701,7 +5718,7 @@ function wireInputs() {
       if (pkgChange) applyPkgDefaults();
       if (id === "siteCoords") renderCoordsOut(); // 30ah
       if (id === "city" || id === "siteState" || id === "siteZip" || id === "siteCounty") { clearTimeout(wireInputs._rt); wireInputs._rt = setTimeout(() => { if (!e.matches(":focus")) render(); }, 50); }
-      if (id === "gasType" || id === "pkg" || id === "atticRetro" || id === "crawlRetro" || id === "housePitch" || id === "blowR" || id.indexOf("filter") === 0)
+      if (id === "gasType" || id === "pkg" || id === "atticRetro" || id === "atticSuckMat" || id === "crawlRetro" || id === "housePitch" || id === "blowR" || id.indexOf("filter") === 0)
         render();
       else schedule();
     };
@@ -6068,7 +6085,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-06skyshare";
+const APP_BUILD = "2026-11-06retroareas";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
