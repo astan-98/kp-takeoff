@@ -385,13 +385,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
 <main>
   <section id="tab-wizard" class="tabs-panel active">
     <button type="button" class="train-launch" id="btnTraining"><svg class="train-ico" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 9 12 4 2 9l10 5 10-5Z"/><path d="M6 11.2V16c0 1.1 2.7 3 6 3s6-1.9 6-3v-4.8"/><path d="M22 9v6"/></svg><span class="tl-txt"><b>Training</b><small>New here? Step-by-step walkthrough. Nothing gets saved.</small></span><span class="tl-chev" aria-hidden="true">›</span></button>
-    <div class="section" id="sec-job">
-      <h2>Job header</h2>
-      <p class="cap">New/retro · package · site info. Draft autosaves.</p>
-      <div class="field hidden" hidden aria-hidden="true" style="display:none!important"><label>Whose job?</label>
-        <div class="seg" id="seg-owner"></div>
-      </div>
-      <div class="callout hidden" id="ownerHint" hidden></div>
+    <!-- Wes: no Job header card (owner/whose-job N/A). Stubs for lockOwner/bindSeg. -->
+    <div class="hidden" hidden aria-hidden="true" style="display:none!important">
+      <div class="seg" id="seg-owner"></div>
+      <div class="callout" id="ownerHint"></div>
     </div>
 
     <div class="section" id="sec-customer">
@@ -5580,7 +5577,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-06wes1";
+const APP_BUILD = "2026-11-06wes2";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
