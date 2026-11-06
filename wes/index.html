@@ -388,12 +388,10 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
     <div class="section" id="sec-job">
       <h2>Job header</h2>
       <p class="cap">New/retro · package · site info. Draft autosaves.</p>
-      <div class="field hidden"><label>Whose job?</label>
-        <div class="seg" id="seg-owner">
-          <button type="button" data-v="wes" class="active">Wes's job</button>
-        </div>
+      <div class="field hidden" hidden aria-hidden="true" style="display:none!important"><label>Whose job?</label>
+        <div class="seg" id="seg-owner"></div>
       </div>
-      <div class="callout hidden" id="ownerHint"></div>
+      <div class="callout hidden" id="ownerHint" hidden></div>
     </div>
 
     <div class="section" id="sec-customer">
@@ -698,7 +696,7 @@ table.xl td { padding: 0 3px; border: none; white-space: nowrap; overflow: hidde
       </div>
       <div class="grid2">
         <div class="field"><label>Owner</label>
-          <select id="filterOwner"><option value="all">All</option><option value="wes">Wes</option></select>
+          <select id="filterOwner" disabled><option value="all">All</option></select>
         </div>
         <div class="field"><label>Package contains</label><input id="filterPkg"></div>
       </div>
@@ -4677,8 +4675,7 @@ function renderLiveOnly() {
     else if (foamCompareOn()) { const fc = foamCompare(); ball = '<span class="pill">OC ' + fmtMoney(fc.A.total) + (fc.A.incomplete ? "*" : "") + " · CC " + fmtMoney(fc.B.total) + (fc.B.incomplete ? "*" : "") + " @ " + marginPct() + "%</span>"; }
     else ball = '<span class="pill">' + fmtMoney(ballpark().total) + " @ " + marginPct() + "%</span>";
   }
-  $("liveBar").innerHTML = '<span class="pill">' + ownerName() + "</span>" +
-    '<span class="pill pill-rows">' + lines.length + " rows</span>" +
+  $("liveBar").innerHTML = '<span class="pill pill-rows">' + lines.length + " rows</span>" +
     '<span class="pill">' + fmt(flat) + " SF</span>" + ball;
   renderOutput();
   if (S.showBallpark || S.showPriceLib) renderPricing();
@@ -5583,7 +5580,7 @@ function calcInit() {
   window.addEventListener("pointermove", e => { if (e.pointerType !== "touch") move(e.clientY); });
   window.addEventListener("pointerup", e => { if (e.pointerType !== "touch") end(); });
 }
-const APP_BUILD = "2026-11-05gcwall";
+const APP_BUILD = "2026-11-06wes1";
 // 30am: auto-update (Asher + Lance copies). Polls ./version.json (tiny, no-store) every 5 min and when the app comes back to the
 // foreground; a different build reloads the page once nothing is being typed and no sheet is open. The draft autosaves, so nothing is lost.
 (function autoUpdate() {
@@ -7530,10 +7527,8 @@ function pending(){try{var p=JSON.parse(localStorage.getItem(PK)||"null");if(p){
  var k=key();if(k&&(ED==="asher"||ED==="lance")&&STANDALONE&&IOS){fetch(API+"?k="+encodeURIComponent(k),{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){if(d&&d.c&&Date.now()-d.at<180000)fill(d.c);}).catch(function(){});}}
 function boot(){fromHash();pending();
  var btn=document.getElementById("btnPickContact");
- if(!btn){var cf=document.getElementById("custFirst"),g=cf&&cf.closest(".grid2");if(g&&IOS){btn=document.createElement("button");btn.type="button";btn.id="btnPickContact";btn.className="btn btn-secondary btn-block";btn.style.margin="2px 0 8px";g.parentNode.insertBefore(btn,g);}}
- if(btn){if(IOS){btn.textContent="📇 Pick contact (runs the KP Contact Shortcut)";btn.style.display="";btn.onclick=function(){location.href="shortcuts://run-shortcut?name="+encodeURIComponent("KP Contact");};}
-  else if(!window.kpContactPicker){btn.style.display="none";}
-  else{var cache=null;try{cache=JSON.parse(localStorage.getItem("kpContactsCache")||"null");}catch(e){}if(!key()&&!(cache&&cache.contacts&&cache.contacts.length)&&!(navigator.contacts&&navigator.contacts.select))btn.style.display="none";}}}
+ if(btn){try{btn.remove();}catch(e){}btn=null;}
+ /* Wes: no Pick contact button */}
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else setTimeout(boot,0);
 window.addEventListener("hashchange",fromHash);document.addEventListener("visibilitychange",function(){if(!document.hidden)pending();});window.addEventListener("pageshow",function(){pending();});})();</script></body>
 </html>
