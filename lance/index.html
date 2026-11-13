@@ -1,1 +1,90 @@
-<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>Field Notes update</title><meta http-equiv="refresh" content="0;url=https://fieldnotes.s98tools.com/lance/"><p>Field Notes has a new home: <a href="https://fieldnotes.s98tools.com/lance/">https://fieldnotes.s98tools.com/lance/</a>.</p>
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Field Notes">
+<meta name="theme-color" content="#1B3A2F">
+<link rel="apple-touch-icon" href="../icons/fn-icon-192.png">
+<title>Field Notes update</title>
+<style>
+:root{--g:#1B3A2F;--o:#C8643B;--bg:#F4EFE6;--card:#FFFCF6;--mut:#6b6458}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,system-ui,"Segoe UI",sans-serif;background:var(--bg);color:#1f1d1a;-webkit-text-size-adjust:100%}
+header{background:var(--g);color:#fff;padding:calc(18px + env(safe-area-inset-top)) 20px 18px}
+header h1{margin:0;font:700 24px Georgia,serif}header p{margin:6px 0 0;opacity:.85;font-size:15px}
+main{padding:16px;max-width:560px;margin:0 auto}
+.card{background:var(--card);border-radius:16px;padding:16px;margin:0 0 14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.step{font:700 12px system-ui;letter-spacing:.08em;color:var(--o);text-transform:uppercase;margin:0 0 4px}
+h2{margin:0 0 6px;font:700 19px Georgia,serif}p{margin:0 0 10px;line-height:1.4}.mut{color:var(--mut);font-size:14px}
+button,.btn{display:block;width:100%;border:0;border-radius:12px;padding:15px;font:600 17px system-ui;text-align:center;text-decoration:none;cursor:pointer}
+.pri{background:var(--o);color:#fff}.sec{background:#E8DFD0;color:var(--g)}.done{background:#2f7a4f;color:#fff}
+#st{margin-top:10px;font-size:14px;color:var(--g);min-height:1em}.warn{color:#9a3412}
+ol{margin:4px 0 0;padding-left:20px;line-height:1.5}
+</style></head>
+<body>
+<header><h1>Field Notes got an upgrade</h1><p>Field Notes has a new home. Save your jobs, then open the new version.</p></header>
+<main>
+  <div class="card" id="c1">
+    <div class="step">Step 1</div><h2>Export backup</h2>
+    <p>Your saved jobs, drafts, work orders, prices and photos are stored on this phone in the current version. They don't move over on their own.</p>
+    <p class="mut">On iPhone, pick <b>Save to Files</b>, then iCloud Drive or On My iPhone.</p>
+    <button class="pri" id="bExp">Export backup</button>
+    <div id="st"></div>
+  </div>
+  <div class="card">
+    <div class="step">Step 2</div><h2>Open new app</h2>
+    <p>On the new app, go to <b>Library</b>, tap <b>Restore from backup</b>, and pick the <b>takeoff-backup</b> file you just saved. Restoring adds to what's there and never deletes.</p>
+    <a class="btn sec" id="bGo" href="https://fieldnotes.s98tools.com/lance/?tab=archive&restore=1">Open new app</a>
+  </div>
+  <div class="card">
+    <div class="step">Step 3</div><h2>Re-add the home-screen icon</h2>
+    <ol class="mut"><li>In Safari on the new app, tap <b>Share</b>, then <b>Add to Home Screen</b>.</li><li>Delete the old Field Notes icon.</li><li>Re-enter your Ops key in Settings if the app asks.</li></ol>
+  </div>
+</main>
+<script>
+(function(){
+"use strict";
+var CFG={"id": "lance", "db": "kp-takeoff-v2", "wo": "kp-chafin-v1", "draft": "kp-takeoff-draft-v1", "fg": "kp-fg-map-v1"};
+var FLAG="fn-moved-exported-"+CFG.id, st=document.getElementById("st"), bExp=document.getElementById("bExp"), bGo=document.getElementById("bGo");
+function say(t,w){st.textContent=t;st.className=w?"warn":"";}
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+// Only open DBs that already exist (never create/upgrade). Opening without a version never upgrades.
+function dbExists(name){if(!window.indexedDB)return Promise.resolve(false);if(!indexedDB.databases)return Promise.resolve(true);
+  return indexedDB.databases().then(function(l){return l.some(function(d){return d.name===name;});},function(){return true;});}
+function readAll(name,store,withKeys){return dbExists(name).then(function(ok){if(!ok)return [];return new Promise(function(res){
+  var r;try{r=indexedDB.open(name);}catch(e){res([]);return;}
+  r.onerror=function(){res([]);};r.onblocked=function(){res([]);};
+  r.onsuccess=function(){var db=r.result;if(!db.objectStoreNames.contains(store)){db.close();res([]);return;}
+    try{var tx=db.transaction(store,"readonly"),os=tx.objectStore(store),v=os.getAll(),k=withKeys?os.getAllKeys():null;
+      tx.oncomplete=function(){db.close();res(withKeys?k.result.map(function(key,i){return {key:key,value:v.result[i]};}):(v.result||[]));};
+      tx.onerror=function(){db.close();res([]);};}catch(e){db.close();res([]);}};});});}
+function toB64(d){return (d instanceof Blob?d.arrayBuffer():Promise.resolve(d)).then(function(ab){var u=new Uint8Array(ab),s="";
+  for(var i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s);});}
+function json(k,def){try{return JSON.parse(lsGet(k)||def);}catch(e){return JSON.parse(def);}}
+// Same file format as the app's own "Back up Library" (kp-takeoff-backup v1), so the new app's Restore reads it as-is.
+function build(){var D=CFG.db,W=CFG.wo;return Promise.all([readAll(D,"jobs"),readAll(D,"price_library"),readAll(D,"fp_specs"),readAll(W,"orders"),readAll(W,"kv",true),readAll(D,"photos")])
+ .then(function(a){var photos=a[5].filter(function(x){return x&&x.id&&x.data;});
+  return Promise.all(photos.map(function(x){return toB64(x.data).then(function(b){return {id:x.id,jobId:x.jobId||"",type:x.type||"image/jpeg",at:x.at||"",b64:b};});})).then(function(ph){
+  return {format:"kp-takeoff-backup",version:1,createdAt:new Date().toISOString(),app:"moved-export-"+CFG.id,
+    takeoff:{jobs:a[0],prices:a[1],fpSpecs:a[2],draft:json(CFG.draft,"null"),fgMap:json(CFG.fg,"{}"),photos:ph},workOrders:{orders:a[3],kv:a[4]}};});});}
+function fname(){var d=new Date();return "takeoff-backup-"+d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+".json";}
+function deliver(name,text){var blob=new Blob([text],{type:"application/json"}),file=null;try{file=new File([blob],name,{type:"application/json"});}catch(e){}
+  if(file&&navigator.canShare&&navigator.share&&navigator.canShare({files:[file]}))return navigator.share({files:[file]}).then(function(){return "shared";},function(e){return e&&e.name==="AbortError"?"cancelled":dl(name,blob);});
+  return Promise.resolve(dl(name,blob));}
+function dl(name,blob){var u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(u);a.remove();},4000);return "downloaded";}
+function count(b){return b.takeoff.jobs.length+b.workOrders.orders.length+b.takeoff.photos.length+(b.takeoff.draft?1:0);}
+function done(msg){lsSet(FLAG,new Date().toISOString());say(msg);bExp.className="done";bExp.textContent="Backup saved ✓ (tap to export again)";bGo.className="btn pri";}
+bExp.onclick=function(){say("Building backup…");build().then(function(b){
+  if(!count(b)){done("Nothing was saved on this phone in the current version, so there's nothing to bring over. Go to step 2.");return;}
+  return deliver(fname(),JSON.stringify(b)).then(function(how){if(how==="cancelled"){say("Backup cancelled, nothing saved. Tap Export backup again.",1);return;}
+    done("Backup ready: "+b.takeoff.jobs.length+" takeoffs, "+b.workOrders.orders.length+" work orders"+(b.takeoff.photos.length?", "+b.takeoff.photos.length+" photos":"")+(b.takeoff.draft?", 1 draft":"")+". Now open the new app.");});
+ }).catch(function(e){say("Backup failed: "+(e&&e.message||e),1);});};
+bGo.onclick=function(ev){if(!lsGet(FLAG)&&!confirm("You haven't exported a backup yet. Jobs saved here won't show up in the new version. Open it anyway?")){ev.preventDefault();return;}
+  // Old push alerts would only land on this page now; stop them (re-turn on alerts in the new app).
+  try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){try{r.pushManager&&r.pushManager.getSubscription().then(function(s){s&&s.unsubscribe();});}catch(e){}r.unregister();});});}catch(e){}};
+if(lsGet(FLAG)){bExp.className="done";bExp.textContent="Backup saved ✓ (tap to export again)";bGo.className="btn pri";say("You already exported a backup on this phone.");}
+})();
+</script>
+</body></html>
